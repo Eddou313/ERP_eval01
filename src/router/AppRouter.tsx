@@ -16,12 +16,15 @@ import ClientLogin from "../module/FrontOffice/client/pages/ClientLogin"
 // import AttributsCaracteristiquesPage from "../module/Backoffice/attribue&Caracteristique/pages/AttributsCaracteristiquesPage"
 import ClientRegister from "../module/FrontOffice/client/pages/ClientRegister"
 import Home from "./Home"
+import ProduitsList from "../module/FrontOffice/produits/pages/ProduitsList"
+import ProduitDetail from "../module/FrontOffice/produits/pages/ProduitDetail"
 
 function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-          {/* <Route path="/" element={<FrontOfficePage />} /> */}
+          <Route path="/" element={<ProduitsList />} />
+          <Route path="/produits/:slug" element={<ProduitDetail />} />
           <Route path="/login" element={<ClientLogin />} />
           <Route path="/register" element={<ClientRegister />} />
           {/* <Route path="/backoffice/login" element={<Login />} /> */}
@@ -53,7 +56,7 @@ function AppRouter() {
           {/* </Route> */}
 
           {/* <Route path="/produit/:id" element={<ProductDetailPage />} /> */}
-          <Route path="*" element={<ClientLogin />} />
+          <Route path="*" element={<ProduitsList />} />
           <Route path="/home" element={<Home/>} />
       </Routes>
     </BrowserRouter>
