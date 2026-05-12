@@ -259,6 +259,31 @@ export function keywordsFromPrestashop(field?: PrestashopLanguageField): string[
   return keywordsFromField(field);
 }
 
+// ==================== Images de produits ====================
+
+/**
+ * Construit l'URL de l'image d'un produit
+ * Format: /api/images/products/[idproduit]/[id_default_image]
+ * Ex: getProductImageUrl(5, 12) => "/api/images/products/5/12"
+ */
+export function getProductImageUrl(productId: number, imageId: number): string {
+  return `${import.meta.env.VITE_BASE_URL}/images/products/${productId}/${imageId}`;
+}
+
+/**
+ * Construit l'URL de l'image d'un produit avec fallback
+ * Retourne un placeholder si l'imageId est 0 ou manquant
+ */
+export function getProductImageUrlWithFallback(
+  productId: number,
+  imageId?: number,
+  placeholderUrl: string = ""
+): string {
+  if (!imageId || imageId === 0) {
+    return placeholderUrl;
+  }
+  return getProductImageUrl(productId, imageId);
+}
 
 // transformation de chaine grouper em json// Définition d'une interface pour la clarté
 interface ProductAchat {

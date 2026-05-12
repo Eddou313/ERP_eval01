@@ -1,151 +1,249 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { IconHeart, IconShoppingCart } from "@tabler/icons-react";
+import { useLocation } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
-import { formatPrice, getProductBySlug } from "../data";
-import "./produits.css";
+import { getProductDetail, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
+import { getProductAttributeGroups, type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
+import { getProductImageUrl } from "../../../../utils/helper";
+import "../pages/produits.css";
+import { useState, useEffect } from "react";
 
 export function ProduitDetail() {
-    const { slug } = useParams();
-    const product = useMemo(() => getProductBySlug(slug), [slug]);
-    const [selectedImage, setSelectedImage] = useState(product.gallery[0]);
-    const [selectedSize, setSelectedSize] = useState(product.sizes[0]);
-    const [selectedColor, setSelectedColor] = useState(product.featuredColor);
+  const location = useLocation();
+  const initialProduct = location.state?.product as ProductListItem;
 
-    useEffect(() => {
-        setSelectedImage(product.gallery[0]);
-        setSelectedSize(product.sizes[0]);
-        setSelectedColor(product.featuredColor);
-    }, [product]);
+  const [product, setProduct] = useState<any>(initialProduct || null);
+  const [attributeGroups, setAttributeGroups] = useState<ProductAttributeGroupSelection[]>([]);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedAttributeValues, setSelectedAttributeValues] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const finalPrice = formatPrice(product.price);
-    const oldPrice = product.oldPrice ? formatPrice(product.oldPrice) : null;
+  useEffect(() => {
+    if (!initialProduct) {
+      setError("Produit non trouvé");
+      return;
+    }
 
+    const loadProductDetails = async () => {
+      try {
+        setLoading(true);
+        const details = await getProductDetail(initialProduct.id);
+        setProduct(details);
+
+        // Charger les attributs/variantes
+        const attrs = await getProductAttributeGroups(initialProduct.id);
+        console.log("ProduitDetail attributeGroups:", attrs);
+        setAttributeGroups(attrs);
+
+        setSelectedAttributeValues(
+          attrs.reduce((accumulator, group) => {
+            accumulator[group.group.id] = String(group.selectedValueId || "");
+            return accumulator;
+          }, {} as Record<number, string>)
+        );
+      } catch (err) {
+        console.error("Erreur lors du chargement des détails:", err);
+        setError("Impossible de charger les détails du produit");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProductDetails();
+  }, [initialProduct]);
+
+  if (error) {
     return (
-        <div className="productsPage">
-            <FrontOfficeHeader />
-
-            <main className="productDetailShell">
-                <section className="productDetailGrid">
-                    <div className="detailMedia">
-                        <div className="detailHero">
-                            <img src={selectedImage} alt={product.name} className="detailImage" />
-                            <div className="badgesStack detailBadges">
-                                {product.badges.map((badge) => (
-                                    <span key={badge.label} className={`badge badge-${badge.tone}`}>
-                                        {badge.label}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="detailThumbnails" aria-label="Galerie du produit">
-                            {product.gallery.map((image) => (
-                                <button
-                                    key={image}
-                                    type="button"
-                                    className={`thumbnailButton ${selectedImage === image ? "isActive" : ""}`}
-                                    onClick={() => setSelectedImage(image)}
-                                    aria-label="Voir l'image du produit"
-                                >
-                                    <img src={image} alt="Miniature du produit" />
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="detailContent">
-                        <p className="productCategory productCategoryDetail">{product.category}</p>
-                        <h1 className="detailTitle">{product.name.toUpperCase()}</h1>
-
-                        <div className="detailPriceRow">
-                            {oldPrice ? <span className="detailOldPrice">{oldPrice}</span> : null}
-                            <span className="detailPrice">{finalPrice}</span>
-                            {product.oldPrice ? (
-                                <span className="discountTag">ÉCONOMISEZ 20%</span>
-                            ) : null}
-                        </div>
-
-                        <p className="taxLabel">TTC</p>
-                        <p className="detailDescription">{product.description}</p>
-
-                        <div className="optionBlock">
-                            <p className="optionLabel">Taille : <strong>{selectedSize}</strong></p>
-                            <div className="sizeGroup">
-                                {product.sizes.map((size) => (
-                                    <button
-                                        key={size}
-                                        type="button"
-                                        className={`optionButton ${selectedSize === size ? "isSelected" : ""}`}
-                                        onClick={() => setSelectedSize(size)}
-                                    >
-                                        {size}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="optionBlock">
-                            <p className="optionLabel">Couleur : <strong>{selectedColor}</strong></p>
-                            <div className="colorGroup">
-                                {product.colors.map((color) => (
-                                    <button
-                                        key={color.name}
-                                        type="button"
-                                        className={`colorSwatch ${selectedColor === color.name ? "isSelected" : ""}`}
-                                        style={{ backgroundColor: color.value }}
-                                        onClick={() => setSelectedColor(color.name)}
-                                        aria-label={color.name}
-                                        title={color.name}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="quantityRow">
-                            <label className="quantityField">
-                                <span>Quantité</span>
-                                <input type="number" min="1" defaultValue="1" />
-                            </label>
-
-                            <button type="button" className="addToCartButton">
-                                <IconShoppingCart size={18} /> AJOUTER AU PANIER
-                            </button>
-
-                            <button type="button" className="favoriteButton" aria-label="Ajouter aux favoris">
-                                <IconHeart size={20} />
-                            </button>
-                        </div>
-
-                        <div className="shareRow">
-                            <span>Partager</span>
-                            <button type="button" className="shareButton">f</button>
-                            <button type="button" className="shareButton">t</button>
-                            <button type="button" className="shareButton">p</button>
-                        </div>
-
-                        <section className="assuranceCards">
-                            <article className="assuranceCard">
-                                <div className="assuranceIcon">🔒</div>
-                                <div>
-                                    <h2>Garanties sécurité</h2>
-                                    <p>(à modifier dans le module “Réassurance”)</p>
-                                </div>
-                            </article>
-
-                            <article className="assuranceCard">
-                                <div className="assuranceIcon">🚚</div>
-                                <div>
-                                    <h2>Politique de livraison</h2>
-                                    <p>Livraison suivie et emballage soigné sur l’ensemble du catalogue.</p>
-                                </div>
-                            </article>
-                        </section>
-                    </div>
-                </section>
-            </main>
+      <div className="productsPage">
+        <FrontOfficeHeader />
+        <div className="productsShell">
+          <p className="error">{error}</p>
         </div>
+      </div>
     );
+  }
+
+  if (loading || !product) {
+    return (
+      <div className="productsPage">
+        <FrontOfficeHeader />
+        <div className="productsShell">
+          <p className="loading">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleAddToCart = () => {
+    console.log("Ajouter au panier:", {
+      productId: product.id,
+      name: product.name,
+      quantity,
+      attributes: selectedAttributeValues,
+      price: product.price,
+    });
+    alert(`${quantity}x "${product.name}" ajouté au panier!`);
+  };
+
+  return (
+    <div className="productsPage">
+      <FrontOfficeHeader />
+      <div className="productDetailShell">
+        
+        <div className="detailContainer">
+          {/* Image Section */}
+          <div className="detailImageSection">
+            <div className="detailImageWrapper">
+              {product.id_default_image ? (
+                <img
+                  src={getProductImageUrl(product.id, product.id_default_image)}
+                  alt={product.name}
+                  className="detailImage"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = "https://via.placeholder.com/500x500?text=Product";
+                  }}
+                />
+              ) : (
+                <img
+                  src="https://via.placeholder.com/500x500?text=Product"
+                  alt={product.name}
+                  className="detailImage"
+                />
+              )}
+              {product.on_sale && (
+                <div className="discountBadgeLarge">-20%</div>
+              )}
+            </div>
+          </div>
+
+          {/* Info Section */}
+          <div className="detailInfoSection">
+            <h1 className="detailTitle">{product.name}</h1>
+
+            <div className="detailBrand">
+              <span className="brandLabel">Référence: {product.reference}</span>
+            </div>
+
+            {product.description_short && (
+              <div className="detailDescription" dangerouslySetInnerHTML={{ __html: product.description_short }} >
+              </div>
+            )}
+
+            {product.description && (
+              <div className="detailFullDescription">
+                <div dangerouslySetInnerHTML={{ __html: product.description }} />
+              </div>
+            )}
+
+            {/* Pricing */}
+            <div className="detailPricing">
+              <div className="priceRow">
+                <span className="priceLabel">Prix</span>
+                <div className="prices">
+                  <span className="detailCurrentPrice">€{(product.price || 0).toFixed(2)}</span>
+                  {product.on_sale && (
+                    <span className="savingBadge">PROMOTION</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Attributes Selection */}
+            {attributeGroups.length > 0 && (
+              <div className="detailAttributes">
+                <h3 className="optionLabel">Attributs</h3>
+                {attributeGroups.map((group) => (
+                  <div key={group.group.id} className="detailOption">
+                    <label className="optionLabel">{group.group.publicName || group.group.name}</label>
+                    {group.group.isColorGroup ? (
+                      <div className="colorGroup">
+                        {group.values.map((value) => {
+                          const isSelected = selectedAttributeValues[group.group.id] === String(value.id);
+                          const swatchColor = value.color?.trim() || "#d8d8d8";
+
+                          return (
+                            <div key={value.id} className="colorSwatchItem">
+                              <button
+                                type="button"
+                                className={`colorSwatch${isSelected ? " isSelected" : ""}`}
+                                style={{ backgroundColor: swatchColor }}
+                                title={value.name}
+                                aria-label={`${group.group.publicName || group.group.name}: ${value.name}`}
+                                onClick={() =>
+                                  setSelectedAttributeValues((current) => ({
+                                    ...current,
+                                    [group.group.id]: String(value.id),
+                                  }))
+                                }
+                              />
+                              <span className="colorSwatchLabel">{value.name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <select
+                        value={selectedAttributeValues[group.group.id] ?? String(group.selectedValueId || "")}
+                        onChange={(e) =>
+                          setSelectedAttributeValues((current) => ({
+                            ...current,
+                            [group.group.id]: e.target.value,
+                          }))
+                        }
+                        className="sizeSelect"
+                      >
+                        {group.values.map((value) => (
+                          <option key={value.id} value={String(value.id)}>
+                            {value.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {attributeGroups.length === 0 && (
+              <p className="emptyState">Aucun attribut configuré pour ce produit.</p>
+            )}
+
+            {/* Quantity Selection */}
+            <div className="detailOption">
+              <label className="optionLabel">Quantité</label>
+              <div className="quantityControl">
+                <button onClick={() => setQuantity(Math.max(1, quantity - 1))}>−</button>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  min="1"
+                />
+                <button onClick={() => setQuantity(quantity + 1)}>+</button>
+              </div>
+            </div>
+
+            {/* Add to Cart Button */}
+            <button className="addToCartBtn" onClick={handleAddToCart}>
+              🛒 AJOUTER AU PANIER
+            </button>
+
+            {/* Stock Status */}
+            <div className="stockStatus">
+              {product.quantity && product.quantity > 0 ? (
+                <p className="inStock">✅ En stock ({product.quantity} unités)</p>
+              ) : (
+                <p className="outOfStock">❌ Rupture de stock</p>
+              )}
+            </div>
+
+            {/* Wishlist Button */}
+            {/* <button className="wishlistBtn">
+              ♥ Ajouter à la sélection
+            </button> */}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default ProduitDetail;

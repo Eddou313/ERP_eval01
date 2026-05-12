@@ -12,21 +12,20 @@ import { BrowserRouter, Routes, Route } from "react-router-dom"
 // import SecureRoute from "./securiter"
 // import FrontOfficePage from "../module/FrontOffice/pages/FrontOfficePage"
 import ClientLogin from "../module/FrontOffice/client/pages/ClientLogin"
-// import ProductDetailPage from "../module/FrontOffice/produit/pages/ProductDetailPage"
+import ProductDetailPage from "../module/FrontOffice/produits/pages/ProduitDetail"
 // import AttributsCaracteristiquesPage from "../module/Backoffice/attribue&Caracteristique/pages/AttributsCaracteristiquesPage"
 import ClientRegister from "../module/FrontOffice/client/pages/ClientRegister"
 import Home from "./Home"
 import ProduitsList from "../module/FrontOffice/produits/pages/ProduitsList"
-import ProduitDetail from "../module/FrontOffice/produits/pages/ProduitDetail"
 
 function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
           <Route path="/" element={<ProduitsList />} />
-          <Route path="/produits/:slug" element={<ProduitDetail />} />
           <Route path="/login" element={<ClientLogin />} />
           <Route path="/register" element={<ClientRegister />} />
+          <Route path="/produit/:id" element={<ProductDetailPage />} />
           {/* <Route path="/backoffice/login" element={<Login />} /> */}
 
           {/* <Route element={<SecureRoute />}> */}
@@ -56,7 +55,7 @@ function AppRouter() {
           {/* </Route> */}
 
           {/* <Route path="/produit/:id" element={<ProductDetailPage />} /> */}
-          <Route path="*" element={<ProduitsList />} />
+          <Route path="*" element={<ClientLogin />} />
           <Route path="/home" element={<Home/>} />
       </Routes>
     </BrowserRouter>
