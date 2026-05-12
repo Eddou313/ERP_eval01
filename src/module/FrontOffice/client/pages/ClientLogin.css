@@ -1,0 +1,156 @@
+.clientLoginPage {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+}
+
+.clientLoginMain {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.loginContainer {
+  width: 100%;
+  max-width: 400px;
+}
+
+.loginCard {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.loginCard h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.8rem;
+  color: #333;
+  text-align: center;
+}
+
+.loginSubtitle {
+  margin: 0 0 2rem 0;
+  text-align: center;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.errorMessage {
+  background-color: #fee;
+  color: #c33;
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.loginForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.formGroup label {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.formGroup input {
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+}
+
+.formGroup input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.submitButton {
+  padding: 0.85rem 1rem;
+  background: linear-gradient(135deg, #00115a 0%, #210041 100%);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.submitButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loginFooter {
+  margin-top: 1.5rem;
+  text-align: center;
+  padding-top: 1.5rem;
+  border-top: 1px solid #eee;
+}
+
+.loginFooter p {
+  margin: 0;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.loginFooter a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.loginFooter a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 480px) {
+  .clientLoginMain {
+    padding: 1rem;
+  }
+
+  .loginCard {
+    padding: 1.5rem;
+  }
+
+  .loginCard h1 {
+    font-size: 1.5rem;
+  }
+}
+
+.formGroup input[type="radio"] {
+  width: auto;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* Style pour le message d'aide de la date de naissance */
+.formGroup small {
+  margin-top: 0.3rem;
+  color: #777;
+}
+
+/* Amélioration visuelle pour le champ date (certains navigateurs ont un padding différent) */
+.formGroup input[type="date"] {
+  font-family: inherit;
+}
