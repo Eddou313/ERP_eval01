@@ -1,88 +1,53 @@
+/**
+ * 📦 API Commandes PrestaShop
+ * 
+ * Gestion complète du CRUD des commandes avec validation des règles PrestaShop 8.2.6
+ * Respecte les formats et champs obligatoires définis par l'API PrestaShop
+ */
+
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
-import { textFromUnknown, numFromUnknown } from "../../../../utils/helper";
+import {
+  textFromUnknown,
+  numFromUnknown,
+  boolFromUnknown,
+  asArray,
+  getFirstLanguageText,
+  toPrestashopBool,
+  languageField,
+  validateUnsignedId,
+  validatePrice,
+  validateFloat,
+} from "../../../../utils/helper";
 import { getClient } from "../../client/api/clientApi";
 import { PAYMENT_METHODS } from "../../paiement/api/PaiementApi";
 
+// ============================================================
+// 📋 TYPES & INTERFACES
+// ============================================================
 
-export function getPaymentMethod(code: string) {
-  return PAYMENT_METHODS.find(p => p.code === code);
-}
-
-type PrestashopLanguageField = {
-  language:
-    | { "@_id": number; "#text"?: string }
-    | Array<{ "@_id": number; "#text"?: string }>;
-};
-
+/**
+ * Réponse XML PrestaShop pour une commande unique
+ */
 type OrderGetResponse = {
   prestashop: {
-    order: {
-      id?: unknown;
-      reference?: unknown;
-      id_customer?: unknown;
-      id_cart?: unknown;
-      id_currency?: unknown;
-      current_state?: unknown;
-      total_paid?: unknown;
-      total_paid_tax_incl?: unknown;
-      total_paid_tax_excl?: unknown;
-      payment?: unknown;
-      module?: unknown;
-      valid?: unknown;
-      date_add?: unknown;
-      date_upd?: unknown;
-      invoice_number?: unknown;
-      invoice_date?: unknown;
-      delivery_date?: unknown;
-      id_address_delivery?: unknown;
-      id_address_invoice?: unknown;
-      delivery_number?: unknown;
-      id_carrier?: unknown;
-      total_paid_real?: unknown;
-      total_products?: unknown;
-      total_products_wt?: unknown;
-      total_shipping?: unknown;
-      total_shipping_tax_incl?: unknown;
-      total_shipping_tax_excl?: unknown;
-      total_discounts?: unknown;
-      total_discounts_tax_incl?: unknown;
-      total_discounts_tax_excl?: unknown;
-      total_wrapping?: unknown;
-      total_wrapping_tax_incl?: unknown;
-      total_wrapping_tax_excl?: unknown;
-      carrier_tax_rate?: unknown;
-      round_mode?: unknown;
-      round_type?: unknown;
-      conversion_rate?: unknown;
-      id_shop_group?: unknown;
-      id_shop?: unknown;
-      secure_key?: unknown;
-      shipping_number?: unknown;
-      recyclable?: unknown;
-      mobile_theme?: unknown;
-      note?: PrestashopLanguageField;
-      gift?: unknown;
-      gift_message?: unknown;
-    };
+    order: Record<string, unknown>;
   };
 };
 
+/**
+ * Réponse XML PrestaShop pour la liste des commandes
+ */
 type OrderListResponse = {
   prestashop: {
     orders: {
-      order: Array<{
-        id: unknown;
-        reference: unknown;
-        id_customer: unknown;
-        total_paid: unknown;
-        payment: unknown;
-        current_state: unknown;
-        date_add: unknown;
-      }>;
+      order: Array<Record<string, unknown>>;
     };
   };
 };
 
+/**
+ * Élément dans la liste des commandes (vue allégée)
+ */
 export type OrderListItem = {
   id: number;
   reference: string;
@@ -93,7 +58,14 @@ export type OrderListItem = {
   date_add: string;
 };
 
+/**
+ * Ressource complète d'une commande
+ * Correspond aux colonnes ps_orders PrestaShop
+ */
 export type OrderResource = {
+  id?: number;
+
+  // ❗ Champs requis (isUnsignedId)
   id_address_delivery: number;
   id_address_invoice: number;
   id_cart: number;
@@ -101,34 +73,25 @@ export type OrderResource = {
   id_lang: number;
   id_customer: number;
   id_carrier: number;
+
+  // ❗ Champs d'état
   current_state: number;
   module: string;
-  invoice_number?: string;
-  invoice_date?: string;
-  delivery_number?: string;
-  delivery_date?: string;
-  valid?: boolean;
-  date_add?: string;
-  date_upd?: string;
-  shipping_number?: string;
-  note?: string;
-  id_shop_group?: number;
-  id_shop?: number;
-  secure_key?: string;
   payment: string;
-  recyclable?: boolean;
-  gift?: boolean;
-  gift_message?: string;
-  mobile_theme?: boolean;
-  total_discounts?: number;
-  total_discounts_tax_incl?: number;
-  total_discounts_tax_excl?: number;
+
+  // ❗ Champs prix obligatoires (isPrice)
   total_paid: number;
-  total_paid_tax_incl?: number;
-  total_paid_tax_excl?: number;
   total_paid_real: number;
   total_products: number;
   total_products_wt: number;
+  conversion_rate: number;
+
+  // Champs prix optionnels
+  total_discounts?: number;
+  total_discounts_tax_incl?: number;
+  total_discounts_tax_excl?: number;
+  total_paid_tax_incl?: number;
+  total_paid_tax_excl?: number;
   total_shipping?: number;
   total_shipping_tax_incl?: number;
   total_shipping_tax_excl?: number;
@@ -136,105 +99,76 @@ export type OrderResource = {
   total_wrapping?: number;
   total_wrapping_tax_incl?: number;
   total_wrapping_tax_excl?: number;
+
+  // Champs documents
+  invoice_number?: string;
+  invoice_date?: string;
+  delivery_number?: string;
+  delivery_date?: string;
+
+  // Champs options & booleans
+  valid?: boolean;
+  recyclable?: boolean;
+  gift?: boolean;
+  mobile_theme?: boolean;
+
+  // Champs texte
+  note?: string;
+  gift_message?: string;
+  secure_key?: string;
+
+  // Champs techniques
   round_mode?: number;
   round_type?: number;
-  conversion_rate: number;
+
+  // Champs multi-shop
+  id_shop_group?: number;
+  id_shop?: number;
+
+  // Champs audit
+  date_add?: string;
+  date_upd?: string;
+
+  // Champs additionnels
   reference?: string;
+  shipping_number?: string;
 };
 
-type RequiredFieldRule<T> = {
-  key: keyof T;
-  message: string;
-  isValid?: (value: unknown, form: T) => boolean;
-};
-
-function assertRequiredFields<T extends Record<string, unknown>>(
-  resourceName: string,
-  form: T,
-  rules: Array<RequiredFieldRule<T>>,
-): void {
-  const missing = rules
-    .filter((rule) => {
-      const value = form[rule.key];
-      if (rule.isValid) return !rule.isValid(value, form);
-      if (typeof value === "string") return value.trim().length === 0;
-      return value === undefined || value === null || value === "";
-    })
-    .map((rule) => rule.message);
-
-  if (missing.length > 0) {
-    throw new Error(`${resourceName}: champs requis manquants - ${missing.join(", ")}`);
-  }
-}
-
-
-export type OrderImport = {
-    id_order: number;
-    reference: string;
-    // id_shop_group: number;
-    // id_shop: number;
-    id_carrier: number;
-    id_lang: number;
-    id_customer: number;
-    id_cart: number;
-    id_currency: number;
-    id_address_delivery: number;
-    id_address_invoice: number;
-
-    // État et Sécurité
-    current_state: number;
-    secure_key: string;
-    payment: string;
-    module: string;
-
-    // Chiffres et Montants (Typés number pour les calculs)
-    conversion_rate: number;
-    total_discounts: number;
-    total_discounts_tax_incl: number;
-    total_discounts_tax_excl: number;
-    total_paid: number;
-    total_paid_tax_incl: number;
-    total_paid_tax_excl: number;
-    total_paid_real: number;
-    total_products: number;
-    total_products_wt: number; // wt = With Tax
-    total_shipping: number;
-    total_shipping_tax_incl: number;
-    total_shipping_tax_excl: number;
-    carrier_tax_rate: number;
-    total_wrapping: number;
-    total_wrapping_tax_incl: number;
-    total_wrapping_tax_excl: number;
-
-    // Configuration et Options (Souvent 0 ou 1 en base de données)
-    recyclable: boolean | number;
-    gift: boolean | number;
-    gift_message?: string;
-    mobile_theme: boolean | number;
-    round_mode: number;
-    round_type: number;
-
-    // Documents et Validation
-    invoice_number: number;
-    delivery_number: number;
-    invoice_date: string; // Format YYYY-MM-DD HH:mm:ss
-    delivery_date: string;
-    valid: boolean | number;
-
-    // Dates et Notes
-    date_add: string;
-    date_upd: string;
-    note?: string;
-};
-
+/**
+ * Formulaire de création d'une commande
+ */
 export type OrderForm = OrderResource;
 
+/**
+ * Formulaire de création avec code de paiement
+ */
 export type OrderCreateForm = OrderForm & {
   payment_code: string;
 };
 
-export type OrderImportForm = OrderImport;
+/**
+ * Type pour les imports en masse
+ */
+export type OrderImport = OrderResource;
 
+/**
+ * États possibles des commandes (référence)
+ */
+export const ORDER_STATES = [
+  { id: 1, label: "En attente" },
+  { id: 2, label: "Paiement accepté" },
+  { id: 3, label: "Préparation en cours" },
+  { id: 4, label: "Expédié" },
+  { id: 5, label: "Livré" },
+  { id: 6, label: "Annulé" },
+  { id: 7, label: "Remboursé" },
+  { id: 8, label: "Retour accepté" },
+  { id: 9, label: "En attente de paiement" },
+];
+
+/**
+ * Formulaire par défaut pour une nouvelle commande
+ */
 export const DEFAULT_ORDER_FORM: OrderForm = {
   id_customer: 0,
   id_address_delivery: 0,
@@ -276,140 +210,239 @@ export const DEFAULT_ORDER_FORM: OrderForm = {
   round_mode: 0,
   round_type: 0,
   secure_key: "",
-  // id_shop: 1,
-  // id_shop_group: 1,
 };
 
-export const ORDER_STATES = [
-  { id: 1, label: "En attente" },
-  { id: 2, label: "Paiement accepté" },
-  { id: 3, label: "Préparation en cours" },
-  { id: 4, label: "Expédié" },
-  { id: 5, label: "Livré" },
-  { id: 6, label: "Annulé" },
-  { id: 7, label: "Remboursé" },
-  { id: 8, label: "Retour accepté" },
-  { id: 9, label: "En attente de paiement" },
+// ============================================================
+// ✅ VALIDATEURS (héritiers des règles PrestaShop)
+// ============================================================
+
+/**
+ * Validateur pour les champs requis
+ */
+type RequiredFieldRule<T> = {
+  key: keyof T;
+  message: string;
+  validator?: (value: unknown) => boolean;
+};
+
+/**
+ * Vérifie que les champs requis sont valides
+ * Jette une erreur avec la liste des champs manquants
+ */
+function validateRequiredFields<T extends Record<string, unknown>>(
+  resourceName: string,
+  form: T,
+  rules: Array<RequiredFieldRule<T>>,
+): void {
+  const errors = rules
+    .filter((rule) => {
+      const value = form[rule.key];
+      if (rule.validator) return !rule.validator(value);
+
+      // Validation par défaut
+      if (typeof value === "number") return value <= 0;
+      if (typeof value === "string") return value.trim().length === 0;
+      return value === undefined || value === null;
+    })
+    .map((rule) => rule.message);
+
+  if (errors.length > 0) {
+    throw new Error(`${resourceName}: ${errors.join(", ")}`);
+  }
+}
+
+/**
+ * Règles de validation pour la création de commande
+ * Basées sur les colonnes Required=✔️ de l'API PrestaShop
+ */
+const CREATE_ORDER_RULES: Array<RequiredFieldRule<OrderForm>> = [
+  { key: "id_customer", message: "id_customer doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_address_delivery", message: "id_address_delivery doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_address_invoice", message: "id_address_invoice doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_cart", message: "id_cart doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_currency", message: "id_currency doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_lang", message: "id_lang doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_carrier", message: "id_carrier doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "payment", message: "payment requis", validator: (v) => typeof v === "string" && v.trim().length > 0 },
+  { key: "total_paid", message: "total_paid doit être >= 0", validator: (v) => validatePrice(v) },
+  { key: "total_paid_real", message: "total_paid_real doit être >= 0", validator: (v) => validatePrice(v) },
+  { key: "total_products", message: "total_products doit être >= 0", validator: (v) => validatePrice(v) },
+  { key: "total_products_wt", message: "total_products_wt doit être >= 0", validator: (v) => validatePrice(v) },
+  { key: "conversion_rate", message: "conversion_rate doit être > 0", validator: (v) => validateFloat(v) },
 ];
 
 
-export async function listOrdersLight(): Promise<OrderListItem[]> {
-  const url = `/orders?display=full&limit=200`;
-  const response = await requestPrestashopXml<OrderListResponse>(url);
+// ============================================================
+// 🔧 HELPERS EXTRACTORS & CONVERTERS
+// ============================================================
+
+/**
+ * Récupère la méthode de paiement par son code
+ */
+export function getPaymentMethod(code: string) {
+  return PAYMENT_METHODS.find((p) => p.code === code);
+}
+
+/**
+ * Extrait un OrderResource à partir d'une réponse XML PrestaShop
+ */
+function extractOrderResource(orderXml: Record<string, unknown>): OrderResource {
+  const noteValue = orderXml.note;
+  const noteText = getFirstLanguageText(noteValue as any) || "";
+
+  const giftMsgValue = orderXml.gift_message;
+  const giftMsg = getFirstLanguageText(giftMsgValue as any) || "";
+
+  return {
+    id: numFromUnknown(orderXml.id),
+    reference: textFromUnknown(orderXml.reference).trim(),
+    id_customer: numFromUnknown(orderXml.id_customer),
+    id_address_delivery: numFromUnknown(orderXml.id_address_delivery),
+    id_address_invoice: numFromUnknown(orderXml.id_address_invoice),
+    id_cart: numFromUnknown(orderXml.id_cart),
+    id_currency: numFromUnknown(orderXml.id_currency),
+    id_lang: numFromUnknown(orderXml.id_lang) || 1,
+    id_carrier: numFromUnknown(orderXml.id_carrier),
+    current_state: numFromUnknown(orderXml.current_state) || 1,
+    payment: textFromUnknown(orderXml.payment).trim(),
+    module: textFromUnknown(orderXml.module).trim(),
+    total_paid: numFromUnknown(orderXml.total_paid),
+    total_paid_real: numFromUnknown(orderXml.total_paid_real),
+    total_products: numFromUnknown(orderXml.total_products),
+    total_products_wt: numFromUnknown(orderXml.total_products_wt),
+    conversion_rate: numFromUnknown(orderXml.conversion_rate) || 1,
+    total_discounts: numFromUnknown(orderXml.total_discounts),
+    total_discounts_tax_incl: numFromUnknown(orderXml.total_discounts_tax_incl),
+    total_discounts_tax_excl: numFromUnknown(orderXml.total_discounts_tax_excl),
+    total_paid_tax_incl: numFromUnknown(orderXml.total_paid_tax_incl),
+    total_paid_tax_excl: numFromUnknown(orderXml.total_paid_tax_excl),
+    total_shipping: numFromUnknown(orderXml.total_shipping),
+    total_shipping_tax_incl: numFromUnknown(orderXml.total_shipping_tax_incl),
+    total_shipping_tax_excl: numFromUnknown(orderXml.total_shipping_tax_excl),
+    carrier_tax_rate: numFromUnknown(orderXml.carrier_tax_rate),
+    total_wrapping: numFromUnknown(orderXml.total_wrapping),
+    total_wrapping_tax_incl: numFromUnknown(orderXml.total_wrapping_tax_incl),
+    total_wrapping_tax_excl: numFromUnknown(orderXml.total_wrapping_tax_excl),
+    round_mode: numFromUnknown(orderXml.round_mode),
+    round_type: numFromUnknown(orderXml.round_type),
+    invoice_number: textFromUnknown(orderXml.invoice_number).trim(),
+    invoice_date: textFromUnknown(orderXml.invoice_date).split(" ")[0],
+    delivery_number: textFromUnknown(orderXml.delivery_number).trim(),
+    delivery_date: textFromUnknown(orderXml.delivery_date).split(" ")[0],
+    valid: boolFromUnknown(orderXml.valid),
+    recyclable: boolFromUnknown(orderXml.recyclable),
+    gift: boolFromUnknown(orderXml.gift),
+    mobile_theme: boolFromUnknown(orderXml.mobile_theme),
+    secure_key: textFromUnknown(orderXml.secure_key).trim(),
+    id_shop_group: numFromUnknown(orderXml.id_shop_group) || 1,
+    id_shop: numFromUnknown(orderXml.id_shop) || 1,
+    note: noteText,
+    gift_message: giftMsg,
+    shipping_number: textFromUnknown(orderXml.shipping_number).trim(),
+    date_add: textFromUnknown(orderXml.date_add),
+    date_upd: textFromUnknown(orderXml.date_upd),
+  };
+}
+
+/**
+ * Extrait un OrderListItem à partir d'une entrée de liste XML
+ */
+function extractOrderListItem(orderXml: Record<string, unknown>): OrderListItem {
+  return {
+    id: numFromUnknown(orderXml.id),
+    reference: textFromUnknown(orderXml.reference).trim(),
+    id_customer: numFromUnknown(orderXml.id_customer),
+    payment: textFromUnknown(orderXml.payment).trim(),
+    total_paid: numFromUnknown(orderXml.total_paid),
+    current_state: numFromUnknown(orderXml.current_state) || 1,
+    date_add: textFromUnknown(orderXml.date_add).split(" ")[0],
+  };
+}
+
+
+// ============================================================
+// 🔄 CRUD OPERATIONS
+// ============================================================
+
+/**
+ * 📖 READ: Récupère la liste allégée des commandes
+ * Format filtrable: reference, id_customer, payment, total_paid, current_state
+ */
+export async function listOrders(
+  params?: Partial<{
+    reference: string;
+    id_customer: number;
+    payment: string;
+    minAmount: number;
+    maxAmount: number;
+    state: number;
+    limit: number;
+    offset: number;
+  }>,
+): Promise<OrderListItem[]> {
+  const query: Record<string, string | number | boolean> = {
+    display: "full",
+    limit: params?.limit ?? 200,
+    offset: params?.offset ?? 0,
+  };
+
+  // Ajouter les filtres si présents
+  if (params?.reference) query.reference = params.reference;
+  if (params?.id_customer) query.id_customer = params.id_customer;
+  if (params?.payment) query.payment = params.payment;
+  if (params?.state) query.current_state = params.state;
+
+  const response = await requestPrestashopXml<OrderListResponse>("/orders", {
+    query,
+  });
 
   if (!response?.prestashop?.orders?.order) {
     return [];
   }
 
-  const orders = Array.isArray(response.prestashop.orders.order)
-    ? response.prestashop.orders.order
-    : [response.prestashop.orders.order];
-
-  return orders.map((order) => {
-      const customerId = numFromUnknown(order.id_customer);
-      // const customer = getClient(customerId).then(c => c ? c.firstname + " " + c.lastname : `#${customerId}`).catch(() => `#${customerId}`);
-      return {
-      id: numFromUnknown(order.id) || 0,
-      reference: textFromUnknown(order.reference).trim(),
-      id_customer: customerId || 0,
-      payment: textFromUnknown(order.payment).trim(),
-      total_paid: Number(textFromUnknown(order.total_paid)) || 0,
-      current_state: numFromUnknown(order.current_state) || 1,
-      date_add: textFromUnknown(order.date_add).split(" ")[0],
-    };
+  const orders = asArray(response.prestashop.orders.order);
+  return orders.map(extractOrderListItem).filter((order) => {
+    // Post-filter sur les montants
+    if (params?.minAmount && order.total_paid < params.minAmount) return false;
+    if (params?.maxAmount && order.total_paid > params.maxAmount) return false;
+    return true;
   });
 }
 
-export async function getOrder(id: number): Promise<OrderForm> {
-  const url = `/orders/${id}?display=full`;
-  const response = await requestPrestashopXml<OrderGetResponse>(url);
+/**
+ * Alias pour compatibilité
+ */
+export const listOrdersLight = listOrders;
+
+/**
+ * 📖 READ: Récupère une commande complète par ID
+ */
+export async function getOrder(id: number): Promise<OrderResource> {
+  if (!validateUnsignedId(id)) {
+    throw new Error(`ID commande invalide: ${id}`);
+  }
+
+  const response = await requestPrestashopXml<OrderGetResponse>(`/orders/${id}`, {
+    query: { display: "full" },
+  });
 
   if (!response?.prestashop?.order) {
-    throw new Error("Commande non trouvée");
+    throw new Error(`Commande #${id} non trouvée`);
   }
 
-  const order = response.prestashop.order;
-
-  const noteValue = order.note;
-  let noteText = "";
-  if (noteValue) {
-    if (typeof noteValue === "object" && "language" in noteValue) {
-      const lang = Array.isArray(noteValue.language) ? noteValue.language[0] : noteValue.language;
-      noteText = lang?.["#text"]?.trim() || "";
-    }
-  }
-
-  const giftMsgValue = order.gift_message;
-  let giftMsg = "";
-  if (giftMsgValue) {
-    if (typeof giftMsgValue === "object" && "language" in giftMsgValue) {
-      const lang = Array.isArray(giftMsgValue.language) ? giftMsgValue.language[0] : giftMsgValue.language;
-      giftMsg = lang?.["#text"]?.trim() || "";
-    }
-  }
-
-  return {
-    id_customer: numFromUnknown(order.id_customer) || 0,
-    id_address_delivery: numFromUnknown(order.id_address_delivery) || 0,
-    id_address_invoice: numFromUnknown(order.id_address_invoice) || 0,
-    id_cart: numFromUnknown(order.id_cart) || 0,
-    id_currency: numFromUnknown(order.id_currency) || 1,
-    id_lang: 1,
-    id_carrier: numFromUnknown(order.id_carrier) || 0,
-    payment: textFromUnknown(order.payment || "").trim(),
-    module: textFromUnknown(order.module || "").trim(),
-    current_state: numFromUnknown(order.current_state) || 1,
-    total_paid: numFromUnknown(order.total_paid) || 0,
-    total_paid_real: numFromUnknown(order.total_paid_real) || numFromUnknown(order.total_paid) || 0,
-    total_products: numFromUnknown(order.total_products) || 0,
-    total_products_wt: numFromUnknown(order.total_products_wt) || numFromUnknown(order.total_products) || 0,
-    total_shipping: numFromUnknown(order.total_shipping) || 0,
-    total_shipping_tax_incl: numFromUnknown(order.total_shipping_tax_incl) || 0,
-    total_shipping_tax_excl: numFromUnknown(order.total_shipping_tax_excl) || 0,
-    total_discounts: numFromUnknown(order.total_discounts) || 0,
-    total_discounts_tax_incl: numFromUnknown(order.total_discounts_tax_incl) || 0,
-    total_discounts_tax_excl: numFromUnknown(order.total_discounts_tax_excl) || 0,
-    total_paid_tax_incl: numFromUnknown(order.total_paid_tax_incl) || 0,
-    total_paid_tax_excl: numFromUnknown(order.total_paid_tax_excl) || 0,
-    total_wrapping: numFromUnknown(order.total_wrapping) || 0,
-    total_wrapping_tax_incl: numFromUnknown(order.total_wrapping_tax_incl) || 0,
-    total_wrapping_tax_excl: numFromUnknown(order.total_wrapping_tax_excl) || 0,
-    carrier_tax_rate: numFromUnknown(order.carrier_tax_rate) || 0,
-    round_mode: numFromUnknown(order.round_mode) || 0,
-    round_type: numFromUnknown(order.round_type) || 0,
-    conversion_rate: numFromUnknown(order.conversion_rate) || 1,
-    id_shop_group: numFromUnknown(order.id_shop_group) || 1,
-    id_shop: numFromUnknown(order.id_shop) || 1,
-    secure_key: textFromUnknown(order.secure_key || "").trim(),
-    valid: numFromUnknown(order.valid) === 1,
-    invoice_number: textFromUnknown(order.invoice_number || "").trim(),
-    invoice_date: textFromUnknown(order.invoice_date || "").split(" ")[0],
-    delivery_date: textFromUnknown(order.delivery_date || "").split(" ")[0],
-    delivery_number: textFromUnknown(order.delivery_number || "").trim(),
-    shipping_number: textFromUnknown(order.shipping_number || "").trim(),
-    note: noteText,
-    gift: numFromUnknown(order.gift) === 1,
-    gift_message: giftMsg,
-    recyclable: numFromUnknown(order.recyclable) === 1,
-    mobile_theme: numFromUnknown(order.mobile_theme) === 1,
-  };
+  return extractOrderResource(response.prestashop.order);
 }
 
+/**
+ * ✅ CREATE: Crée une nouvelle commande
+ * Valide les champs obligatoires et applique les règles PrestaShop
+ */
 export async function createOrder(form: OrderCreateForm): Promise<number> {
-  // 🔥 SAFE VALIDATION (only strict required fields)
-  assertRequiredFields<OrderForm>("Commande", form, [
-    { key: "id_customer", message: "id_customer", isValid: v => Number(v) > 0 },
-    { key: "id_cart", message: "id_cart", isValid: v => Number(v) > 0 },
-    { key: "id_address_delivery", message: "id_address_delivery", isValid: v => Number(v) > 0 },
-    { key: "id_address_invoice", message: "id_address_invoice", isValid: v => Number(v) > 0 },
-    { key: "id_currency", message: "id_currency", isValid: v => Number(v) > 0 },
-    { key: "id_lang", message: "id_lang", isValid: v => Number(v) > 0 },
-    { key: "id_carrier", message: "id_carrier", isValid: v => Number(v) > 0 },
-  ]);
+  // ✅ Validation des champs requis
+  validateRequiredFields("Commande", form, CREATE_ORDER_RULES);
 
-  // 🔥 GET CUSTOMER SECURE KEY SAFE
+  // 🔑 Récupère la clé sécurisée du client
   let secureKey = form.secure_key;
-
   if (!secureKey) {
     try {
       const customer = await getClient(form.id_customer);
@@ -419,207 +452,237 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     }
   }
 
-  const method = getPaymentMethod(form.payment_code || "cash");
-
-  if (!method?.module) {
+  // 💳 Valide la méthode de paiement
+  const paymentMethod = getPaymentMethod(form.payment_code || "cash");
+  if (!paymentMethod?.module) {
     throw new Error(`Méthode de paiement invalide: ${form.payment_code}`);
   }
 
+  // 🛠️ Prépare le formulaire sécurisé
   const safeForm: OrderForm = {
     ...form,
-    module: method.module,
-    payment: method.label,
+    module: paymentMethod.module,
+    payment: paymentMethod.label,
     secure_key: secureKey,
-    id_shop: 1,
-    id_shop_group: 1,
+    id_shop: form.id_shop ?? 1,
+    id_shop_group: form.id_shop_group ?? 1,
   };
 
+  // 📤 Envoie la création
   const xml = buildOrderXmlForCreation(safeForm);
-
   const response = await requestPrestashopXml<{
-    prestashop: { order: { id: unknown } }
-  }>(
-    `/orders`,
-    {
-      method: "POST",
-      bodyXml: xml,
-    }
-  );
+    prestashop: { order: { id: unknown } };
+  }>("/orders", {
+    method: "POST",
+    bodyXml: xml,
+  });
 
-  const id = Number(response?.prestashop?.order?.id);
-
-  if (!Number.isFinite(id) || id <= 0) {
+  const orderId = numFromUnknown(response?.prestashop?.order?.id);
+  if (!validateUnsignedId(orderId)) {
     throw new Error("Échec création commande PrestaShop (ID invalide)");
   }
 
-  return id;
+  return orderId;
 }
 
+/**
+ * Alias pour compatibilité
+ */
+export const createCommande = createOrder;
+
+/**
+ * ✏️ UPDATE: Met à jour une commande existante
+ */
 export async function updateOrder(id: number, form: OrderForm): Promise<void> {
-  const xml = buildOrderXml(form);
-  await requestPrestashopXml(`/orders/${id}`, { method: "PUT", bodyXml: xml });
+  if (!validateUnsignedId(id)) {
+    throw new Error(`ID commande invalide: ${id}`);
+  }
+
+  // Valide les champs critiques
+  validateRequiredFields("Commande", form, CREATE_ORDER_RULES);
+
+  const xml = buildOrderXmlForUpdate({ ...form, id });
+  await requestPrestashopXml(`/orders/${id}`, {
+    method: "PUT",
+    bodyXml: xml,
+  });
 }
 
-export async function updateImportOrder(id: number, form: OrderImport): Promise<void> {
-  const xml = buildOrderTXml(form);
-  await requestPrestashopXml(`/orders/${id}`, { method: "PUT", bodyXml: xml });
+/**
+ * ✏️ UPDATE: Change l'état d'une commande
+ * Utilise le workflow cohérent de PrestaShop
+ */
+export async function updateOrderState(id: number, newState: number): Promise<void> {
+  if (!validateUnsignedId(id)) {
+    throw new Error(`ID commande invalide: ${id}`);
+  }
+
+  if (!validateUnsignedId(newState)) {
+    throw new Error(`État invalide: ${newState}`);
+  }
+
+  const order = await getOrder(id);
+  await updateOrder(id, { ...order, current_state: newState });
 }
 
+/**
+ * Alias pour compatibilité
+ */
+export const updateEtatCommande = updateOrderState;
+
+/**
+ * 🗑️ DELETE: Supprime une commande
+ * ⚠️ Attention: Opération irréversible
+ */
 export async function deleteOrder(id: number): Promise<void> {
+  if (!validateUnsignedId(id)) {
+    throw new Error(`ID commande invalide: ${id}`);
+  }
+
   await requestPrestashopXml(`/orders/${id}`, { method: "DELETE" });
 }
 
-export const createCommande = createOrder;
-export const updateEtatCommande = async (id: number, current_state: number): Promise<void> => {
-  const order = await getOrder(id);
-  await updateOrder(id, {
-    ...order,
-    current_state,
-  });
-};
+/**
+ * Alias pour compatibilité
+ */
 export const deleteCommande = deleteOrder;
 
-// conversion d'un OrderForm en XML pour Prestashop
+/**
+ * 📤 BATCH: Import en masse de commandes
+ */
+export async function importOrders(items: OrderListItem[]): Promise<void> {
+  const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer ${items.length} commande(s)?`);
+  if (!confirmed) return;
+
+  try {
+    const deletePromises = items.map((item) => deleteOrder(item.id));
+    await Promise.all(deletePromises);
+  } catch (err) {
+    console.error("Erreur lors du traitement des commandes:", err);
+    throw new Error(`Erreur lors de l'initialisation: ${err}`);
+  }
+}
+
+// ============================================================
+// 🏗️ XML BUILDERS
+// ============================================================
 
 /**
- * Build minimal XML for order CREATION
- * Excludes read-only fields that PrestaShop auto-generates (invoice_date, delivery_date, valid, etc.)
+ * Construit le XML minimal pour la création d'une commande
+ * Exclut les champs générés automatiquement par PrestaShop
  */
 function buildOrderXmlForCreation(form: OrderForm): string {
-  const root = {
-    prestashop: {
-      order: {
-        id_cart: form.id_cart,
-        id_customer: form.id_customer,
-        id_address_delivery: form.id_address_delivery,
-        id_address_invoice: form.id_address_invoice,
-        id_currency: form.id_currency,
-        id_lang: form.id_lang,
-        id_carrier: form.id_carrier,
-
-        module: form.module,
-        payment: form.payment,
-        secure_key: form.secure_key || "",
-
-        total_paid: form.total_paid || 0,
-        total_paid_tax_incl: form.total_paid_tax_incl || form.total_paid || 0,
-        total_paid_tax_excl: form.total_paid_tax_excl || form.total_paid || 0,
-        total_paid_real: form.total_paid_real || form.total_paid || 0,
-        total_products: form.total_products || 0,
-        total_products_wt: form.total_products_wt || form.total_products || 0,
-        total_shipping: form.total_shipping || 0,
-        conversion_rate: form.conversion_rate || 1,
-      },
-    },
+  const order = {
+    id_cart: form.id_cart,
+    id_customer: form.id_customer,
+    id_address_delivery: form.id_address_delivery,
+    id_address_invoice: form.id_address_invoice,
+    id_currency: form.id_currency,
+    id_lang: form.id_lang || 1,
+    id_carrier: form.id_carrier,
+    module: form.module,
+    payment: form.payment,
+    secure_key: form.secure_key || "",
+    total_paid: form.total_paid || 0,
+    total_paid_tax_incl: form.total_paid_tax_incl ?? form.total_paid ?? 0,
+    total_paid_tax_excl: form.total_paid_tax_excl ?? form.total_paid ?? 0,
+    total_paid_real: form.total_paid_real || form.total_paid || 0,
+    total_products: form.total_products || 0,
+    total_products_wt: form.total_products_wt || form.total_products || 0,
+    total_shipping: form.total_shipping || 0,
+    conversion_rate: form.conversion_rate || 1,
   };
 
-  return buildPrestashopXml(root);
-}
-
-function buildOrderXml(form: OrderForm): string {
-  const root = {
-    prestashop: {
-      order: {
-      id_cart: form.id_cart,
-      id_customer: form.id_customer,
-      id_address_delivery: form.id_address_delivery,
-      id_address_invoice: form.id_address_invoice,
-      id_currency: form.id_currency,
-      id_lang: form.id_lang,
-      id_carrier: form.id_carrier,
-      payment: form.payment,
-      module: form.module,
-      current_state: form.current_state,
-      total_paid: form.total_paid,
-      total_paid_tax_incl: form.total_paid_tax_incl ?? form.total_paid,
-      total_paid_tax_excl: form.total_paid_tax_excl ?? form.total_paid,
-      total_paid_real: form.total_paid_real,
-      total_products: form.total_products,
-      total_products_wt: form.total_products_wt,
-      total_shipping: form.total_shipping,
-      total_shipping_tax_incl: form.total_shipping_tax_incl ?? form.total_shipping,
-      total_shipping_tax_excl: form.total_shipping_tax_excl ?? form.total_shipping,
-      total_discounts: form.total_discounts ?? 0,
-      total_discounts_tax_incl: form.total_discounts_tax_incl ?? 0,
-      total_discounts_tax_excl: form.total_discounts_tax_excl ?? 0,
-      carrier_tax_rate: form.carrier_tax_rate ?? 0,
-      total_wrapping: form.total_wrapping ?? 0,
-      total_wrapping_tax_incl: form.total_wrapping_tax_incl ?? 0,
-      total_wrapping_tax_excl: form.total_wrapping_tax_excl ?? 0,
-      round_mode: form.round_mode ?? 0,
-      round_type: form.round_type ?? 0,
-      conversion_rate: form.conversion_rate,
-      secure_key: form.secure_key || "",
-      valid: form.valid ? 1 : 0,
-      invoice_number: form.invoice_number,
-      invoice_date: form.invoice_date,
-      delivery_date: form.delivery_date,
-      delivery_number: form.delivery_number,
-      gift: form.gift ? 1 : 0,
-      recyclable: form.recyclable ? 1 : 0,
-      mobile_theme: form.mobile_theme ? 1 : 0,
-      },
-    },
-  };
-
+  // Ajoute les champs multilingues si présents
   if (form.note) {
-    (root.prestashop.order as any).note = {
-      language: {
-        "@_id": "1",
-        "#text": form.note,
-      },
-    };
+    (order as any).note = languageField(form.note);
   }
 
-  if (form.gift_message) {
-    (root.prestashop.order as any).gift_message = {
-      language: {
-        "@_id": "1",
-        "#text": form.gift_message,
-      },
-    };
-  }
-
-  return buildPrestashopXml(root);
+  return buildPrestashopXml({ prestashop: { order } });
 }
 
-function buildOrderTXml(form: OrderImport): string {
-  const root = {
-    prestashop: {
-      order: {
-        // id_shop_group: form.id_shop_group,
-        // id_shop: form.id_shop,
-        id_address_delivery: form.id_address_delivery,
-        id_address_invoice: form.id_address_invoice,
-        id_cart: form.id_cart,
-        id_currency: form.id_currency,
-        id_lang: form.id_lang || 1,
-        id_customer: form.id_customer,
-        id_carrier: form.id_carrier,
-        current_state: form.current_state,
-        module: form.module,
-        payment: form.payment,
-        total_paid: form.total_paid,
-        total_paid_tax_incl: form.total_paid_tax_incl,
-        total_paid_tax_excl: form.total_paid_tax_excl,
-        total_products: form.total_products,
-        total_products_wt: form.total_products_wt,
-        total_paid_real: form.total_paid_real,
-        conversion_rate: form.conversion_rate,
-        secure_key: form.secure_key,
-      },
-    },
+/**
+ * Construit le XML complet pour la mise à jour d'une commande
+ */
+function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
+  const order: Record<string, unknown> = {
+    id: form.id,
+    id_shop: form.id_shop || 1,
+    id_shop_group: form.id_shop_group || 1,
+    id_cart: form.id_cart,
+    id_customer: form.id_customer,
+    id_address_delivery: form.id_address_delivery,
+    id_address_invoice: form.id_address_invoice,
+    id_currency: form.id_currency,
+    id_lang: form.id_lang || 1,
+    id_carrier: form.id_carrier,
+    current_state: form.current_state || 1,
+    module: form.module,
+    payment: form.payment,
+    secure_key: form.secure_key || "",
+
+    // Montants
+    total_paid: form.total_paid || 0,
+    total_paid_tax_incl: form.total_paid_tax_incl ?? form.total_paid ?? 0,
+    total_paid_tax_excl: form.total_paid_tax_excl ?? form.total_paid ?? 0,
+    total_paid_real: form.total_paid_real || form.total_paid || 0,
+    total_products: form.total_products || 0,
+    total_products_wt: form.total_products_wt || form.total_products || 0,
+    total_shipping: form.total_shipping || 0,
+    total_shipping_tax_incl: form.total_shipping_tax_incl ?? form.total_shipping ?? 0,
+    total_shipping_tax_excl: form.total_shipping_tax_excl ?? form.total_shipping ?? 0,
+    total_discounts: form.total_discounts ?? 0,
+    total_discounts_tax_incl: form.total_discounts_tax_incl ?? 0,
+    total_discounts_tax_excl: form.total_discounts_tax_excl ?? 0,
+    carrier_tax_rate: form.carrier_tax_rate ?? 0,
+    total_wrapping: form.total_wrapping ?? 0,
+    total_wrapping_tax_incl: form.total_wrapping_tax_incl ?? 0,
+    total_wrapping_tax_excl: form.total_wrapping_tax_excl ?? 0,
+    conversion_rate: form.conversion_rate || 1,
+
+    // Techniques
+    round_mode: form.round_mode ?? 0,
+    round_type: form.round_type ?? 0,
+    valid: toPrestashopBool(form.valid || false),
+    recyclable: toPrestashopBool(form.recyclable || false),
+    gift: toPrestashopBool(form.gift || false),
+    mobile_theme: toPrestashopBool(form.mobile_theme || false),
+
+    // Documents
+    invoice_number: form.invoice_number || "",
+    invoice_date: form.invoice_date || "",
+    delivery_number: form.delivery_number || "",
+    delivery_date: form.delivery_date || "",
+    shipping_number: form.shipping_number || "",
   };
 
-  return buildPrestashopXml(root);
+  // Champs multilingues
+  if (form.note) {
+    order.note = languageField(form.note);
+  }
+  if (form.gift_message) {
+    order.gift_message = languageField(form.gift_message);
+  }
+
+  return buildPrestashopXml({ prestashop: { order } });
 }
 
+// ============================================================
+// 🛠️ UTILITIES & FORMATTERS
+// ============================================================
+
+/**
+ * Retourne le libellé d'un état de commande
+ */
 export function getOrderStateLabel(stateId: number): string {
   const state = ORDER_STATES.find((s) => s.id === stateId);
   return state?.label || `État #${stateId}`;
 }
 
-export function formatCurrency(value: number): string {
+/**
+ * Formate un montant en devise EUR
+ */
+export function formatCurrencyEur(value: number): string {
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "EUR",
@@ -628,15 +691,26 @@ export function formatCurrency(value: number): string {
   }).format(value);
 }
 
+/**
+ * Alias pour compatibilité
+ */
+export const formatCurrency = formatCurrencyEur;
+
+/**
+ * Initialise l'import en masse (supprime toutes les commandes)
+ * ⚠️ Opération destructrice
+ */
 export async function initCommande(items: OrderListItem[]): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
+  const confirmed = window.confirm(
+    `Êtes-vous sûr de vouloir supprimer tous les ${items.length} commandes?`,
+  );
   if (!confirmed) return;
-  console.log("Initialisation des commandes...");
+
   try {
-      const deletePromises = items.map(donner => deleteOrder(donner.id));
-      await Promise.all(deletePromises);
+    const deletePromises = items.map((item) => deleteOrder(item.id));
+    await Promise.all(deletePromises);
   } catch (err) {
-      console.error("Une ou plusieurs erreurs sont survenues lors de la suppression", err);
-      alert("Une erreur est survenue lors de l'initialisation.");
+    console.error("Erreur lors de la suppression des commandes:", err);
+    throw new Error(`Erreur lors de l'initialisation: ${err}`);
   }
 }

@@ -57,7 +57,14 @@ export async function listOrderStates(): Promise<OrderStateListItem[]> {
     return [];
   }
 }
-
+export async function getOrderStateById(idEtat: number,liste:OrderStateListItem[]): Promise<OrderStateListItem | null> {
+  for (const state of liste) {
+    if (state.id === idEtat) {
+      return state;
+    }
+  }
+  return null; 
+}
 export async function getOrderStateDetail(stateId: number): Promise<OrderStateDetail | null> {
   try {
     const response = await requestPrestashopXml<any>(`/order_states/${stateId}`);

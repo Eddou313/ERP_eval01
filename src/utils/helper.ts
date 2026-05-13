@@ -1,10 +1,109 @@
 export const normalizeText = (value: string): string => value.trim().toLowerCase();
+
 /**
  * Utilitaires et fonctions helper partagées
  * Ce fichier centralise les fonctions communes utilisées dans les différents modules
  */
 
-// ==================== Extraction et conversion XML ====================
+// ============================================================
+// ✅ VALIDATEURS PrestaShop API
+// ============================================================
+
+/**
+ * Valide un ID non-signé (> 0)
+ * Format: isUnsignedId
+ */
+export function validateUnsignedId(value: unknown): boolean {
+  const num = numFromUnknown(value);
+  return num > 0;
+}
+
+/**
+ * Valide un prix (>= 0)
+ * Format: isPrice
+ */
+export function validatePrice(value: unknown): boolean {
+  const num = numFromUnknown(value);
+  return num >= 0 && Number.isFinite(num);
+}
+
+/**
+ * Valide un nombre flottant (> 0)
+ * Format: isFloat
+ */
+export function validateFloat(value: unknown): boolean {
+  const num = numFromUnknown(value);
+  return num > 0 && Number.isFinite(num);
+}
+
+/**
+ * Valide un booléen (0 ou 1)
+ * Format: isBool
+ */
+export function validateBool(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  return text === "0" || text === "1" || text === "" || text === "true" || text === "false";
+}
+
+/**
+ * Valide un nom de module
+ * Format: isModuleName - alphanumérique + tirets/underscores
+ */
+export function validateModuleName(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  return /^[a-zA-Z0-9_-]+$/.test(text);
+}
+
+/**
+ * Valide un nom générique
+ * Format: isGenericName - alphanumérique + espaces
+ */
+export function validateGenericName(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  return /^[a-zA-Z0-9\s\-_'àâäéèêëïîôùûüœæçñ.]+$/i.test(text);
+}
+
+/**
+ * Valide un hash MD5
+ * Format: isMd5 - 32 caractères hexadécimaux
+ */
+export function validateMd5(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  return /^[a-f0-9]{32}$/i.test(text) || text.length === 0;
+}
+
+/**
+ * Valide du HTML sécurisé
+ * Format: isCleanHtml
+ */
+export function validateCleanHtml(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  // Accepte le HTML basique mais rejette les attributs dangereux
+  return !/on\w+\s*=/i.test(text) && !/script/i.test(text);
+}
+
+/**
+ * Valide une date
+ * Format: isDate - YYYY-MM-DD ou YYYY-MM-DD HH:mm:ss
+ */
+export function validateDate(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  const dateRegex = /^\d{4}-\d{2}-\d{2}(\s\d{2}:\d{2}:\d{2})?$/;
+  if (!dateRegex.test(text)) return false;
+  
+  // Vérifie si c'est une date valide
+  const date = new Date(text);
+  return date instanceof Date && !isNaN(date.getTime());
+}
+
+/**
+ * Valide un numéro de suivi
+ * Format: isTrackingNumber - alphanumérique
+ */
+export function validateTrackingNumber(value: unknown): boolean {
+  const text = textFromUnknown(value);
+  return /^[a-zA-Z0-9\-\s]+$/.test(text) || text.length === 0;
+}
 
 /**
  * Extrait du texte à partir d'une valeur inconnue (objet, string, number, etc)
@@ -261,16 +360,11 @@ export function keywordsFromPrestashop(field?: PrestashopLanguageField): string[
 
 // ==================== Images de produits ====================
 
-/**
- * Construit l'URL de l'image d'un produit
- * Format: /api/images/products/[idproduit]/[id_default_image]
- * Ex: getProductImageUrl(5, 12) => "/api/images/products/5/12"
- */
 export function getProductImageUrl(productId: number, imageId: number): string {
-  return `${import.meta.env.VITE_BASE_URL}/images/products/${productId}/${imageId}`;
+  return `http://localhost/prestashop_edition_classic_version_8.2.6/${import.meta.env.VITE_BASE_URL}/images/products/${productId}/${imageId}`;
 }
 
-/**
+/**http://localhost/prestashop_edition_classic_version_8.2.6/api/images/products/1/1
  * Construit l'URL de l'image d'un produit avec fallback
  * Retourne un placeholder si l'imageId est 0 ou manquant
  */

@@ -31,11 +31,6 @@ export function buildPrestashopProductImageUrl(productId: number, imageId?: numb
   return `${baseUrl}${imagePath}?ws_key=${encodeURIComponent(apiKey)}`;
 }
 
-function basicAuthHeader(apiKey: string): string {
-  // PrestaShop webservice: ws_key as username, empty password
-  return `Basic ${btoa(`${apiKey}:`)}`;
-}
-
 export async function requestPrestashopXml<T>(
   resourcePath: string,
   opts: {
@@ -46,10 +41,9 @@ export async function requestPrestashopXml<T>(
   } = {},
 ): Promise<T> {
   const baseUrl = getEnv("VITE_BASE_URL").replace(/\/$/, "");
-  const apiKey = getEnv("VITE_API_KEY");
   const method = opts.method ?? "GET";
 
-  // On construit l'URL manuellement au lieu d'utiliser new URL()
+  // Construit l'URL
   let fullUrl = `${baseUrl}${resourcePath.startsWith("/") ? "" : "/"}${resourcePath}`;
 
   if (opts.query) {
@@ -63,36 +57,51 @@ export async function requestPrestashopXml<T>(
       fullUrl += `?${queryString}`;
     }
   }
-  // ----------------------
 
   if (opts.bodyXml) {
-    console.log(`\n===== PrestaShop XML OUT ${method} ${resourcePath} =====\n${opts.bodyXml}\n===== /PrestaShop XML OUT ${method} ${resourcePath} =====\n`);
+    console.log(
+      `\n===== PrestaShop XML OUT ${method} ${resourcePath} =====\n${opts.bodyXml}\n===== /PrestaShop XML OUT ${method} ${resourcePath} =====\n`,
+    );
   }
 
   const bodyXml = opts.bodyXml?.replace(/^<\?xml[^>]*\?>\s*/i, "");
 
-  const res = await fetch(fullUrl, { // On passe la string directement
-    method,
-    headers: {
-      Authorization: basicAuthHeader(apiKey),
-      Accept: "application/xml",
-      ...(bodyXml ? { "Content-Type": "application/xml" } : null),
-    },
-    body: bodyXml,
-    signal: opts.signal,
-  });
+  try {
+    const res = await fetch(fullUrl, {
+      method,
+      headers: {
+        Accept: "application/xml",
+        ...(bodyXml ? { "Content-Type": "application/xml" } : null),
+      },
+      body: bodyXml,
+      signal: opts.signal,
+    });
 
-  const text = await res.text();
-  if (!res.ok) {
-    console.error(`PrestaShop response body for ${method} ${resourcePath}:`, text);
+    const text = await res.text();
+    if (!res.ok) {
+      console.error(
+        `PrestaShop response body for ${method} ${resourcePath}:`,
+        text,
+      );
+      throw new PrestashopWebserviceError(
+        `PrestaShop Webservice error (${res.status})`,
+        res.status,
+        text,
+      );
+    }
+
+    return xmlToJson<T>(text);
+  } catch (error: any) {
+    if (error instanceof PrestashopWebserviceError) {
+      throw error;
+    }
+    console.error("[PrestaShop Client Error]", error);
     throw new PrestashopWebserviceError(
-      `PrestaShop Webservice error (${res.status})`,
-      res.status,
-      text,
+      `Erreur de connexion: ${error.message}`,
+      0,
+      error.message,
     );
   }
-
-  return xmlToJson<T>(text);
 }
 
 export function buildPrestashopXml(payload: unknown): string {

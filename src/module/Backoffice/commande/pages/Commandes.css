@@ -1,134 +1,108 @@
-/* Styles pour le module Commandes — inspiré des styles globaux (Home/Sidebar)
-   Classes légères pour header, filtres, tableau et boutons. */
-
 .commandesPage {
   padding: 20px;
+  font-family: Arial, sans-serif;
 }
 
-.commandesHeader {
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 15px;
 }
 
-.commandesError {
-  color: #b91c1c; /* rouge */
-  background: rgba(185,28,28,0.06);
-  padding: 8px 12px;
-  border-radius: 8px;
+.error {
+  color: red;
+  margin-bottom: 10px;
 }
 
-.commandesFilters {
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
-}
-
-.commandesFilterRow {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-
-.commandesFilterLabel {
-  display: flex;
-  flex-direction: column;
-  font-size: 13px;
-}
-
-.commandesFilterLabel input,
-.commandesFilterLabel select {
-  margin-top: 6px;
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-}
-
-.commandesFilterActions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.commandesToolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.commandesTable {
+/* TABLE */
+.table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  background: white;
 }
 
-.commandesTable thead tr {
-  background: #f8fafc;
+.table th,
+.table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
 }
 
-.commandesCell {
-  padding: 10px 12px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 14px;
+.table th {
+  background: #f5f5f5;
 }
 
-.commandesActions a,
-.commandesActions button {
-  color: #0f172a;
-  text-decoration: none;
-  padding: 6px 8px;
-  border-radius: 6px;
-}
-
-.commandesDanger {
-  background: #fff1f2;
-  color: #b91c1c;
-  border: 1px solid rgba(185,28,28,0.08);
-}
-
-@media (max-width: 960px) {
-  .commandesFilterRow {
-    flex-direction: column;
-  }
-}
-
-/* Global inputs and buttons within commandes pages */
-.commandesPage input[type="text"],
-.commandesPage input[type="number"],
-.commandesPage input[type="date"],
-.commandesPage select,
-.commandesPage textarea {
-  padding: 8px 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  font-size: 14px;
-  background: #ffffff;
-}
-
-.commandesPage button {
-  background: #2563eb;
-  color: #fff;
+/* BUTTON */
+.btn-edit {
+  padding: 5px 10px;
   border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
+  background: #3498db;
+  color: white;
   cursor: pointer;
-  font-weight: 600;
+  border-radius: 4px;
 }
 
-.commandesPage button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.btn-edit:hover {
+  background: #2980b9;
 }
 
-.commandesPage .commandesDanger {
-  background: #fff1f2;
-  color: #b91c1c;
+/* MODAL */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  width: 320px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.modal select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+}
+
+.btn-save {
+  background: #2ecc71;
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.btn-cancel {
+  background: #e74c3c;
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.btn-save:hover {
+  background: #27ae60;
+}
+
+.btn-cancel:hover {
+  background: #c0392b;
 }

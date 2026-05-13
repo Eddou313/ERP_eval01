@@ -70,22 +70,22 @@ export function ProduitsList() {
                   style={{ cursor: "pointer" }}
                 >
                   <div className="productImageWrap">
-                    {product.id_default_image && (
+                    {product.id_default_image ? (
                       <img
                         src={getProductImageUrl(product.id, product.id_default_image)}
                         alt={product.name}
                         className="productImage"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://via.placeholder.com/250x250?text=No+Image";
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="250" height="250"%3E%3Crect fill="%23f0f0f0" width="250" height="250"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-size="14"%3ENo Image%3C/text%3E%3C/svg%3E';
                         }}
                       />
-                    )}
-                    {!product.id_default_image && (
-                      <img
-                        src="https://via.placeholder.com/250x250?text=No+Image"
-                        alt={product.name}
-                        className="productImage"
-                      />
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 250 250" className="productImage">
+                        <rect fill="#f0f0f0" width="250" height="250"/>
+                        <text x="50%" y="50%" textAnchor="middle" dy=".3em" fill="#999" fontSize="14">
+                          No Image
+                        </text>
+                      </svg>
                     )}
                     {product.on_sale && (
                       <div className="badgesStack">
