@@ -88,7 +88,7 @@ export function ProduitsList() {
                     )}
                     {product.on_sale && (
                       <div className="badgesStack">
-                        <span className="discountBadge">-20%</span>
+                        {/* <span className="discountBadge">-20%</span> */}
                       </div>
                     )}
                     {/* Availability badges */}
