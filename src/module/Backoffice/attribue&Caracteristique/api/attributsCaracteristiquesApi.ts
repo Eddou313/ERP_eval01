@@ -38,6 +38,15 @@ export type ProductAttributeGroupSelection = {
   group: AttributeGroupListItem;
   values: AttributeValueListItem[];
   selectedValueId: number;
+  // combinaison
+  combinations?: {
+    id: number;
+    quantity?: number;
+    attributes: {
+      groupId: number;
+      valueId: number;
+    }[];
+  }[];
 };
 
 export type ProductFeatureGroupSelection = {
@@ -388,6 +397,54 @@ export async function getProductAttributeGroups(productId: number): Promise<Prod
     const groupIds = Array.from(valuesByGroup.keys());
     const groups = await Promise.all(groupIds.map((id) => getAttributeGroup(id)));
 
+    // valueId -> groupId, utile pour normaliser les combinaisons
+    const valueIdToGroupId = new Map<number, number>();
+    for (const value of values) {
+      valueIdToGroupId.set(value.id, value.attributeGroupId);
+    }
+
+    // Charger les combinaisons exactes du produit
+    let normalizedCombinations: NonNullable<ProductAttributeGroupSelection["combinations"]> = [];
+    try {
+      const combinationsResponse = await requestPrestashopXml<any>("/combinations", {
+        query: {
+          display: "full",
+          "filter[id_product]": `[${productId}]`,
+        },
+      });
+
+      const combinationsRaw = combinationsResponse?.prestashop?.combinations?.combination;
+      if (combinationsRaw) {
+        normalizedCombinations = asArray(combinationsRaw)
+          .map((combination: any) => {
+            const combinationId = numFromUnknown(combination?.id);
+            if (combinationId <= 0) return null;
+
+            const associationValues = combination?.associations?.product_option_values?.product_option_value;
+            const attributes = asArray(associationValues || [])
+              .map((optionValue: any) => {
+                const valueId = extractNumericId(optionValue, ["id", "id_attribute", "id_product_attribute"]);
+                const groupId = valueIdToGroupId.get(valueId) ?? 0;
+                if (valueId <= 0 || groupId <= 0) return null;
+                return {
+                  groupId,
+                  valueId,
+                };
+              })
+              .filter(Boolean) as { groupId: number; valueId: number }[];
+
+            return {
+              id: combinationId,
+              quantity: numFromUnknown(combination?.quantity),
+              attributes,
+            };
+          })
+          .filter(Boolean) as NonNullable<ProductAttributeGroupSelection["combinations"]>;
+      }
+    } catch (error) {
+      console.warn("Impossible de charger les combinaisons du produit:", error);
+    }
+
     return groups
       .map((group) => {
         const groupValues = (valuesByGroup.get(group.id) ?? []).sort((left, right) => left.position - right.position || left.name.localeCompare(right.name));
@@ -398,6 +455,7 @@ export async function getProductAttributeGroups(productId: number): Promise<Prod
           },
           values: groupValues,
           selectedValueId: groupValues[0]?.id ?? 0,
+          combinations: normalizedCombinations,
         } satisfies ProductAttributeGroupSelection;
       })
       .sort((left, right) => left.group.position - right.group.position || left.group.name.localeCompare(right.group.name));

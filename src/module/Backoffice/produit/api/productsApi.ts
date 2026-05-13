@@ -8,6 +8,7 @@ import {
   getFirstLanguageText,
   type PrestashopLanguageField,
 } from "../../../../utils/helper";
+import { getStockByProductId } from "../../stock/api/stockApi";
 
 // Product types based on PrestaShop 8.2.6 API schema
 
@@ -207,13 +208,15 @@ export async function getProduct(id: number): Promise<ProductListItem> {
   const json = await requestPrestashopXml<ProductGetResponse>(`/products/${id}`);
   const p = json.prestashop.product;
 
+  const stock = await getStockByProductId(id);
+
   return {
     id: numFromPrestashop(p.id),
     name: getFirstLanguageText(p.name),
     reference: stringFromPrestashop(p.reference),
     price: numFromPrestashop(p.price),
     active: boolFromPrestashop(p.active),
-    quantity: numFromPrestashop(p.quantity_discount), // Note: quantity is often in stock_available
+    quantity: stock ?? 0, // Note: quantity is often in stock_available
     id_category_default: numFromPrestashop(p.id_category_default),
     id_manufacturer: numFromPrestashop(p.id_manufacturer),
     id_supplier: numFromPrestashop(p.id_supplier),

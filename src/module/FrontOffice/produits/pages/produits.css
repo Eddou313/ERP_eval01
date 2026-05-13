@@ -507,6 +507,11 @@
 .quantityControl input:focus {
   outline: none;
 }
+.addToCartBtn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
 
 /* BUTTONS */
 .addToCartBtn {

@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getProductDetail, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
 import { getProductAttributeGroups, type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
+import { getStockByProductId } from "../../../Backoffice/stock/api/stockApi";
 import { getProductImageUrl } from "../../../../utils/helper";
 import "../pages/produits.css";
 import { useState, useEffect } from "react";
@@ -14,6 +15,7 @@ export function ProduitDetail() {
   const [attributeGroups, setAttributeGroups] = useState<ProductAttributeGroupSelection[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [selectedAttributeValues, setSelectedAttributeValues] = useState<Record<number, string>>({});
+  const [availableStock, setAvailableStock] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,81 @@ export function ProduitDetail() {
 
     loadProductDetails();
   }, [initialProduct]);
+
+  // Fonction utilitaire: vérifie le stock pour un mapping d'attributs donné
+  const verifyStockForAttributes = async (attributes: Record<number, string>) => {
+    try {
+      if (!product?.id) return null;
+
+      // Rassembler les combinaisons disponibles depuis attributeGroups
+      const combinations = attributeGroups.flatMap((g) => g.combinations || []);
+      const uniqueCombinations = Array.from(
+        new Map(combinations.map((comb) => [Number((comb as any).id), comb])).values()
+      );
+
+      // Produit avec attributs mais combinaisons absentes => ne pas retomber sur stock total
+      if (attributeGroups.length > 0 && uniqueCombinations.length === 0) {
+        setAvailableStock(0);
+        return 0;
+      }
+
+      // Produit simple: id_product_attribute = 0
+      if (attributeGroups.length === 0 && uniqueCombinations.length === 0) {
+        const simpleStock = await getStockByProductId(product.id);
+        setAvailableStock(simpleStock ?? 0);
+        return simpleStock;
+      }
+
+      // Trouver combinaison correspondant exactement aux attributs fournis
+      const match = uniqueCombinations.find((comb: any) => {
+        if (!comb.attributes || comb.attributes.length === 0) {
+          return false;
+        }
+
+        // La combinaison doit couvrir toutes les valeurs sélectionnées
+        if (comb.attributes.length !== Object.keys(attributes).length) {
+          return false;
+        }
+
+        return Object.entries(attributes).every(([gId, val]) => {
+          const gid = Number(gId);
+          const vid = Number(val);
+          return comb.attributes?.some((a: any) => Number(a.groupId) === gid && Number(a.valueId) === vid);
+        });
+      });
+
+      if (match && match.id) {
+        const comboId = Number(match.id);
+        const stock = await getStockByProductId(product.id, comboId);
+        setAvailableStock(stock ?? 0);
+        console.log(`Stock vérifié pour combinaison ${comboId}:`, stock);
+        return stock;
+      }
+
+      // Produit à déclinaisons mais combinaison non trouvée => stock 0
+      setAvailableStock(0);
+      console.log("Aucune combinaison correspondante trouvée pour", attributes);
+      return 0;
+    } catch (err) {
+      console.error("Erreur vérification stock:", err);
+      setAvailableStock(0);
+      return null;
+    }
+  };
+
+  // Vérifier automatiquement le stock réel à chaque changement d'attributs
+  useEffect(() => {
+    if (!product?.id) {
+      return;
+    }
+
+    // Attendre que les sélections par défaut soient disponibles
+    if (attributeGroups.length > 0 && Object.keys(selectedAttributeValues).length === 0) {
+      return;
+    }
+
+    verifyStockForAttributes(selectedAttributeValues);
+  }, [product?.id, attributeGroups, selectedAttributeValues]);
 
   if (error) {
     return (
@@ -228,7 +305,13 @@ export function ProduitDetail() {
 
             {/* Stock Status */}
             <div className="stockStatus">
-              {product.quantity && product.quantity > 0 ? (
+              {availableStock !== null ? (
+                availableStock > 0 ? (
+                  <p className="inStock">✅ En stock ({availableStock} unités)</p>
+                ) : (
+                  <p className="outOfStock">❌ Rupture de stock</p>
+                )
+              ) : product.quantity && product.quantity > 0 ? (
                 <p className="inStock">✅ En stock ({product.quantity} unités)</p>
               ) : (
                 <p className="outOfStock">❌ Rupture de stock</p>
