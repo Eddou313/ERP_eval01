@@ -12,14 +12,22 @@ export type ClientSession = {
 };
 
 export const CLIENT_STORAGE_KEY = "evaluation01.client.session";
+export const CLIENT_SESSION_STORAGE_KEY = "evaluation01.client.session.runtime";
 const SESSION_DURATION = 2 * 60 * 60 * 1000;
 
 export function getStoredClientSession(): ClientSession | null {
-  const rawSession = window.localStorage.getItem(CLIENT_STORAGE_KEY);
+  const rawSession =
+    window.sessionStorage.getItem(CLIENT_SESSION_STORAGE_KEY) ||
+    window.localStorage.getItem(CLIENT_STORAGE_KEY);
   if (!rawSession) return null;
 
   try {
-    return JSON.parse(rawSession) as ClientSession;
+    const session = JSON.parse(rawSession) as ClientSession;
+    if (!session?.expiresAt || session.expiresAt < Date.now()) {
+      logoutClient();
+      return null;
+    }
+    return session;
   } catch {
     return null;
   }
@@ -31,10 +39,12 @@ export function saveClientSession(sessionData: Omit<ClientSession, 'expiresAt'>)
     expiresAt: Date.now() + SESSION_DURATION
   };
   window.localStorage.setItem(CLIENT_STORAGE_KEY, JSON.stringify(session));
+  window.sessionStorage.setItem(CLIENT_SESSION_STORAGE_KEY, JSON.stringify(session));
 }
 
 export function logoutClient(): void {
   window.localStorage.removeItem(CLIENT_STORAGE_KEY);
+  window.sessionStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
 }
 
 interface PrestashopCustomerResponse {

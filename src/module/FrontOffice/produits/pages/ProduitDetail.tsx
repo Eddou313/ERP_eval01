@@ -1,8 +1,10 @@
-import { useLocation } from "react-router-dom";
+import {  useLocation, useNavigate } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getProductDetail, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
 import { getProductAttributeGroups, type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
 import { getStockByProductId } from "../../../Backoffice/stock/api/stockApi";
+import { addProductToCart, createCartForConnectedCustomer, getLatestCartForCustomerId, getOrCreateGuestCart } from "../../../Backoffice/panier/api/panierApi";
+import { getStoredClientSession } from "../../client/api/clientAPI";
 import { getProductImageUrl } from "../../../../utils/helper";
 import "../pages/produits.css";
 import { useState, useEffect } from "react";
@@ -10,6 +12,7 @@ import { useState, useEffect } from "react";
 export function ProduitDetail() {
   const location = useLocation();
   const initialProduct = location.state?.product as ProductListItem;
+  const navigate = useNavigate();
 
   const [product, setProduct] = useState<any>(initialProduct || null);
   const [attributeGroups, setAttributeGroups] = useState<ProductAttributeGroupSelection[]>([]);
@@ -18,6 +21,7 @@ export function ProduitDetail() {
   const [availableStock, setAvailableStock] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   useEffect(() => {
     if (!initialProduct) {
@@ -54,46 +58,55 @@ export function ProduitDetail() {
   }, [initialProduct]);
 
   // Fonction utilitaire: vérifie le stock pour un mapping d'attributs donné
+  const findMatchingCombination = (attributes: Record<number, string>) => {
+    const combinations = attributeGroups.flatMap((g) => g.combinations || []);
+    const uniqueCombinations = Array.from(
+      new Map(combinations.map((comb) => [Number((comb as any).id), comb])).values()
+    );
+
+    if (attributeGroups.length > 0 && uniqueCombinations.length === 0) {
+      return null;
+    }
+
+    if (attributeGroups.length === 0 && uniqueCombinations.length === 0) {
+      return { id: 0, attributes: [] as Array<{ groupId: number; valueId: number }> };
+    }
+
+    return uniqueCombinations.find((comb: any) => {
+      if (!comb.attributes || comb.attributes.length === 0) {
+        return false;
+      }
+
+      if (comb.attributes.length !== Object.keys(attributes).length) {
+        return false;
+      }
+
+      return Object.entries(attributes).every(([gId, val]) => {
+        const gid = Number(gId);
+        const vid = Number(val);
+        return comb.attributes?.some((a: any) => Number(a.groupId) === gid && Number(a.valueId) === vid);
+      });
+    }) || null;
+  };
+
   const verifyStockForAttributes = async (attributes: Record<number, string>) => {
     try {
       if (!product?.id) return null;
 
-      // Rassembler les combinaisons disponibles depuis attributeGroups
-      const combinations = attributeGroups.flatMap((g) => g.combinations || []);
-      const uniqueCombinations = Array.from(
-        new Map(combinations.map((comb) => [Number((comb as any).id), comb])).values()
-      );
+      const match = findMatchingCombination(attributes);
 
       // Produit avec attributs mais combinaisons absentes => ne pas retomber sur stock total
-      if (attributeGroups.length > 0 && uniqueCombinations.length === 0) {
+      if (attributeGroups.length > 0 && !match) {
         setAvailableStock(0);
         return 0;
       }
 
       // Produit simple: id_product_attribute = 0
-      if (attributeGroups.length === 0 && uniqueCombinations.length === 0) {
+      if (attributeGroups.length === 0 && (!match || Number((match as any).id) === 0)) {
         const simpleStock = await getStockByProductId(product.id);
         setAvailableStock(simpleStock ?? 0);
         return simpleStock;
       }
-
-      // Trouver combinaison correspondant exactement aux attributs fournis
-      const match = uniqueCombinations.find((comb: any) => {
-        if (!comb.attributes || comb.attributes.length === 0) {
-          return false;
-        }
-
-        // La combinaison doit couvrir toutes les valeurs sélectionnées
-        if (comb.attributes.length !== Object.keys(attributes).length) {
-          return false;
-        }
-
-        return Object.entries(attributes).every(([gId, val]) => {
-          const gid = Number(gId);
-          const vid = Number(val);
-          return comb.attributes?.some((a: any) => Number(a.groupId) === gid && Number(a.valueId) === vid);
-        });
-      });
 
       if (match && match.id) {
         const comboId = Number(match.id);
@@ -128,6 +141,73 @@ export function ProduitDetail() {
     verifyStockForAttributes(selectedAttributeValues);
   }, [product?.id, attributeGroups, selectedAttributeValues]);
 
+  const handleAddToCart = async () => {
+    try {
+      if (!product?.id) return;
+
+      const match = findMatchingCombination(selectedAttributeValues);
+      const comboId = match && Number(match.id) > 0 ? Number(match.id) : 0;
+
+      if (attributeGroups.length > 0 && comboId === 0) {
+        alert("Veuillez choisir une combinaison valide.");
+        return;
+      }
+
+      if (availableStock !== null && availableStock > 0 && quantity > availableStock) {
+        alert(`Stock insuffisant. Disponible: ${availableStock}`);
+        return;
+      }
+
+      setIsAddingToCart(true);
+
+      const session = getStoredClientSession();
+      const customerId = Number(session?.id || 0);
+
+      if (customerId > 0) {
+        const latestCart = await getLatestCartForCustomerId(customerId);
+        const targetCart = latestCart ?? (await createCartForConnectedCustomer(customerId));
+
+        if (!targetCart) {
+          throw new Error("Impossible de récupérer le panier client");
+        }
+
+        const updatedCart = await addProductToCart({
+          cartId: typeof targetCart === "number" ? targetCart : targetCart.id,
+          customerId,
+          id_product: product.id,
+          id_product_attribute: comboId,
+          quantity,
+        });
+
+        console.log("Panier client mis à jour:", updatedCart);
+        alert(`${quantity}x "${product.name}" ajouté au panier`);
+        return;
+      }
+
+      const guestCart = await getOrCreateGuestCart();
+      if (!guestCart) {
+        throw new Error("Impossible de créer le panier invité");
+      }
+
+      const updatedCart = await addProductToCart({
+        cartId: guestCart.id,
+        customerId: 0,
+        id_product: product.id,
+        id_product_attribute: comboId,
+        quantity,
+      });
+
+      console.log("Panier invité mis à jour:", updatedCart);
+      navigate("/panier");
+      // alert(`${quantity}x "${product.name}" ajouté au panier`);
+    } catch (err) {
+      console.error("Erreur ajout panier:", err);
+      alert("Impossible d'ajouter le produit au panier.");
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="productsPage">
@@ -149,17 +229,6 @@ export function ProduitDetail() {
       </div>
     );
   }
-
-  const handleAddToCart = () => {
-    console.log("Ajouter au panier:", {
-      productId: product.id,
-      name: product.name,
-      quantity,
-      attributes: selectedAttributeValues,
-      price: product.price,
-    });
-    alert(`${quantity}x "${product.name}" ajouté au panier!`);
-  };
 
   return (
     <div className="productsPage">
@@ -299,8 +368,8 @@ export function ProduitDetail() {
             </div>
 
             {/* Add to Cart Button */}
-            <button className="addToCartBtn" onClick={handleAddToCart}>
-              🛒 AJOUTER AU PANIER
+            <button className="addToCartBtn" onClick={handleAddToCart} disabled={isAddingToCart}>
+              {isAddingToCart ? "AJOUT AU PANIER..." : "🛒 AJOUTER AU PANIER"}
             </button>
 
             {/* Stock Status */}
