@@ -1,0 +1,134 @@
+/* Styles pour le module Commandes — inspiré des styles globaux (Home/Sidebar)
+   Classes légères pour header, filtres, tableau et boutons. */
+
+.commandesPage {
+  padding: 20px;
+}
+
+.commandesHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.commandesError {
+  color: #b91c1c; /* rouge */
+  background: rgba(185,28,28,0.06);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.commandesFilters {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.commandesFilterRow {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.commandesFilterLabel {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+
+.commandesFilterLabel input,
+.commandesFilterLabel select {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.commandesFilterActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.commandesToolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.commandesTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+.commandesTable thead tr {
+  background: #f8fafc;
+}
+
+.commandesCell {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.commandesActions a,
+.commandesActions button {
+  color: #0f172a;
+  text-decoration: none;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.commandesDanger {
+  background: #fff1f2;
+  color: #b91c1c;
+  border: 1px solid rgba(185,28,28,0.08);
+}
+
+@media (max-width: 960px) {
+  .commandesFilterRow {
+    flex-direction: column;
+  }
+}
+
+/* Global inputs and buttons within commandes pages */
+.commandesPage input[type="text"],
+.commandesPage input[type="number"],
+.commandesPage input[type="date"],
+.commandesPage select,
+.commandesPage textarea {
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #ffffff;
+}
+
+.commandesPage button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.commandesPage button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.commandesPage .commandesDanger {
+  background: #fff1f2;
+  color: #b91c1c;
+}

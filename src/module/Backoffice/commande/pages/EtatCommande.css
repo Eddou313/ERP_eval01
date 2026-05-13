@@ -1,0 +1,166 @@
+.EtatCommandePage {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.EtatCommandeHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+}
+
+.EtatCommandeTitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.EtatCommandeButton {
+  padding: 10px 20px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.EtatCommandeButton:hover:not(:disabled) {
+  background-color: #1976d2;
+}
+
+.EtatCommandeButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.EtatCommandeEmpty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.EtatCommandeEmpty p {
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.EtatCommandeContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.EtatCommandeMuted {
+  color: #999;
+  font-size: 13px;
+  margin: 0;
+}
+
+.EtatCommandeTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.EtatCommandeTable thead {
+  background-color: #f5f5f5;
+}
+
+.EtatCommandeTable thead th {
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  font-size: 13px;
+  border-bottom: 2px solid #ddd;
+}
+
+.EtatCommandeTable tbody tr {
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.EtatCommandeTable tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+.EtatCommandeTable tbody td {
+  padding: 12px 15px;
+  font-size: 13px;
+  color: #666;
+}
+
+.EtatCommandeName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.EtatCommandeColorCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.EtatCommandeColorBox {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid #ddd;
+}
+
+.EtatCommandeType {
+  display: inline-block;
+  padding: 3px 8px;
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.EtatCommandeBadge {
+  display: inline-block;
+  padding: 3px 8px;
+  background-color: #ff9800;
+  color: white;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .EtatCommandeHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .EtatCommandeTitle {
+    font-size: 22px;
+  }
+
+  .EtatCommandeTable {
+    font-size: 12px;
+  }
+
+  .EtatCommandeTable thead th,
+  .EtatCommandeTable tbody td {
+    padding: 8px 10px;
+  }
+}

@@ -3,11 +3,11 @@ import DashboardPage from "../module/Backoffice/tableauBord/pages/DashboardPage"
 
 // import CategoriesListPage from "../module/Backoffice/categorie/pages/CategoriesListPage"
 // import ProductsListPage from "../module/Backoffice/produit/pages/ProductsListPage"
-// import CommandesListPage from "../module/Backoffice/commande/pages/CommandesListPage"
+import CommandesListPage from "../module/Backoffice/commande/pages/CommandesListPage"
 // import ImportGlobal from "../files/pages/ImportGlobal"
 // import PaniersListPage from "../module/Backoffice/panier/pages/PaniersListPage"
 // import PanierDetailPage from "../module/Backoffice/panier/pages/PanierDetailPage"
-// import EtatCommande from "../module/Backoffice/commande/pages/EtatCommande"
+import EtatCommande from "../module/Backoffice/commande/pages/EtatCommande"
 import Login from "../module/Backoffice/auth/pages/login"
 import SecureRoute from "./securiter"
 // import FrontOfficePage from "../module/FrontOffice/pages/FrontOfficePage"
@@ -45,14 +45,14 @@ function AppRouter() {
             {/* <Route path="catalogue/marques-fournisseurs" element={<MarquesFournisseursPage />} /> */}
             {/* <Route path="catalogue/stock" element={<StockPage />} /> */}
 
-            {/* <Route path="commandes/list" element={<CommandesListPage />} /> */}
+            <Route path="commandes/list" element={<CommandesListPage />} />
             {/* <Route path="/catalogue/fichier" element={<ImportGlobal/>}/> */}
 
             {/* <Route path="/clients/clients" element={<ClientsListe/>}/> */}
             {/* <Route path="/clients/adresses" element={<ClientsAdressesListe/>}/> */}
             {/* <Route path="/commandes/panier" element={<PaniersListPage/>} /> */}
             {/* <Route path="/commandes/panier/:id" element={<PanierDetailPage/>} /> */}
-            {/* <Route path="/commandes/etat" element={<EtatCommande/>} /> */}
+            <Route path="/commandes/etat" element={<EtatCommande/>} />
 
             {/* <Route path="/sav/sav" element={<SavePage/>} /> */}
             {/* <Route path="/sav/sav/:id" element={<SaveDetailPage/>} /> */}
