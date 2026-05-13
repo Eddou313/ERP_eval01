@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
-// import DashboardPage from "../module/Backoffice/tableauBord/pages/DashboardPage"
+import DashboardPage from "../module/Backoffice/tableauBord/pages/DashboardPage"
 
 // import CategoriesListPage from "../module/Backoffice/categorie/pages/CategoriesListPage"
 // import ProductsListPage from "../module/Backoffice/produit/pages/ProductsListPage"
@@ -37,7 +37,7 @@ function AppRouter() {
           <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}
             
-            {/* <Route path="/Dashbord" element={<DashboardPage />} /> */}
+            <Route path="/Dashbord" element={<DashboardPage />} />
 
             {/* <Route path="catalogue/categories" element={<CategoriesListPage />} /> */}
             {/* <Route path="catalogue/produits" element={<ProductsListPage />} /> */}
