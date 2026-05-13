@@ -188,7 +188,7 @@ export const localnumFromPrestashop = numFromPrestashop;
 export const localstringFromPrestashop = stringFromPrestashop;
 export const localkeywordsFromPrestashop = keywordsFromPrestashop;
 
-type PriceWorkflowBreakdown = {
+export type PriceWorkflowBreakdown = {
   basePrice: number;
   combinationPriceImpact: number;
   reductionAmount: number;
@@ -331,12 +331,13 @@ async function resolveTaxRate(product: any): Promise<number> {
   return 20;
 }
 
-async function resolveProductPriceWorkflow(product: any, productId: number): Promise<PriceWorkflowBreakdown> {
+export async function resolveProductPriceWorkflow(product: any, productId: number, combinationId?: number): Promise<PriceWorkflowBreakdown> {
   const basePrice = Number(product?.price) || 0;
   const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
-  const combinationPriceImpact = await resolveCombinationPriceImpact(productId, defaultCombinationId);
+  const targetCombinationId = Number(combinationId || defaultCombinationId || 0);
+  const combinationPriceImpact = await resolveCombinationPriceImpact(productId, targetCombinationId);
   const priceAfterCombination = roundMoney(basePrice + combinationPriceImpact);
-  const reductionAmount = await resolveReductionAmount(product, productId, priceAfterCombination, defaultCombinationId);
+  const reductionAmount = await resolveReductionAmount(product, productId, priceAfterCombination, targetCombinationId);
   const priceHt = roundMoney(Math.max(0, priceAfterCombination - reductionAmount));
   const taxRate = await resolveTaxRate(product);
   const taxAmount = roundMoney(priceHt * (taxRate / 100));
@@ -350,7 +351,7 @@ async function resolveProductPriceWorkflow(product: any, productId: number): Pro
     taxAmount,
     priceHt,
     finalPrice,
-    defaultCombinationId,
+    defaultCombinationId: targetCombinationId || defaultCombinationId,
   };
 }
 

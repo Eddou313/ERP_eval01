@@ -13,7 +13,6 @@ export function Panier()
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [updatingLineKey, setUpdatingLineKey] = useState<string | null>(null);
-    const [session, setSession] = useState<any>(null);
     useEffect(() => {
         const loadCurrentCustomerCart = async () => {
             try {
@@ -21,8 +20,7 @@ export function Panier()
                 setError(null);
 
                 const currentSession = getStoredClientSession();
-                setSession(currentSession);
-                const customerId = Number(session?.id || 0);
+                const customerId = Number(currentSession?.id || 0);
 
                 if (!Number.isFinite(customerId) || customerId <= 0) {
                     const guestCart = await getOrCreateGuestCart();
@@ -96,8 +94,12 @@ export function Panier()
                 .filter((line) => line.quantity > 0);
 
             await updateCartItems(cart.id, cart.id_customer, payloadItems);
-            const refreshed = await getCart(cart.id);
-            setCart(refreshed);
+            if (payloadItems.length === 0) {
+                setCart(null);
+            } else {
+                const refreshed = await getCart(cart.id);
+                setCart(refreshed);
+            }
         } catch (e) {
             console.error("Erreur mise à jour quantité panier:", e);
             setError("Impossible de mettre à jour la quantité du panier.");
@@ -180,6 +182,7 @@ export function Panier()
                                         </div>
 
                                         <div className="panier_line_total">
+                                            
                                             {formatEuro(item.total)}
                                         </div>
 
@@ -216,7 +219,14 @@ export function Panier()
                         <strong style={{fontSize:30}}>{formatEuro(total)}</strong>
                     </div>
 
-                    <button type="button" onClick={async () => { if(!session?.id ){alert("Veuillez vous connecter pour continuer");} else {navigate('/Commande');}}} className="panier_checkout_btn" disabled={lines.length === 0}>
+                    <button type="button" onClick={() => {
+                        const currentSession = getStoredClientSession();
+                        if (!currentSession?.id) {
+                            alert("Veuillez vous connecter pour continuer");
+                            return;
+                        }
+                        navigate('/Commande');
+                    }} className="panier_checkout_btn" disabled={lines.length === 0}>
                         COMMANDER
                     </button>
                 </aside>

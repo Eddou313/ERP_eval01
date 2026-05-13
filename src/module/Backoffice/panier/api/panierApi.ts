@@ -1,6 +1,7 @@
 import { buildPrestashopXml, PrestashopWebserviceError, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { getClient } from "../../client/api/clientApi";
 import { getOrder } from "../../commande/api/commandesApi";
+import { resolveProductPriceWorkflow } from "../../produit/api/productsApi";
 import { asArray, textFromUnknown, numFromUnknown } from "../../../../utils/helper";
 
 type PrestashopCartItem = {
@@ -63,6 +64,7 @@ export type CartDetail = {
   total_products: number;
   total: number;
 };
+
 
 export type CartCreate = {
   id_customer: number;
@@ -164,12 +166,10 @@ async function getProductInfo(
     const nameLang = (product.name && (Array.isArray(product.name.language) ? product.name.language[0] : product.name.language)) || null;
     const baseName = textFromUnknown(nameLang?.["#text"]) || "";
     const baseReference = textFromUnknown(product.reference) || "";
-    const basePrice = Number(product.price) || 0;
     const imageId = numFromUnknown(product.id_default_image) || undefined;
 
     // If attributeId provided, try to find combination info in the product's associations
     let comboReference = "";
-    let comboPrice: number | undefined = undefined;
     let attributesLabel = "";
     if (attributeId && product.associations && product.associations.combinations) {
       const combos = product.associations.combinations.combination;
@@ -177,8 +177,6 @@ async function getProductInfo(
       const found = arr.find((cm: any) => Number(cm.id) === attributeId || Number(cm["@_id"]) === attributeId);
       if (found) {
         comboReference = textFromUnknown(found.reference) || "";
-        // combinations may include price impact; try to read 'price' if present
-        comboPrice = Number(found.price) || undefined;
       }
 
       // Resolve selected option value names for display in cart
@@ -214,9 +212,11 @@ async function getProductInfo(
       }
     }
 
+    const pricing = await resolveProductPriceWorkflow(product, productId, attributeId ?? undefined);
+
     const name = comboReference ? `${baseName}\nRéf. : ${baseReference} / ${comboReference}` : `${baseName}\nRéf. : ${baseReference}`;
     const reference = comboReference ? `${baseReference} / ${comboReference}` : baseReference;
-    const price = comboPrice !== undefined ? comboPrice : basePrice;
+    const price = pricing.finalPrice;
 
     // Try to fetch stock (best-effort). If attributeId provided, filter by it.
     let stock: number | undefined = undefined;
@@ -492,7 +492,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
       if (!prod) return it;
 
       const composedName = prod.reference ? `${prod.name}\nRéf. : ${prod.reference}` : prod.name;
-      const unitPrice = it.unit_price || prod.price || 0;
+      const unitPrice = prod.price || it.unit_price || 0;
       const stock = it.stock ?? prod.stock;
       const total = unitPrice * (it.quantity || 0);
 
@@ -771,6 +771,11 @@ export async function updateCartItems(
   idLang = 1,
   idCurrency = 1,
 ): Promise<void> {
+  if (!items || items.length === 0) {
+    await deleteCart(cartId);
+    return;
+  }
+
   const xml = buildCartUpdateXml(cartId, customerId, items, idLang, idCurrency);
   await requestPrestashopXml(`/carts/${cartId}`, { method: "PUT", bodyXml: xml });
 }

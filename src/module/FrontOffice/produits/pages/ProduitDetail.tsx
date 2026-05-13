@@ -1,4 +1,4 @@
-import {  useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getProductDetail, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
 import { getProductAttributeGroups, type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
@@ -18,10 +18,10 @@ export function ProduitDetail() {
   const [attributeGroups, setAttributeGroups] = useState<ProductAttributeGroupSelection[]>([]);
   const [quantity, setQuantity] = useState(1);
   const [selectedAttributeValues, setSelectedAttributeValues] = useState<Record<number, string>>({});
-  const [availableStock, setAvailableStock] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [availableStock, setAvailableStock] = useState<number>(0);
 
   useEffect(() => {
     if (!initialProduct) {
@@ -91,7 +91,7 @@ export function ProduitDetail() {
 
   const verifyStockForAttributes = async (attributes: Record<number, string>) => {
     try {
-      if (!product?.id) return null;
+      if (!product?.id) return 0;
 
       const match = findMatchingCombination(attributes);
 
@@ -273,7 +273,7 @@ export function ProduitDetail() {
     <div className="productsPage">
       <FrontOfficeHeader />
       <div className="productDetailShell">
-        
+
         <div className="detailContainer">
           {/* Image Section */}
           <div className="detailImageSection">
@@ -425,8 +425,20 @@ export function ProduitDetail() {
             </div>
 
             {/* Add to Cart Button */}
-            <button className="addToCartBtn" onClick={handleAddToCart} disabled={isAddingToCart}>
-              {isAddingToCart ? "AJOUT AU PANIER..." : "🛒 AJOUTER AU PANIER"}
+            <button
+              className="addToCartBtn"
+              onClick={handleAddToCart}
+              disabled={
+                isAddingToCart ||
+                availableStock <= 0 ||
+                quantity > availableStock
+              }
+            >
+              {isAddingToCart
+                ? "AJOUT AU PANIER..."
+                : availableStock <= 0
+                  ? "RUPTURE DE STOCK"
+                  : "🛒 AJOUTER AU PANIER"}
             </button>
 
             {/* Stock Status */}
