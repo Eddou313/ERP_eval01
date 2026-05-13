@@ -216,7 +216,7 @@ export function Panier()
                         <strong style={{fontSize:30}}>{formatEuro(total)}</strong>
                     </div>
 
-                    <button type="button" onClick={async () => { if(!session.id ){alert("Veuillez vous connecter pour continuer");} else {navigate('/Commande');}}} className="panier_checkout_btn" disabled={lines.length === 0}>
+                    <button type="button" onClick={async () => { if(!session?.id ){alert("Veuillez vous connecter pour continuer");} else {navigate('/Commande');}}} className="panier_checkout_btn" disabled={lines.length === 0}>
                         COMMANDER
                     </button>
                 </aside>

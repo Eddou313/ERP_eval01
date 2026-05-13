@@ -7,7 +7,7 @@ import { addProductToCart, createCartForConnectedCustomer, getLatestCartForCusto
 import { getStoredClientSession } from "../../client/api/clientAPI";
 import { getProductImageUrl } from "../../../../utils/helper";
 import "../pages/produits.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 export function ProduitDetail() {
   const location = useLocation();
@@ -126,6 +126,45 @@ export function ProduitDetail() {
       return null;
     }
   };
+
+  const priceBreakdown = useMemo(() => {
+    const match = findMatchingCombination(selectedAttributeValues) as any;
+    const basePrice = Number(product?.base_price ?? product?.price ?? 0);
+    const comboImpact = Number(match?.price ?? 0);
+    const priceAfterCombination = Math.max(0, basePrice + comboImpact);
+
+    const reductionAmount = Number(product?.reduction_amount ?? 0) || (product?.on_sale ? priceAfterCombination * 0.2 : 0);
+    const priceHt = Math.max(0, priceAfterCombination - reductionAmount);
+    const taxRate = Number(product?.tax_rate ?? 20) || 0;
+    const taxAmount = priceHt * (taxRate / 100);
+    const finalPrice = priceHt + taxAmount;
+
+    console.log(
+      "Formule prix produit:",
+      `(${basePrice.toFixed(2)} + ${comboImpact.toFixed(2)} - ${reductionAmount.toFixed(2)}) + taxe(${taxRate.toFixed(2)}%) = ${finalPrice.toFixed(2)}`,
+      {
+        basePrice,
+        comboImpact,
+        priceAfterCombination,
+        reductionAmount,
+        priceHt,
+        taxRate,
+        taxAmount,
+        finalPrice,
+        selectedAttributeValues,
+      },
+    );
+
+    return {
+      basePrice,
+      comboImpact,
+      reductionAmount,
+      taxRate,
+      taxAmount,
+      priceHt,
+      finalPrice,
+    };
+  }, [product, selectedAttributeValues, attributeGroups]);
 
   // Vérifier automatiquement le stock réel à chaque changement d'attributs
   useEffect(() => {
@@ -285,10 +324,28 @@ export function ProduitDetail() {
               <div className="priceRow">
                 <span className="priceLabel">Prix</span>
                 <div className="prices">
-                  <span className="detailCurrentPrice">€{(product.price || 0).toFixed(2)}</span>
+                  <span className="detailCurrentPrice">€{priceBreakdown.finalPrice.toFixed(2)}</span>
                   {product.on_sale && (
                     <span className="savingBadge">PROMOTION</span>
                   )}
+                </div>
+              </div>
+              <div className="priceBreakdown">
+                <div className="priceBreakdownRow">
+                  <span>Prix réel produit</span>
+                  <strong>€{priceBreakdown.basePrice.toFixed(2)}</strong>
+                </div>
+                <div className="priceBreakdownRow">
+                  <span>Impact prix combinaison</span>
+                  <strong>{priceBreakdown.comboImpact >= 0 ? "+" : ""}€{priceBreakdown.comboImpact.toFixed(2)}</strong>
+                </div>
+                <div className="priceBreakdownRow">
+                  <span>Réduction appliquée</span>
+                  <strong>-€{priceBreakdown.reductionAmount.toFixed(2)}</strong>
+                </div>
+                <div className="priceBreakdownRow">
+                  <span>Taxe appliquée ({priceBreakdown.taxRate.toFixed(2)}%)</span>
+                  <strong>€{priceBreakdown.taxAmount.toFixed(2)}</strong>
                 </div>
               </div>
             </div>

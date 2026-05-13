@@ -56,6 +56,14 @@ export type ProductListItem = {
   name?: string;
   reference?: string;
   price?: number;
+  base_price?: number;
+  price_ht?: number;
+  combination_price_impact?: number;
+  reduction_amount?: number;
+  tax_rate?: number;
+  tax_amount?: number;
+  final_price?: number;
+  default_combination_id?: number;
   active?: boolean;
   quantity?: number;
   id_category_default?: number;
@@ -180,6 +188,201 @@ export const localnumFromPrestashop = numFromPrestashop;
 export const localstringFromPrestashop = stringFromPrestashop;
 export const localkeywordsFromPrestashop = keywordsFromPrestashop;
 
+type PriceWorkflowBreakdown = {
+  basePrice: number;
+  combinationPriceImpact: number;
+  reductionAmount: number;
+  taxRate: number;
+  taxAmount: number;
+  priceHt: number;
+  finalPrice: number;
+  defaultCombinationId: number;
+};
+
+function roundMoney(value: number): number {
+  return Number((Number(value) || 0).toFixed(2));
+}
+
+async function resolveDefaultCombinationId(product: any, productId: number): Promise<number> {
+  const cacheDefault = numFromPrestashop(product?.cache_default_attribute);
+  if (cacheDefault > 0) {
+    return cacheDefault;
+  }
+
+  try {
+    const response = await requestPrestashopXml<any>("/combinations", {
+      query: {
+        display: "full",
+        "filter[id_product]": `[${productId}]`,
+      },
+    });
+
+    const combinationsRaw = response?.prestashop?.combinations?.combination;
+    const combinations = asArray(combinationsRaw);
+    const first = combinations[0];
+    return numFromPrestashop(first?.id ?? first?.["@_id"]);
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveCombinationPriceImpact(productId: number, combinationId: number): Promise<number> {
+  if (!combinationId) return 0;
+
+  try {
+    const response = await requestPrestashopXml<any>("/combinations", {
+      query: {
+        display: "full",
+        "filter[id_product]": `[${productId}]`,
+      },
+    });
+
+    const combinations = asArray(response?.prestashop?.combinations?.combination);
+    const found = combinations.find((combination: any) => {
+      const currentId = numFromPrestashop(combination?.id ?? combination?.["@_id"]);
+      return currentId === combinationId;
+    });
+
+    if (!found) return 0;
+
+    const rawImpact = found.price ?? found.price_impact ?? found.price_te ?? 0;
+    return Number(rawImpact) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function resolveReductionAmount(product: any, productId: number, priceAfterCombination: number, combinationId: number): Promise<number> {
+  try {
+    const response = await requestPrestashopXml<any>("/specific_prices", {
+      query: {
+        display: "full",
+        "filter[id_product]": `[${productId}]`,
+      },
+    });
+
+    const specificPrices = asArray(response?.prestashop?.specific_prices?.specific_price);
+    const matched = specificPrices.find((entry: any) => {
+      const entryCombinationId = numFromPrestashop(entry?.id_product_attribute);
+      return !combinationId || entryCombinationId === 0 || entryCombinationId === combinationId;
+    }) ?? specificPrices[0];
+
+    if (matched) {
+      const reductionType = String(matched.reduction_type || matched.reductionType || "").toLowerCase();
+      const reductionValue = Number(matched.reduction) || 0;
+
+      if (reductionType === "percentage") {
+        const percent = reductionValue > 1 ? reductionValue / 100 : reductionValue;
+        return roundMoney(priceAfterCombination * percent);
+      }
+
+      if (reductionType === "amount") {
+        return roundMoney(reductionValue);
+      }
+
+      if (reductionValue > 0) {
+        return roundMoney(reductionValue);
+      }
+    }
+  } catch {
+    // fallback below
+  }
+
+  if (product?.on_sale) {
+    // Heuristique cohérente avec le badge promotionnel déjà affiché dans l'UI.
+    return roundMoney(priceAfterCombination * 0.2);
+  }
+
+  return 0;
+}
+
+async function resolveTaxRate(product: any): Promise<number> {
+  const taxRuleGroupId = numFromPrestashop(product?.id_tax_rules_group);
+  if (!taxRuleGroupId) return 0;
+
+  try {
+    const response = await requestPrestashopXml<any>("/tax_rules", {
+      query: {
+        display: "full",
+        "filter[id_tax_rules_group]": `[${taxRuleGroupId}]`,
+      },
+    });
+
+    const taxRules = asArray(response?.prestashop?.tax_rules?.tax_rule);
+    const matchedRule = taxRules[0];
+
+    if (matchedRule) {
+      const directRate = Number(matchedRule.rate) || 0;
+      if (directRate > 0) return directRate;
+
+      const taxId = numFromPrestashop(matchedRule.id_tax);
+      if (taxId > 0) {
+        const taxResponse = await requestPrestashopXml<any>(`/taxes/${taxId}`, {
+          query: { display: "full" },
+        });
+        const taxRate = Number(taxResponse?.prestashop?.tax?.rate) || Number(taxResponse?.prestashop?.tax?.value) || 0;
+        if (taxRate > 0) return taxRate;
+      }
+    }
+  } catch {
+    // fallback below
+  }
+
+  return 20;
+}
+
+async function resolveProductPriceWorkflow(product: any, productId: number): Promise<PriceWorkflowBreakdown> {
+  const basePrice = Number(product?.price) || 0;
+  const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
+  const combinationPriceImpact = await resolveCombinationPriceImpact(productId, defaultCombinationId);
+  const priceAfterCombination = roundMoney(basePrice + combinationPriceImpact);
+  const reductionAmount = await resolveReductionAmount(product, productId, priceAfterCombination, defaultCombinationId);
+  const priceHt = roundMoney(Math.max(0, priceAfterCombination - reductionAmount));
+  const taxRate = await resolveTaxRate(product);
+  const taxAmount = roundMoney(priceHt * (taxRate / 100));
+  const finalPrice = roundMoney(priceHt + taxAmount);
+
+  return {
+    basePrice: roundMoney(basePrice),
+    combinationPriceImpact: roundMoney(combinationPriceImpact),
+    reductionAmount: roundMoney(reductionAmount),
+    taxRate: roundMoney(taxRate),
+    taxAmount,
+    priceHt,
+    finalPrice,
+    defaultCombinationId,
+  };
+}
+
+function mapProductFromApi(product: any, stock: number | undefined, pricing: PriceWorkflowBreakdown): ProductListItem {
+  return {
+    id: numFromPrestashop(product.id),
+    name: getFirstLanguageText(product.name),
+    reference: stringFromPrestashop(product.reference),
+    price: pricing.finalPrice,
+    base_price: pricing.basePrice,
+    price_ht: pricing.priceHt,
+    combination_price_impact: pricing.combinationPriceImpact,
+    reduction_amount: pricing.reductionAmount,
+    tax_rate: pricing.taxRate,
+    tax_amount: pricing.taxAmount,
+    final_price: pricing.finalPrice,
+    active: boolFromPrestashop(product.active),
+    quantity: stock ?? 0,
+    id_category_default: numFromPrestashop(product.id_category_default),
+    id_manufacturer: numFromPrestashop(product.id_manufacturer),
+    id_supplier: numFromPrestashop(product.id_supplier),
+    type: stringFromPrestashop(product.type),
+    on_sale: boolFromPrestashop(product.on_sale),
+    date_add: stringFromPrestashop(product.date_add),
+    date_upd: stringFromPrestashop(product.date_upd),
+    id_default_image: numFromPrestashop(product.id_default_image),
+    link_rewrite: getFirstLanguageText(product.link_rewrite),
+    description_short: getFirstLanguageText(product.description_short),
+    default_combination_id: pricing.defaultCombinationId,
+  };
+}
+
 // --- CRUD FUNCTIONS ---
 
 /**
@@ -201,6 +404,21 @@ export async function listProductIds(limit?: number): Promise<number[]> {
     .filter((id) => !isNaN(id) && Number.isFinite(id));
 }
 
+export async function listProductIdsPaginated(limit = 8, offset = 0): Promise<number[]> {
+  const queryParams: any = { display: "[id]", limit: `${offset},${limit}` };
+
+  const json = await requestPrestashopXml<any>("/products", {
+    query: queryParams,
+  });
+
+  const productsRaw = json?.prestashop?.products?.product;
+  if (!productsRaw) return [];
+
+  return asArray(productsRaw)
+    .map((p: any) => Number(p["@_id"] || p.id))
+    .filter((id) => !isNaN(id) && Number.isFinite(id));
+}
+
 /**
  * Get a single product by ID
  */
@@ -209,25 +427,9 @@ export async function getProduct(id: number): Promise<ProductListItem> {
   const p = json.prestashop.product;
 
   const stock = await getStockByProductId(id);
+  const pricing = await resolveProductPriceWorkflow(p, id);
 
-  return {
-    id: numFromPrestashop(p.id),
-    name: getFirstLanguageText(p.name),
-    reference: stringFromPrestashop(p.reference),
-    price: numFromPrestashop(p.price),
-    active: boolFromPrestashop(p.active),
-    quantity: stock ?? 0, // Note: quantity is often in stock_available
-    id_category_default: numFromPrestashop(p.id_category_default),
-    id_manufacturer: numFromPrestashop(p.id_manufacturer),
-    id_supplier: numFromPrestashop(p.id_supplier),
-    type: stringFromPrestashop(p.type),
-    on_sale: boolFromPrestashop(p.on_sale),
-    date_add: stringFromPrestashop(p.date_add),
-    date_upd: stringFromPrestashop(p.date_upd),
-    id_default_image: numFromPrestashop(p.id_default_image),
-    link_rewrite: getFirstLanguageText(p.link_rewrite),
-    description_short: getFirstLanguageText(p.description_short),
-  };
+  return mapProductFromApi(p, stock ?? 0, pricing);
 }
 
 /**
@@ -248,8 +450,9 @@ export async function getProductDetail(id: number): Promise<ProductListItem & {
 }> {
   const json = await requestPrestashopXml<ProductGetResponse>(`/products/${id}`);
   const p = json.prestashop.product;
-
-  const base = await getProduct(id);
+  const stock = await getStockByProductId(id);
+  const pricing = await resolveProductPriceWorkflow(p, id);
+  const base = mapProductFromApi(p, stock ?? 0, pricing);
 
   return {
     ...base,
@@ -272,6 +475,12 @@ export async function getProductDetail(id: number): Promise<ProductListItem & {
  */
 export async function listProductsLight(limit?: number): Promise<ProductListItem[]> {
   const ids = await listProductIds(limit);
+  const results = await Promise.all(ids.map((id) => getProduct(id)));
+  return results;
+}
+
+export async function listProductsLightPaginated(limit = 8, offset = 0): Promise<ProductListItem[]> {
+  const ids = await listProductIdsPaginated(limit, offset);
   const results = await Promise.all(ids.map((id) => getProduct(id)));
   return results;
 }

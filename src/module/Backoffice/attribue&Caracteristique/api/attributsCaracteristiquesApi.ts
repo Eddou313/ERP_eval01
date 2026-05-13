@@ -42,6 +42,7 @@ export type ProductAttributeGroupSelection = {
   combinations?: {
     id: number;
     quantity?: number;
+    price?: number;
     attributes: {
       groupId: number;
       valueId: number;
@@ -436,6 +437,7 @@ export async function getProductAttributeGroups(productId: number): Promise<Prod
             return {
               id: combinationId,
               quantity: numFromUnknown(combination?.quantity),
+              price: numFromUnknown(combination?.price),
               attributes,
             };
           })
