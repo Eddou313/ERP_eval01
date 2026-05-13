@@ -1,4 +1,4 @@
-import { requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
 export type AddressGetResponse = {
     prestashop: {
@@ -55,6 +55,40 @@ export type ClientAddressImportForm = ClientAddressForm & {
     company?: string;
     vat_number?: string;
 };
+
+export async function createClientAddress(idCustomer: number, form: ClientAddressImportForm): Promise<number> {
+    const xml = buildPrestashopXml({
+        prestashop: {
+            address: {
+                id_customer: idCustomer,
+                alias: form.alias || `${form.firstname} ${form.lastname}`.trim() || "Adresse",
+                firstname: form.firstname,
+                lastname: form.lastname,
+                company: form.company || "",
+                vat_number: form.vat_number || "",
+                address1: form.address1,
+                address2: form.other || "",
+                postcode: form.postcode,
+                city: form.city,
+                id_country: form.id_country,
+                phone: form.phone || "",
+                phone_mobile: form.phone_mobile || "",
+            },
+        },
+    });
+
+    const response = await requestPrestashopXml<{ prestashop: { address: { id: unknown } } }>("/addresses", {
+        method: "POST",
+        bodyXml: xml,
+    });
+
+    const id = Number(response?.prestashop?.address?.id);
+    if (!Number.isFinite(id) || id <= 0) {
+        throw new Error("Erreur lors de la création de l'adresse");
+    }
+
+    return id;
+}
 
 export async function listAddressIds(): Promise<number[]> {
     const json = await requestPrestashopXml<{
