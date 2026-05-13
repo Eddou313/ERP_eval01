@@ -6,11 +6,13 @@ import {
 	getLatestCartForCustomerId,
 	type CartDetail,
 } from "../../../Backoffice/panier/api/panierApi";
-import { PAYMENT_METHODS, createOrder, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
+import { createOrder, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
 import { createClientAddress, type ClientAddressImportForm } from "../../../Backoffice/client/api/clientAdresAPI";
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, textFromUnknown } from "../../../../utils/helper";
 import "./WorkFlowCommande.css";
+import { getAllModeLivraison, type ModeLivraisonForm, type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/LivraisonApi";
+import { PAYMENT_METHODS,type PaymentMethod } from "../../../Backoffice/paiement/api/PaiementApi";
 
 type AddressMode = "existing" | "new";
 
@@ -40,12 +42,15 @@ export default function WorkFlowCommande() {
 	const [loading, setLoading] = useState(false);
 	const [creatingOrder, setCreatingOrder] = useState(false);
 	const [shippingMethod, setShippingMethod] = useState<string>("Standard");
-	const [paymentMethod, setPaymentMethod] = useState<string>(PAYMENT_METHODS[0] || "");
+	const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0] || {} as PaymentMethod);
 	const [addressMode, setAddressMode] = useState<AddressMode>("existing");
 	const [addresses, setAddresses] = useState<Array<{ id: number; label: string }>>([]);
 	const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
 	const [countryIdFrance, setCountryIdFrance] = useState<number>(0);
 	const [newAddress, setNewAddress] = useState<NewAddressForm>(DEFAULT_NEW_ADDRESS);
+
+	const [ModeLivraison, setModeLivraison] = useState<ModeLivraisonListItem[]>([]);
+	const [selectedModeLivraisonId, setSelectedModeLivraisonId] = useState<number>(0);
 
 	useEffect(() => {
 		const load = async () => {
@@ -97,6 +102,10 @@ export default function WorkFlowCommande() {
 						const franceId = Number(france?.["@_id"] ?? france?.id) || 0;
 						setCountryIdFrance(franceId);
 						setNewAddress((currentValue) => ({ ...currentValue, id_country: franceId || currentValue.id_country }));
+
+
+						const modeLivraisonResponse = await getAllModeLivraison(5);
+						setModeLivraison(modeLivraisonResponse);
 					} catch (e) {
 						console.warn("Impossible de charger les adresses utilisateur", e);
 					}
@@ -321,10 +330,27 @@ export default function WorkFlowCommande() {
 							<div className="step">
 								<div className="step-title">2. Méthode de livraison</div>
 								<div className="step-body">
-									<select className="workflow-select" value={shippingMethod} onChange={(e) => setShippingMethod(e.target.value)}>
+									{/* <select className="workflow-select" value={ModeLivraison.id} onChange={(e) => setShippingMethod(e.target.value)}>
 										<option>Standard</option>
 										<option>Express</option>
 										<option>Retrait en magasin</option>
+									</select> */}
+									<select
+										className="workflow-select"
+										value={selectedModeLivraisonId}
+										onChange={(e) =>
+											setSelectedModeLivraisonId(Number(e.target.value))
+										}
+									>
+										<option value={0}>
+											Sélectionner un mode de livraison
+										</option>
+
+										{ModeLivraison.map((mode) => (
+											<option key={mode.id} value={mode.id}>
+												{mode.name}
+											</option>
+										))}
 									</select>
 								</div>
 							</div>
@@ -332,10 +358,10 @@ export default function WorkFlowCommande() {
 							<div className="step">
 								<div className="step-title">3. Méthode de paiement</div>
 								<div className="step-body">
-									<select className="workflow-select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+									<select className="workflow-select" value={paymentMethod?.id || 0} onChange={(e) => setPaymentMethod(PAYMENT_METHODS.find((m) => m.code === e.target.value) || {} as PaymentMethod)}>
 										{PAYMENT_METHODS.map((m) => (
-											<option key={m} value={m}>
-												{m}
+											<option key={m.code} value={m.code}>
+												{m.label}
 											</option>
 										))}
 									</select>

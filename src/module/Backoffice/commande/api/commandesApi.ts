@@ -190,14 +190,6 @@ export const ORDER_STATES = [
   { id: 9, label: "En attente de paiement" },
 ];
 
-export const PAYMENT_METHODS = [
-  "Virement bancaire",
-  "Chèque",
-  "PayPal",
-  "Carte de crédit",
-  "À la livraison",
-  "Autres",
-];
 
 export async function listOrdersLight(): Promise<OrderListItem[]> {
   const url = `/orders?display=full&limit=200`;
