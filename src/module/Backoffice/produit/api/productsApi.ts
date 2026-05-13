@@ -535,3 +535,20 @@ export async function InitProducts(data: ProductListItem[]): Promise<void> {
     }
   }
 }
+
+// workflow prix
+// Produit chargé
+//       ↓
+// Prix de base
+//       ↓
+// Utilisateur choisit attributs
+//       ↓
+// Trouver combinaison
+//       ↓
+// Appliquer impact prix
+//       ↓
+// Appliquer réductions
+//       ↓
+// Appliquer taxes
+//       ↓
+// Afficher prix final

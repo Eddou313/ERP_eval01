@@ -13,14 +13,15 @@ export function Panier()
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [updatingLineKey, setUpdatingLineKey] = useState<string | null>(null);
-
+    const [session, setSession] = useState<any>(null);
     useEffect(() => {
         const loadCurrentCustomerCart = async () => {
             try {
                 setLoading(true);
                 setError(null);
 
-                const session = getStoredClientSession();
+                const currentSession = getStoredClientSession();
+                setSession(currentSession);
                 const customerId = Number(session?.id || 0);
 
                 if (!Number.isFinite(customerId) || customerId <= 0) {
@@ -31,6 +32,7 @@ export function Panier()
 
                 const latestCart = await getLatestCartForCustomerId(customerId);
                 setCart(latestCart);
+                
             } catch (e) {
                 console.error("Erreur chargement panier client:", e);
                 setError("Impossible de charger votre panier.");
@@ -214,7 +216,7 @@ export function Panier()
                         <strong style={{fontSize:30}}>{formatEuro(total)}</strong>
                     </div>
 
-                    <button type="button" onClick={() => navigate('/Commande')} className="panier_checkout_btn" disabled={lines.length === 0}>
+                    <button type="button" onClick={async () => { if(!session.id ){alert("Veuillez vous connecter pour continuer");} else {navigate('/Commande');}}} className="panier_checkout_btn" disabled={lines.length === 0}>
                         COMMANDER
                     </button>
                 </aside>

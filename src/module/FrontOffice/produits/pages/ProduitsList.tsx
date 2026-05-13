@@ -38,7 +38,6 @@ export function ProduitsList() {
       <FrontOfficeHeader />
       <div className="productsShell">
         <div className="productsIntro">
-          <div className="eyebrow">NOTRE CATALOGUE</div>
           <h1>Nos Produits</h1>
           <p className="introText">Découvrez notre large gamme de produits de qualité avec des designs uniques et inspirants.</p>
         </div>
