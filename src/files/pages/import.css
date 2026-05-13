@@ -1,0 +1,65 @@
+.import-page-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    max-width: 800px;
+    margin: 2rem auto;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+.import-section {
+    background: #ffffff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #eaeaea;
+}
+
+.section-title {
+    font-size: 1.2rem;
+    color: #333;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #0070f3;
+    padding-bottom: 0.5rem;
+    display: inline-block;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.form-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.text-input, .file-input {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.file-input {
+    border: 2px dashed #0070f3;
+    background: #f0f7ff;
+}
+
+.submit-button {
+    background-color: #0070f3;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    align-self: flex-end;
+}
+
+.submit-button:hover {
+    background-color: #0056b3;
+}

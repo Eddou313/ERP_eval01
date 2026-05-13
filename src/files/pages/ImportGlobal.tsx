@@ -1,0 +1,311 @@
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import './import.css';
+// import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
+import { parseCSVFile,  InitialisationGLobal } from "../api/importAPI"
+import type { colonneCSV, ImportDataType } from "./../api/importAPI"
+import {formatDate,transformToObjects} from "../../utils/helper"
+
+export function ImportGlobal ()
+{
+    
+ 
+    const [mes,setMes] = useState<string>("");
+    // Produit pour le fichier
+    const [file, setFile] = useState<File | null>(null);
+    const [Produit,setProduit] = useState<colonneCSV["produitImport"][]>([]);
+
+    const [file2, setFile2] = useState<File | null>(null);
+    const [Produit_Attribut_Stock,setProduit_Attribut_Stock] = useState<colonneCSV["produit_Attribut_StockImport"][]>([]);
+
+    const [file3, setFile3] = useState<File | null>(null);
+    const [Commande_client_produit,setCommande_client_produit] = useState<colonneCSV["Commande_client_produit"][]>([]);
+    
+    // État pour les paramètres d'importation
+    const [config, setConfig] = useState({
+        separator: ',',
+        encoding: 'UTF-8',
+        skipHeader: true
+    });
+
+    const handleFile1Change = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setFile(e.target.files[0]);
+        }
+    };
+
+    const handleFile2Change = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setFile2(e.target.files[0]);
+        }
+    };
+
+    const handleFile3Change = (e: ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setFile3(e.target.files[0]);
+        }
+    };
+
+    const handleConfigChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value, type } = e.target;
+        const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
+        
+        setConfig(prev => ({
+            ...prev,
+            [name]: val
+        }));
+    };
+
+    const parseFile = <T,>(fileToParse: File, separator: string) => {
+        return new Promise<T[]>((resolve) => {
+            parseCSVFile<T>(fileToParse, separator, resolve);
+        });
+    };
+
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!file && !file2 && !file3){
+          setMes("Inserer au moins un fichier csv valide !");
+          return;  
+        }
+        try{
+            setMes("Parsing en cours...");
+
+            const parsedProducts = file ? await parseFile<colonneCSV["produitImport"]>(file, config.separator) : [];
+            const parsedAttributes = file2 ? await parseFile<colonneCSV["produit_Attribut_StockImport"]>(file2, config.separator) : [];
+            const parsedOrders = file3 ? await parseFile<colonneCSV["Commande_client_produit"]>(file3, config.separator) : [];
+
+            if (file) {
+                console.log("Fichier 1 parsé:", parsedProducts);
+                setProduit(parsedProducts);
+                // await importDataToPrestashop(parsedProducts, "produitImport" as ImportDataType);
+            }
+            if (file2) {
+                console.log("Fichier 2 parsé:", parsedAttributes);
+                setProduit_Attribut_Stock(parsedAttributes);
+                // await importDataToPrestashop(parsedAttributes, "produit_Attribut_StockImport" as ImportDataType);
+            }
+            if (file3) {
+                console.log("Fichier 3 parsé:", parsedOrders);
+                setCommande_client_produit(parsedOrders);
+                // await importDataToPrestashop(parsedOrders, "Commande_client_produit" as ImportDataType);
+            }
+            setMes("Fichiers importés avec succès !");
+            setTimeout(() => setMes(""), 3000);
+        }
+        catch (error) {
+            console.error(error);
+            setMes("Erreur lors de l'import des données !");
+        }
+    };
+
+    async function InitialiserAllDonner() {
+        const confirmed = window.confirm("Êtes-vous sûr de vouloir réinitialiser toutes les données ? Cette action est irréversible.");
+        if (confirmed) {
+            try {
+                setMes("Initialisation en cours...");
+                await InitialisationGLobal();
+                setMes("Initialisation réussie !");
+                setTimeout(() => setMes(""), 3000);
+            } catch (error) {
+                setMes("Erreur lors de l'initialisation");
+                console.error(error);
+            }
+        }
+    }
+
+    return (
+        <div className="import-page-wrapper">
+            <h1>Import Global</h1>
+            {mes && <div className="message" style={{color: mes.includes('Erreur') ? 'red' : 'green', marginBottom: '1rem'}}>{mes}</div>}
+            <button onClick={InitialiserAllDonner} className="submit-button">Initialiser les donner +</button>
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column' }}>
+                
+                {/* Section 1 : Chargement du fichier */}
+                <section className="import-section">
+                    <h2 className="section-title">1. Fichier Source</h2>
+                    <div className="form-group">
+                        <label className="form-label" htmlFor="csv-file1">Fichier 1 (Produits)</label>
+                        <input 
+                            id="csv-file1"
+                            type="file" 
+                            accept=".csv"
+                            onChange={handleFile1Change}
+                            className="file-input"
+                        />
+                        {file && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file.name}</span>}
+                        <br />
+                        
+                        <label className="form-label" htmlFor="csv-file2">Fichier 2 (Produits - Attributs et Stock)</label>
+                        <input 
+                            id="csv-file2"
+                            type="file" 
+                            accept=".csv"
+                            onChange={handleFile2Change}
+                            className="file-input"
+                        />
+                        {file2 && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file2.name}</span>}
+                        <br />
+                        
+                        <label className="form-label" htmlFor="csv-file3">Fichier 3 (Commandes et Clients)</label>
+                        <input 
+                            id="csv-file3"
+                            type="file" 
+                            accept=".csv"
+                            onChange={handleFile3Change}
+                            className="file-input"
+                        />
+                        {file3 && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file3.name}</span>}
+                    </div>
+                </section>
+
+                {/* Section 2 : Paramètres de l'import */}
+                <section className="import-section" style={{ marginTop: '1rem' }}>
+                    <h2 className="section-title">2. Paramètres de Configuration</h2>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                            <label className="form-label">Séparateur de colonnes</label>
+                            <select name="separator" onChange={handleConfigChange} id="">
+                                <option value=",">,</option>
+                                <option value=";">;</option>
+                            </select>
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">Encodage</label>
+                            <select 
+                                name="encoding" 
+                                className="text-input"
+                                value={config.encoding}
+                                onChange={handleConfigChange}
+                            >
+                                <option value="UTF-8">UTF-8</option>
+                                <option value="ISO-8859-1">ISO-8859-1 (Windows)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <input 
+                            name="skipHeader"
+                            type="checkbox" 
+                            id="skipHeader"
+                            checked={config.skipHeader}
+                            onChange={handleConfigChange}
+                        />
+                        <label htmlFor="skipHeader" className="form-label">Ignorer la première ligne (En-têtes)</label>
+                    </div>
+                </section>
+
+                <button type="submit" className="submit-button" disabled={!file && !file2 && !file3} style={{ marginTop: '1rem' }}>
+                    Démarrer l'importation
+                </button>
+                
+                {(Produit.length > 0 || Produit_Attribut_Stock.length > 0 || Commande_client_produit.length > 0) && (
+                    <div style={{ marginTop: '2rem' }}>
+                        <h2>Aperçu des données importées</h2>
+                        
+                        {Produit.length > 0 && (
+                            <section style={{ marginBottom: '2rem' }}>
+                                <h3>📦 Fichier 1 - Produits ({Produit.length} lignes)</h3>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#f0f0f0' }}>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>date_availability_produit</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Nom</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Référence</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Catégorie</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Prix TTC</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Prix Achat</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Produit.map((item, index) => (
+                                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{formatDate(item.date_availability_produit)}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.nom}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.reference}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.categorie}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.prix_ttc}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.prix_achat}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
+                        )}
+                        
+                        {Produit_Attribut_Stock.length > 0 && (
+                            <section style={{ marginBottom: '2rem' }}>
+                                <h3>📊 Fichier 2 - Produits Attributs & Stock ({Produit_Attribut_Stock.length} lignes)</h3>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#f0f0f0' }}>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Référence</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Spécificité</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Variante</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Stock Initial</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Prix Vente TTC</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Produit_Attribut_Stock.map((item, index) => (
+                                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.reference}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.specificité || '-'}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.karazany || '-'}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.stock_initial}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.prix_vente_ttc || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
+                        )}
+                        
+                        {Commande_client_produit.length > 0 && (
+                            <section>
+                                <h3>🛒 Fichier 3 - Commandes & Clients ({Commande_client_produit.length} lignes)</h3>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#f0f0f0' }}>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Nom</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Email</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Adresse</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>Achat</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>État</th>
+                                            <th style={{ border: '1px solid #ccc', padding: '0.5rem' }}>pwd</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {Commande_client_produit.map((item, index) => (
+                                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9' }}>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.nom}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.email}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.adresse}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>
+                                                    {transformToObjects(item.achat).map((prod, index) => (
+                                                        <div key={index} style={{ fontSize: '0.85rem', marginBottom: '4px' }}>
+                                                        <strong>{prod.reference_produit}</strong> {prod.quantity} <small>{prod.attribut}</small>
+                                                        </div>
+                                                    ))}
+                                                </td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.etat}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.pwd}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </section>
+                        )}
+                    </div>
+                )}
+                
+            </form>
+        </div>
+    );
+}
+
+
+export default ImportGlobal;
