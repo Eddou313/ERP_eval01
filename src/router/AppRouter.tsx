@@ -8,8 +8,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom"
 // import PaniersListPage from "../module/Backoffice/panier/pages/PaniersListPage"
 // import PanierDetailPage from "../module/Backoffice/panier/pages/PanierDetailPage"
 // import EtatCommande from "../module/Backoffice/commande/pages/EtatCommande"
-// import Login from "../module/Backoffice/auth/pages/login"
-// import SecureRoute from "./securiter"
+import Login from "../module/Backoffice/auth/pages/login"
+import SecureRoute from "./securiter"
 // import FrontOfficePage from "../module/FrontOffice/pages/FrontOfficePage"
 import ClientLogin from "../module/FrontOffice/client/pages/ClientLogin"
 import ProductDetailPage from "../module/FrontOffice/produits/pages/ProduitDetail"
@@ -32,9 +32,9 @@ function AppRouter() {
           <Route path="/panier" element={<Panier />} />
           <Route path="/Mescommande" element={<Commande />} />
           <Route path="/Commande" element={<WorkFlowCommande />} />
-          {/* <Route path="/backoffice/login" element={<Login />} /> */}
+          <Route path="/admin/login" element={<Login />} />
 
-          {/* <Route element={<SecureRoute />}> */}
+          <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}
             
             {/* <Route path="/Dashbord" element={<DashboardPage />} /> */}
@@ -58,7 +58,7 @@ function AppRouter() {
             {/* <Route path="/sav/sav/:id" element={<SaveDetailPage/>} /> */}
             {/* <Route path="/sav/retours-produit" element={<ReturnPage/>} /> */}
             {/* <Route path="/sav/retours-produit/:id" element={<ReturnDetailPage/>} /> */}
-          {/* </Route> */}
+          </Route>
 
           {/* <Route path="/produit/:id" element={<ProductDetailPage />} /> */}
           <Route path="*" element={<ClientLogin />} />

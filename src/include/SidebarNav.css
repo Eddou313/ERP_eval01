@@ -1,0 +1,179 @@
+.homeSidebar {
+  --sidebar-width: clamp(240px, 15vw, 300px);
+  background: #fff;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: var(--sidebar-width);
+  height: 100vh;
+  padding: 24px 16px;
+  box-shadow: 10px 0 18px rgba(0, 0, 0, 0.08);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-shrink: 0;
+}
+
+.homeSidebar::before,
+.homeSidebar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: #2563eb;
+}
+
+.homeSidebar::before {
+  width: 6px;
+  height: 56px;
+}
+
+.homeSidebar::after {
+  width: 56px;
+  height: 6px;
+}
+
+.homeNav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.homeNavItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #000;
+  padding: 10px 12px;
+  border-radius: 10px;
+}
+
+.homeNavItem:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.homeNavItemActive {
+  background: rgba(37, 99, 235, 0.12);
+  font-weight: 600;
+}
+
+.homeNavItemIcon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.homeNavDropdown {
+  border-radius: 10px;
+}
+
+.homeNavDropdownSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #000;
+}
+
+.homeNavDropdownSummaryLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.homeNavDropdownSummary:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.homeNavDropdownSummary::-webkit-details-marker {
+  display: none;
+}
+
+.homeNavDropdownChevron {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.homeNavDropdown[open] .homeNavDropdownChevron {
+  transform: rotate(180deg);
+}
+
+.homeNavDropdownItems {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 8px;
+}
+
+.homeNavSubItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #000;
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+
+.homeNavSubItemIndented {
+  padding-left: 28px;
+}
+
+.homeNavSubItem:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+@media (max-width: 960px) {
+  .homeSidebar {
+    position: relative;
+    width: auto;
+    height: auto;
+    overflow: visible;
+  }
+}
+/* ===== ACTIONS (haut + bas) ===== */
+.homeSidebarActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.homeSidebarActions--bottom {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.homeSidebarButton {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.homeSidebarButton--view {
+  background: #2563eb;
+  color: #fff;
+}
+
+.homeSidebarButton--view:hover {
+  background: #1d4ed8;
+}
+
+.homeSidebarButton--logout {
+  background: rgba(220, 38, 38, 0.08);
+  color: #dc2626;
+}
+
+.homeSidebarButton--logout:hover {
+  background: rgba(220, 38, 38, 0.16);
+}
