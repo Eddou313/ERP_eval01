@@ -28,7 +28,7 @@ export default function FrontOfficeHeader() {
             <h1>E-COMMERCE</h1>
           </Link>
           <nav className="headerNav">
-            <Link to="/" className="navLink"><IconHome size={18} /> Accueil</Link>
+            <Link to="/produits" className="navLink"><IconHome size={18} /> Accueil</Link>
             {client && (
               <Link to="/Mescommande" className="navLink"><IconReceipt size={18} /> Mes Commandes</Link>
             )}

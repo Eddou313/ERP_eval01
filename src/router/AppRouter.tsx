@@ -17,6 +17,7 @@ import ProductDetailPage from "../module/FrontOffice/produits/pages/ProduitDetai
 import ClientRegister from "../module/FrontOffice/client/pages/ClientRegister"
 import Home from "./Home"
 import ProduitsList from "../module/FrontOffice/produits/pages/ProduitsList"
+import ClientListe from "../module/FrontOffice/client/pages/ClientListe"
 import { Panier } from "../module/FrontOffice/panier/Panier"
 import Commande from "../module/FrontOffice/commande/pages/Commande"
 import WorkFlowCommande from "../module/FrontOffice/commande/pages/WorkFlowCommande"
@@ -25,7 +26,8 @@ function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
-          <Route path="/" element={<ProduitsList />} />
+          <Route path="/" element={<ClientListe />} />
+          <Route path="/produits" element={<ProduitsList />} />
           <Route path="/login" element={<ClientLogin />} />
           <Route path="/register" element={<ClientRegister />} />
           <Route path="/produit/:id" element={<ProductDetailPage />} />

@@ -1,12 +1,14 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { checUser } from "../api/clientAPI";
 import "./ClientLogin.css";
 
 export default function ClientLogin() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const location = useLocation();
+  const initialEmail = (location.state && (location.state as any).email) || "";
+  const [email, setEmail] = useState<string>(initialEmail);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +27,7 @@ export default function ClientLogin() {
 
       if (success) {
         console.log("Connexion réussie !",Info.gmail);
-        navigate('/'); // Redirection vers l'accueil
+        navigate('/produits'); // Redirection vers la liste produits
       } else {
         alert("Email ou mot de passe incorrect.");
       }
@@ -53,6 +55,7 @@ export default function ClientLogin() {
                 <input
                   type="email"
                   id="email"
+                  value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="votre@email.com"
                 />

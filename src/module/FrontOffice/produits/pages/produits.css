@@ -152,15 +152,49 @@
   width: fit-content;
 }
 
+.hotBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: #e11d48;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  width: fit-content;
+}
+
 .newBadgeLarge {
   position: absolute;
   top: 16px;
-  left: 16px;
+  right: 16px;
+  left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 10px 16px;
   background: #2cb3dc;
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  border-radius: 4px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.hotBadgeLarge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: #e11d48;
   color: #ffffff;
   font-size: 0.8rem;
   font-weight: 800;

@@ -76,6 +76,7 @@ export type ProductListItem = {
   id_default_image?: number;
   link_rewrite?: string;
   description_short?: string;
+  available_date?: string;
 };
 
 export type ProductGetResponse = {
@@ -377,6 +378,7 @@ function mapProductFromApi(product: any, stock: number | undefined, pricing: Pri
     on_sale: boolFromPrestashop(product.on_sale),
     date_add: stringFromPrestashop(product.date_add),
     date_upd: stringFromPrestashop(product.date_upd),
+    available_date: stringFromPrestashop(product.available_date),
     id_default_image: numFromPrestashop(product.id_default_image),
     link_rewrite: getFirstLanguageText(product.link_rewrite),
     description_short: getFirstLanguageText(product.description_short),
@@ -406,8 +408,11 @@ export async function listProductIds(limit?: number): Promise<number[]> {
 }
 
 export async function listProductIdsPaginated(limit = 8, offset = 0): Promise<number[]> {
-  const queryParams: any = { display: "[id]", limit: `${offset},${limit}` };
-
+  const queryParams: any = {
+    display: "[id]",
+    limit: `${offset},${limit}`,
+    "filter[active]": 1,
+  };
   const json = await requestPrestashopXml<any>("/products", {
     query: queryParams,
   });
@@ -480,10 +485,22 @@ export async function listProductsLight(limit?: number): Promise<ProductListItem
   return results;
 }
 
-export async function listProductsLightPaginated(limit = 8, offset = 0): Promise<ProductListItem[]> {
+export async function listProductsLightPaginated(
+  limit = 8,
+  offset = 0
+): Promise<ProductListItem[]> {
   const ids = await listProductIdsPaginated(limit, offset);
+
   const results = await Promise.all(ids.map((id) => getProduct(id)));
-  return results;
+
+  // return results.sort((a, b) => {
+  //   const dateA = a.date_add ? new Date(a.date_add).getTime() : 0;
+  //   const dateB = b.date_add ? new Date(b.date_add).getTime() : 0;
+
+  //   return dateA - dateB;
+  // });
+  // return results.sort((a, b) => (b.id) - (a.id));
+  return results.sort((a, b) => b.id - a.id);
 }
 
 /**

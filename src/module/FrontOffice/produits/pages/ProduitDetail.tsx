@@ -297,6 +297,25 @@ export function ProduitDetail() {
               {product.on_sale && (
                 <div className="discountBadgeLarge">-20%</div>
               )}
+              {/* Availability badge in detail */}
+              {(() => {
+                const dateStr = product.available_date || product.date_add || "";
+                if (!dateStr) return null;
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return null;
+                const diffMs = Date.now() - d.getTime();
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                if (diffDays <= 1) {
+                  return <div className="badgeLarge hotBadgeLarge">HOT</div>;
+                }
+
+                if (diffDays <= 7) {
+                  return <div className="badgeLarge newBadgeLarge">NEW</div>;
+                }
+
+                return null;
+              })()}
             </div>
           </div>
 

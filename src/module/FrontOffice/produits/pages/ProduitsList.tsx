@@ -22,7 +22,6 @@ export function ProduitsList() {
         setLoading(true);
         const allIds = await listProductIds();
         setTotalProducts(allIds.length);
-
         const offset = (page - 1) * pageSize;
         // Récupérer les produits depuis l'API PrestaShop
         const productsData = await listProductsLightPaginated(pageSize, offset);
@@ -70,7 +69,7 @@ export function ProduitsList() {
                   style={{ cursor: "pointer" }}
                 >
                   <div className="productImageWrap">
-                    {product.id_default_image ? (
+                      {product.id_default_image ? (
                       <img
                         src={getProductImageUrl(product.id, product.id_default_image)}
                         alt={product.name}
@@ -92,6 +91,33 @@ export function ProduitsList() {
                         <span className="discountBadge">-20%</span>
                       </div>
                     )}
+                    {/* Availability badges */}
+                    {(() => {
+                      const dateStr = product.available_date || product.date_add || "";
+                      if (!dateStr) return null;
+                      const d = new Date(dateStr);
+                      if (isNaN(d.getTime())) return null;
+                      const diffMs = Date.now() - d.getTime();
+                      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+                      if (diffDays <= 1) {
+                        return (
+                          <div className="badgesStack">
+                            <span className="hotBadge">HOT</span>
+                          </div>
+                        );
+                      }
+
+                      if (diffDays <= 7) {
+                        return (
+                          <div className="badgesStack" style ={{ top: 4, left: 4 }}>
+                            <span className="newBadge">NEW</span>
+                          </div>
+                        );
+                      }
+
+                      return null;
+                    })()}
                   </div>
                   <div className="productCardContent">
                     <h3 className="productName">{product.name || "Produit sans nom"}</h3>
