@@ -53,9 +53,21 @@
 .billing-check {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;          /* Espacement entre le carré et le texte */
   font-size: 14px;
   color: #334155;
+  cursor: pointer;    /* Pour montrer que c'est cliquable */
+  margin-top: 15px;   /* Espace avec le formulaire ou le sélecteur au-dessus */
+  padding: 8px 0;     /* Zone de clic plus large */
+  font-weight: 500;
+}
+
+/* Optionnel : Style pour agrandir la case à cocher elle-même */
+.billing-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #2c7be5; /* Change la couleur de la coche en bleu pour matcher ton thème */
 }
 
 .workflow-select,

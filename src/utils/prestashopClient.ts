@@ -69,14 +69,16 @@ export async function requestPrestashopXml<T>(
     console.log(`\n===== PrestaShop XML OUT ${method} ${resourcePath} =====\n${opts.bodyXml}\n===== /PrestaShop XML OUT ${method} ${resourcePath} =====\n`);
   }
 
+  const bodyXml = opts.bodyXml?.replace(/^<\?xml[^>]*\?>\s*/i, "");
+
   const res = await fetch(fullUrl, { // On passe la string directement
     method,
     headers: {
       Authorization: basicAuthHeader(apiKey),
       Accept: "application/xml",
-      ...(opts.bodyXml ? { "Content-Type": "application/xml" } : null),
+      ...(bodyXml ? { "Content-Type": "application/xml" } : null),
     },
-    body: opts.bodyXml,
+    body: bodyXml,
     signal: opts.signal,
   });
 

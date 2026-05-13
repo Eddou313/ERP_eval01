@@ -158,3 +158,5 @@ export async function updateModeLivraison(id: number, form: ModeLivraisonForm): 
 export const getAllLModeLivaraison = getAllModeLivraison;
 export const updateMOdeLivraion = updateModeLivraison;
 export const getDetailModeLibvraisonByid = getDetailModeLivraisonById;
+
+export const PRIX_LIVRAISON_STANDARD = 0.0;

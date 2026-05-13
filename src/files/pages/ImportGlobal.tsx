@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import './import.css';
 // import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
 import { parseCSVFile,  InitialisationGLobal } from "../api/importAPI"
-import type { colonneCSV, ImportDataType } from "./../api/importAPI"
+import type { colonneCSV } from "./../api/importAPI"
 import {formatDate,transformToObjects} from "../../utils/helper"
 
 export function ImportGlobal ()

@@ -4,15 +4,17 @@ import { getStoredClientSession } from "../../client/api/clientAPI";
 import {
 	getOrCreateGuestCart,
 	getLatestCartForCustomerId,
+	getCart,
+	deleteCart,
 	type CartDetail,
 } from "../../../Backoffice/panier/api/panierApi";
-import { createOrder, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
+import { createCommande, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
 import { createClientAddress, type ClientAddressImportForm } from "../../../Backoffice/client/api/clientAdresAPI";
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, textFromUnknown } from "../../../../utils/helper";
 import "./WorkFlowCommande.css";
-import { getAllModeLivraison, type ModeLivraisonForm, type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/LivraisonApi";
-import { PAYMENT_METHODS,type PaymentMethod } from "../../../Backoffice/paiement/api/PaiementApi";
+import { getAllModeLivraison, PRIX_LIVRAISON_STANDARD, type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/LivraisonApi";
+import { PAYMENT_METHODS, type PaymentMethod } from "../../../Backoffice/paiement/api/PaiementApi";
 
 type AddressMode = "existing" | "new";
 
@@ -41,8 +43,7 @@ export default function WorkFlowCommande() {
 	const [cart, setCart] = useState<CartDetail | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [creatingOrder, setCreatingOrder] = useState(false);
-	const [shippingMethod, setShippingMethod] = useState<string>("Standard");
-	const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PAYMENT_METHODS[0] || {} as PaymentMethod);
+	const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(PAYMENT_METHODS[0] || null);
 	const [addressMode, setAddressMode] = useState<AddressMode>("existing");
 	const [addresses, setAddresses] = useState<Array<{ id: number; label: string }>>([]);
 	const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
@@ -51,6 +52,8 @@ export default function WorkFlowCommande() {
 
 	const [ModeLivraison, setModeLivraison] = useState<ModeLivraisonListItem[]>([]);
 	const [selectedModeLivraisonId, setSelectedModeLivraisonId] = useState<number>(0);
+	const [shippingPrice, setShippingPrice] = useState<number>(PRIX_LIVRAISON_STANDARD);
+	const [clearCartAfterOrder, setClearCartAfterOrder] = useState<boolean>(true);
 
 	useEffect(() => {
 		const load = async () => {
@@ -121,18 +124,47 @@ export default function WorkFlowCommande() {
 	}, []);
 
 	const total = cart ? Number(cart.total || cart.total_products || 0) : 0;
+	const grandTotal = Number(total + shippingPrice);
+	const canCreateOrder = Boolean(
+		cart &&
+		getStoredClientSession() &&
+		selectedModeLivraisonId > 0 &&
+		paymentMethod &&
+		shippingPrice >= 0 &&
+		(addressMode === "existing" ? selectedAddressId && selectedAddressId > 0 : newAddress.firstname.trim() && newAddress.lastname.trim() && newAddress.address1.trim() && newAddress.postcode.trim() && newAddress.city.trim())
+	);
 
 	const handleConfirm = () => {
 		if (!cart) return alert("Panier introuvable");
 		const session = getStoredClientSession();
 		if (!session) return alert("Veuillez vous connecter pour confirmer la commande.");
+		if (!paymentMethod) return alert("Veuillez choisir une méthode de paiement.");
+		if (!selectedModeLivraisonId) return alert("Veuillez choisir un mode de livraison.");
 
 		(async () => {
 			try {
 				setCreatingOrder(true);
 
-				let deliveryAddressId = selectedAddressId || 0;
-				let invoiceAddressId = selectedAddressId || 0;
+				// === RÈGLE PROPRE ===
+				// 1. Récupérer le cart frais
+				const freshCart = await getCart(cart.id);
+				
+				// 2. Récupérer les produits du cart
+				const cartItems = freshCart.items || [];
+				
+				// 3. Calculer les totaux à partir des produits
+				const cartTotalProducts = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
+				const shippingCost = Number(shippingPrice) || 0;
+				const orderGrandTotal = cartTotalProducts + shippingCost;
+				
+				console.debug("=== Order Totals ===");
+				console.debug("Cart Items:", cartItems.length);
+				console.debug("Total Products:", cartTotalProducts);
+				console.debug("Shipping Cost:", shippingCost);
+				console.debug("Grand Total:", orderGrandTotal);
+
+				let deliveryAddressId = 0;
+				let invoiceAddressId = 0;
 
 				if (addressMode === "new") {
 					if (!newAddress.firstname.trim() || !newAddress.lastname.trim() || !newAddress.address1.trim() || !newAddress.postcode.trim() || !newAddress.city.trim()) {
@@ -148,7 +180,10 @@ export default function WorkFlowCommande() {
 						id_country: newAddress.id_country || countryIdFrance || 0,
 					});
 					deliveryAddressId = createdAddressId;
-					invoiceAddressId = newAddress.useForBilling ? createdAddressId : invoiceAddressId;
+					invoiceAddressId = newAddress.useForBilling ? createdAddressId : 0;
+				} else {
+					deliveryAddressId = Number(selectedAddressId || 0);
+					invoiceAddressId = Number(selectedAddressId || 0);
 				}
 
 				if (!deliveryAddressId) {
@@ -156,16 +191,47 @@ export default function WorkFlowCommande() {
 					return;
 				}
 
-				const form = { ...DEFAULT_ORDER_FORM } as any;
-				form.id_customer = Number(session.id);
-				form.payment = paymentMethod || form.payment;
-				form.total_paid = Number(total) || 0;
-				form.id_currency = 1;
-				form.id_address_delivery = deliveryAddressId;
-				form.id_address_invoice = invoiceAddressId || deliveryAddressId;
+				if (!invoiceAddressId) {
+					invoiceAddressId = deliveryAddressId;
+				}
 
-				const orderId = await createOrder(form);
-				alert(`Commande créée (ID: ${orderId}) — total: ${total.toFixed(2)} €`);
+				const form = {
+					...DEFAULT_ORDER_FORM,
+					id_customer: Number(session.id),
+					id_cart: freshCart.id,
+					id_lang: 1,
+					id_currency: 1,
+					id_carrier: selectedModeLivraisonId,
+					id_address_delivery: deliveryAddressId,
+					id_address_invoice: invoiceAddressId || deliveryAddressId,
+					payment: paymentMethod.label,
+					module: paymentMethod.code,
+					current_state: 1,
+					total_paid: orderGrandTotal,
+					total_paid_real: orderGrandTotal,
+					total_products: cartTotalProducts,
+					total_products_wt: cartTotalProducts,
+					total_shipping: shippingCost,
+					total_shipping_tax_incl: shippingCost,
+					total_shipping_tax_excl: shippingCost,
+					total_paid_tax_incl: orderGrandTotal,
+					total_paid_tax_excl: orderGrandTotal,
+					conversion_rate: 1,
+					valid: false,
+					note: "",
+					gift: false,
+					gift_message: "",
+					payment_code: paymentMethod.code,
+				};
+
+				const orderId = await createCommande(form);
+
+				if (clearCartAfterOrder) {
+					await deleteCart(freshCart.id);
+					setCart(null);
+				}
+
+				alert(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
 			} catch (err: any) {
 				console.error("Erreur création commande:", err);
 				alert("Erreur lors de la création de la commande: " + (err?.message || String(err)));
@@ -330,11 +396,6 @@ export default function WorkFlowCommande() {
 							<div className="step">
 								<div className="step-title">2. Méthode de livraison</div>
 								<div className="step-body">
-									{/* <select className="workflow-select" value={ModeLivraison.id} onChange={(e) => setShippingMethod(e.target.value)}>
-										<option>Standard</option>
-										<option>Express</option>
-										<option>Retrait en magasin</option>
-									</select> */}
 									<select
 										className="workflow-select"
 										value={selectedModeLivraisonId}
@@ -352,13 +413,23 @@ export default function WorkFlowCommande() {
 											</option>
 										))}
 									</select>
+									<div className="field" style={{ marginTop: 12 }}>
+										<label>Prix de livraison</label>
+										<input
+											type="number"
+											min={0}
+											step="0.01"
+											value={shippingPrice}
+											onChange={(e) => setShippingPrice(Math.max(0, Number(e.target.value) || 0))}
+										/>
+									</div>
 								</div>
 							</div>
 
 							<div className="step">
 								<div className="step-title">3. Méthode de paiement</div>
 								<div className="step-body">
-									<select className="workflow-select" value={paymentMethod?.id || 0} onChange={(e) => setPaymentMethod(PAYMENT_METHODS.find((m) => m.code === e.target.value) || {} as PaymentMethod)}>
+									<select className="workflow-select" value={paymentMethod?.code || PAYMENT_METHODS[0]?.code || ""} onChange={(e) => setPaymentMethod(PAYMENT_METHODS.find((m) => m.code === e.target.value) || null)}>
 										{PAYMENT_METHODS.map((m) => (
 											<option key={m.code} value={m.code}>
 												{m.label}
@@ -372,9 +443,26 @@ export default function WorkFlowCommande() {
 								<div className="step-title">4. Confirmation</div>
 								<div className="step-body">
 									<div className="workflow-total">
-										<strong>Montant total produits:</strong> {total.toFixed(2)} €
+										<strong>Sous-total produits:</strong> {total.toFixed(2)} €
 									</div>
-									<button className="confirm-button" onClick={handleConfirm} disabled={creatingOrder}>
+									<div className="workflow-total">
+										<strong>Livraison:</strong> {shippingPrice.toFixed(2)} €
+									</div>
+									<div className="workflow-total">
+										<strong>Total commande:</strong> {grandTotal.toFixed(2)} €
+									</div>
+									<div className="workflow-total">
+										<strong>Adresse livraison:</strong> {String(selectedAddressId ?? "nouvelle adresse")}
+									</div>
+									<label className="billing-check" style={{ display: "block", marginBottom: 12 }}>
+										<input
+											type="checkbox"
+											checked={clearCartAfterOrder}
+											onChange={(e) => setClearCartAfterOrder(e.target.checked)}
+										/>
+										Vider le panier après la commande
+									</label>
+									<button className="confirm-button" onClick={handleConfirm} disabled={creatingOrder || !canCreateOrder}>
 										{creatingOrder ? "Création..." : "Confirmer la commande"}
 									</button>
 								</div>
