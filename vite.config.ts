@@ -27,7 +27,6 @@ export default defineConfig(({ mode }) => {
 
                 // Construit l'URL PrestaShop avec la clé API
                 const params = new URLSearchParams();
-                params.set('ws_key', apiKey);
 
                 // Parse et ajoute les paramètres existants
                 const urlObj = new URL(resourcePath, 'http://localhost');
@@ -36,7 +35,7 @@ export default defineConfig(({ mode }) => {
                 }
 
                 // Reconstruit l'URL avec /api/ ajouté
-                const fullUrl = `${prestashopUrl}/api${resourcePath.split('?')[0]}?${params.toString()}`;
+                const fullUrl = `${prestashopUrl}/api${resourcePath.split('?')[0]}?${params.toString()}`;;
 
                 console.log(`[PrestaShop Proxy] ${req.method} ${fullUrl}`);
 
@@ -69,7 +68,21 @@ export default defineConfig(({ mode }) => {
                   }
                 }
 
-                const response = await fetch(fullUrl, options);
+                const response = await fetch(fullUrl, {
+                  method: req.method,
+                  headers: {
+                    Accept: 'application/xml, image/*',
+                    Authorization:
+                      'Basic ' +
+                      Buffer.from(`${apiKey}:`).toString('base64'),
+                    ...(req.headers['content-type']
+                      ? {
+                          'Content-Type': req.headers['content-type'],
+                        }
+                      : {}),
+                  },
+                  body: (options as any).body,
+                });
                 const contentType = response.headers.get('content-type') || '';
 
                 // Gère les images (contenu binaire)

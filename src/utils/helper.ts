@@ -90,7 +90,7 @@ export function validateDate(value: unknown): boolean {
   const text = textFromUnknown(value);
   const dateRegex = /^\d{4}-\d{2}-\d{2}(\s\d{2}:\d{2}:\d{2})?$/;
   if (!dateRegex.test(text)) return false;
-  
+
   // Vérifie si c'est une date valide
   const date = new Date(text);
   return date instanceof Date && !isNaN(date.getTime());
@@ -175,8 +175,8 @@ export function asArray<T>(value: T | T[] | undefined): T[] {
 
 export type PrestashopLanguageField = {
   language:
-    | { "@_id": number | string; "#text"?: string }
-    | Array<{ "@_id": number | string; "#text"?: string }>;
+  | { "@_id": number | string; "#text"?: string }
+  | Array<{ "@_id": number | string; "#text"?: string }>;
 };
 
 /**
@@ -359,26 +359,53 @@ export function keywordsFromPrestashop(field?: PrestashopLanguageField): string[
 }
 
 // ==================== Images de produits ====================
+function getPrestashopImageBaseUrl(): string {
+  const prestashopBase = (import.meta.env.VITE_BASE_URL_FULL || "").replace(/\/$/, "");
 
-export function getProductImageUrl(productId: number, imageId: number): string {
-  return `http://localhost/prestashop_edition_classic_version_8.2.6/${import.meta.env.VITE_BASE_URL}/images/products/${productId}/${imageId}`;
+  if (!prestashopBase) {
+    const apiBase = (import.meta.env.VITE_BASE_URL || "/api").replace(/\/$/, "");
+    return `${window.location.origin}${apiBase}`;
+  }
+
+  return `${prestashopBase}/api`;
 }
 
-/**http://localhost/prestashop_edition_classic_version_8.2.6/api/images/products/1/1
- * Construit l'URL de l'image d'un produit avec fallback
- * Retourne un placeholder si l'imageId est 0 ou manquant
+function getPrestashopApiKey(): string {
+  return String(import.meta.env.VITE_API_KEY || "").trim();
+}
+
+/**
+ * Construit l'URL d'une image produit via le proxy Vite
+ *
+ * Exemple :
+ * http://localhost:5173/api/images/products/7/7
+ */
+export function getProductImageUrl(
+  productId: number,
+  imageId: number,
+): string {
+  const baseUrl = getPrestashopImageBaseUrl();
+  const wsKey = getPrestashopApiKey();
+
+  const query = wsKey ? `?ws_key=${encodeURIComponent(wsKey)}` : "";
+
+  return `${baseUrl}/images/products/${productId}/${imageId}${query}`;
+}
+
+/**
+ * Retourne l'image produit ou un placeholder
  */
 export function getProductImageUrlWithFallback(
   productId: number,
   imageId?: number,
-  placeholderUrl: string = ""
+  placeholderUrl: string = "",
 ): string {
-  if (!imageId || imageId === 0) {
+  if (!imageId || imageId <= 0) {
     return placeholderUrl;
   }
+
   return getProductImageUrl(productId, imageId);
 }
-
 // transformation de chaine grouper em json// Définition d'une interface pour la clarté
 interface ProductAchat {
   reference_produit: string;
@@ -388,7 +415,7 @@ interface ProductAchat {
 
 const transformMultipleStringsToJSON = (str: string): (string | number)[][] => {
   if (!str) return [];
-  
+
   const matches = str.match(/\(([^)]+)\)/g);
   if (!matches) return [];
 
@@ -399,7 +426,7 @@ const transformMultipleStringsToJSON = (str: string): (string | number)[][] => {
     return parts.map(item => {
       let value = item.trim().replace(/"/g, '');
       if (value === "") return "";
-      
+
       // On vérifie si c'est un nombre, mais on s'assure de ne pas transformer "T_01" en NaN
       const num = Number(value);
       return !isNaN(num) && value !== "" ? num : value;
@@ -409,7 +436,7 @@ const transformMultipleStringsToJSON = (str: string): (string | number)[][] => {
 
 export const transformToObjects = (str: string): ProductAchat[] => {
   const data = transformMultipleStringsToJSON(str);
-  
+
   return data.map(item => ({
     // On force le typage ici pour correspondre à l'interface
     reference_produit: String(item[0] || ""),

@@ -1,6 +1,6 @@
 import { jsonToXml, xmlToJson } from "./xml";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
 
 export class PrestashopWebserviceError extends Error {
   status: number;
@@ -15,20 +15,68 @@ export class PrestashopWebserviceError extends Error {
 }
 
 function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
-  const value = (import.meta as any).env?.[name] as string | undefined;
+  const value = import.meta.env[name] as string | undefined;
+
   if (!value) {
-    throw new Error(
-      `Missing ${name}. Add it to .env (Vite variables must be prefixed with VITE_).`,
-    );
+    throw new Error(`Variable ${name} manquante dans le .env`);
   }
+
   return value;
 }
 
-export function buildPrestashopProductImageUrl(productId: number, imageId?: number): string {
+function getEnvOptional(name: "VITE_BASE_URL_FULL" | "VITE_API_KEY"): string {
+  const value = import.meta.env[name] as string | undefined;
+
+  return value?.trim() || "";
+}
+
+/**
+ * Construit une URL image via le proxy Vite
+ */
+export function buildPrestashopProductImageUrl(
+  productId: number,
+  imageId?: number,
+): string {
+  const baseUrl = getEnvOptional("VITE_BASE_URL_FULL").replace(/\/$/, "");
+  const apiKey = getEnvOptional("VITE_API_KEY");
+
+  const fallbackBaseUrl = getEnv("VITE_BASE_URL").replace(/\/$/, "");
+  const resolvedBaseUrl = baseUrl ? `${baseUrl}/api` : `${window.location.origin}${fallbackBaseUrl}`;
+
+  const imagePath = imageId
+    ? `/images/products/${productId}/${imageId}`
+    : `/images/products/${productId}`;
+  const query = apiKey ? `?ws_key=${encodeURIComponent(apiKey)}` : "";
+
+  return `${resolvedBaseUrl}${imagePath}${query}`;
+}
+
+/**
+ * Construit l'URL finale via le proxy /api
+ */
+function buildApiUrl(
+  resourcePath: string,
+  query?: Record<string, string | number | boolean | undefined>,
+): string {
   const baseUrl = getEnv("VITE_BASE_URL").replace(/\/$/, "");
-  const apiKey = getEnv("VITE_API_KEY");
-  const imagePath = imageId ? `/images/products/${productId}/${imageId}` : `/images/products/${productId}`;
-  return `${baseUrl}${imagePath}?ws_key=${encodeURIComponent(apiKey)}`;
+
+  const cleanPath = resourcePath.startsWith("/")
+    ? resourcePath
+    : `/${resourcePath}`;
+
+  const searchParams = new URLSearchParams();
+
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null) continue;
+
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const qs = searchParams.toString();
+
+  return `${baseUrl}${cleanPath}${qs ? `?${qs}` : ""}`;
 }
 
 export async function requestPrestashopXml<T>(
@@ -40,54 +88,49 @@ export async function requestPrestashopXml<T>(
     signal?: AbortSignal;
   } = {},
 ): Promise<T> {
-  const baseUrl = getEnv("VITE_BASE_URL").replace(/\/$/, "");
   const method = opts.method ?? "GET";
 
-  // Construit l'URL
-  let fullUrl = `${baseUrl}${resourcePath.startsWith("/") ? "" : "/"}${resourcePath}`;
-
-  if (opts.query) {
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(opts.query)) {
-      if (value === undefined) continue;
-      searchParams.set(key, String(value));
-    }
-    const queryString = searchParams.toString();
-    if (queryString) {
-      fullUrl += `?${queryString}`;
-    }
-  }
-
-  if (opts.bodyXml) {
-    console.log(
-      `\n===== PrestaShop XML OUT ${method} ${resourcePath} =====\n${opts.bodyXml}\n===== /PrestaShop XML OUT ${method} ${resourcePath} =====\n`,
-    );
-  }
+  const fullUrl = buildApiUrl(resourcePath, opts.query);
 
   const bodyXml = opts.bodyXml?.replace(/^<\?xml[^>]*\?>\s*/i, "");
 
+  if (bodyXml) {
+    console.log(
+      `\n===== XML OUT ${method} ${resourcePath} =====\n${bodyXml}\n===== END XML OUT =====\n`,
+    );
+  }
+
   try {
-    const res = await fetch(fullUrl, {
+    const response = await fetch(fullUrl, {
       method,
       headers: {
         Accept: "application/xml",
-        ...(bodyXml ? { "Content-Type": "application/xml" } : null),
+        ...(bodyXml
+          ? {
+              "Content-Type": "application/xml",
+            }
+          : {}),
       },
       body: bodyXml,
       signal: opts.signal,
     });
 
-    const text = await res.text();
-    if (!res.ok) {
-      console.error(
-        `PrestaShop response body for ${method} ${resourcePath}:`,
-        text,
-      );
+    const text = await response.text();
+
+    console.log(
+      `\n===== XML IN ${method} ${resourcePath} =====\n${text}\n===== END XML IN =====\n`,
+    );
+
+    if (!response.ok) {
       throw new PrestashopWebserviceError(
-        `PrestaShop Webservice error (${res.status})`,
-        res.status,
+        `Erreur PrestaShop (${response.status})`,
+        response.status,
         text,
       );
+    }
+
+    if (!text.trim()) {
+      return {} as T;
     }
 
     return xmlToJson<T>(text);
@@ -95,9 +138,11 @@ export async function requestPrestashopXml<T>(
     if (error instanceof PrestashopWebserviceError) {
       throw error;
     }
-    console.error("[PrestaShop Client Error]", error);
+
+    console.error("[Prestashop Client Error]", error);
+
     throw new PrestashopWebserviceError(
-      `Erreur de connexion: ${error.message}`,
+      error.message || "Erreur réseau",
       0,
       error.message,
     );
