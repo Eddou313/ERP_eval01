@@ -19,6 +19,7 @@ import Home from "./Home"
 import ProduitsList from "../module/FrontOffice/produits/pages/ProduitsList"
 import { Panier } from "../module/FrontOffice/panier/Panier"
 import Commande from "../module/FrontOffice/commande/pages/Commande"
+import WorkFlowCommande from "../module/FrontOffice/commande/pages/WorkFlowCommande"
 
 function AppRouter() {
   return (
@@ -30,6 +31,7 @@ function AppRouter() {
           <Route path="/produit/:id" element={<ProductDetailPage />} />
           <Route path="/panier" element={<Panier />} />
           <Route path="/Mescommande" element={<Commande />} />
+          <Route path="/Commande" element={<WorkFlowCommande />} />
           {/* <Route path="/backoffice/login" element={<Login />} /> */}
 
           {/* <Route element={<SecureRoute />}> */}

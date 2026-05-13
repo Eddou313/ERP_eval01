@@ -1,0 +1,39 @@
+/* Simple styles for the workflow modal-like page */
+.workflow-root {
+  min-height: 100vh;
+  background: #f4f4f4;
+}
+
+.workflow-container {
+  display: flex;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.workflow-card {
+  width: 100%;
+  max-width: 820px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  padding: 20px;
+}
+
+.workflow-steps .step {
+  border-bottom: 1px solid #eee;
+  padding: 12px 0;
+}
+.workflow-steps .step:last-child { border-bottom: none; }
+.step-title { font-weight: 600; margin-bottom: 8px; }
+.step-body { color: #444; }
+
+.confirm-button {
+  background: #1fa2d8;
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.confirm-button:hover { opacity: .95 }

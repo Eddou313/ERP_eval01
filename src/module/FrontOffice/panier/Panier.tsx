@@ -1,5 +1,6 @@
 import FrontOfficeHeader from "../include/FrontOfficeHeader";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {getCart,getLatestCartForCustomerId,getOrCreateGuestCart,updateCartItems,type CartDetail} from "../../Backoffice/panier/api/panierApi";
 import { getStoredClientSession } from "../client/api/clientAPI";
 import { getProductImageUrl } from "../../../utils/helper";
@@ -7,6 +8,7 @@ import "./Panier.css";
 
 export function Panier()
 {
+    const navigate = useNavigate();
     const [cart, setCart] = useState<CartDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -212,7 +214,7 @@ export function Panier()
                         <strong style={{fontSize:30}}>{formatEuro(total)}</strong>
                     </div>
 
-                    <button type="button" className="panier_checkout_btn" disabled={lines.length === 0}>
+                    <button type="button" onClick={() => navigate('/Commande')} className="panier_checkout_btn" disabled={lines.length === 0}>
                         COMMANDER
                     </button>
                 </aside>
