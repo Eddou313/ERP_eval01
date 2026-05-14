@@ -4,11 +4,14 @@ import { getStoredClientSession } from "../../client/api/clientAPI";
 import {listOrdersLight,getOrder,getOrderStateLabel,type OrderListItem} from "../../../Backoffice/commande/api/commandesApi";
 import { Link } from "react-router-dom";
 import "./Commande.css";
+import {listOrderStates, type OrderStateListItem} from "../../../Backoffice/commande/api/EtatCommande";
+
 
 export function Commande() {
     const [orders, setOrders] = useState<Array<OrderListItem & { note?: string }>>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [OrderStates, setOrderStates] = useState<OrderStateListItem[]>([]);
 
     useEffect(() => {
         const session = getStoredClientSession();
@@ -32,6 +35,7 @@ export function Commande() {
                         }
                     })
                 );
+                setOrderStates(await listOrderStates());
 
                 setOrders(enriched);
             } catch (e: any) {
@@ -94,7 +98,7 @@ export function Commande() {
                                         <td className="commande-total">{o.total_paid_tax_incl.toFixed(2)}</td>
                                         <td>{o.payment}</td>
                                         <td>
-                                            {getOrderStateLabel(o.current_state)}
+                                            {OrderStates.find((state) => state.id === o.current_state)?.name || "État inconnu"}
                                         </td>
                                         {/* <td className="commande-note">{o.note || "-"}</td> */}
                                     </tr>
