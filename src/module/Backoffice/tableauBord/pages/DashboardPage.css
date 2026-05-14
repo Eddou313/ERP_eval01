@@ -1,7 +1,6 @@
 /* ─── Layout ───────────────────────────────────────────────── */
 .db-page {
 
-  /* --bg: #f7f8fa; */
   --surface: #ffffff;
   --border: #e2e5ea;
   --text-primary: #0d1117;
@@ -10,10 +9,8 @@
   --font: "DM Sans", "Helvetica Neue", Arial, sans-serif;
 
   min-height: 100vh;
-  width: calc(100%  );
-  margin-left: var(--sidebar);
+  width: 100%;
   padding: 40px 40px 64px;
-  background: var(--bg);
   color: var(--text-primary);
   font-family: var(--font);
 }
