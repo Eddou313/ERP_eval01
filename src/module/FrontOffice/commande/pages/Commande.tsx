@@ -98,7 +98,7 @@ export function Commande() {
                                     <tr key={o.id}>
                                         <td>{o.reference}</td>
                                         <td>{o.date_add}</td>
-                                        <td className="commande-total">{o.total_paid.toFixed(2)}</td>
+                                        <td className="commande-total">{o.total_paid_tax_incl.toFixed(2)}</td>
                                         <td>{o.payment}</td>
                                         <td>
                                             <select

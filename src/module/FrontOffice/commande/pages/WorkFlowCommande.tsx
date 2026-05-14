@@ -23,8 +23,8 @@ type NewAddressForm = ClientAddressImportForm & {
 };
 
 const DEFAULT_NEW_ADDRESS: NewAddressForm = {
-	firstname: "John",
-	lastname: "DOE",
+	firstname: "Test",
+	lastname: "TestTest",
 	company: "",
 	vat_number: "",
 	address1: "",
