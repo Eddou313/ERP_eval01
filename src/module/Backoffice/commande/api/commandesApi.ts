@@ -1,10 +1,3 @@
-/**
- * 📦 API Commandes PrestaShop
- * 
- * Gestion complète du CRUD des commandes avec validation des règles PrestaShop 8.2.6
- * Respecte les formats et champs obligatoires définis par l'API PrestaShop
- */
-
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import {
   textFromUnknown,
@@ -21,22 +14,12 @@ import {
 import { getClient } from "../../client/api/clientApi";
 import { PAYMENT_METHODS } from "../../paiement/api/PaiementApi";
 
-// ============================================================
-// 📋 TYPES & INTERFACES
-// ============================================================
-
-/**
- * Réponse XML PrestaShop pour une commande unique
- */
 type OrderGetResponse = {
   prestashop: {
     order: Record<string, unknown>;
   };
 };
 
-/**
- * Réponse XML PrestaShop pour la liste des commandes
- */
 type OrderListResponse = {
   prestashop: {
     orders: {
@@ -45,27 +28,18 @@ type OrderListResponse = {
   };
 };
 
-/**
- * Élément dans la liste des commandes (vue allégée)
- */
 export type OrderListItem = {
   id: number;
   reference: string;
   id_customer: number;
   payment: string;
-  total_paid: number;
+  total_paid_tax_incl: number;
   current_state: number;
   date_add: string;
 };
 
-/**
- * Ressource complète d'une commande
- * Correspond aux colonnes ps_orders PrestaShop
- */
 export type OrderResource = {
   id?: number;
-
-  // ❗ Champs requis (isUnsignedId)
   id_address_delivery: number;
   id_address_invoice: number;
   id_cart: number;
@@ -73,20 +47,16 @@ export type OrderResource = {
   id_lang: number;
   id_customer: number;
   id_carrier: number;
-
-  // ❗ Champs d'état
   current_state: number;
   module: string;
   payment: string;
 
-  // ❗ Champs prix obligatoires (isPrice)
   total_paid: number;
   total_paid_real: number;
   total_products: number;
   total_products_wt: number;
   conversion_rate: number;
 
-  // Champs prix optionnels
   total_discounts?: number;
   total_discounts_tax_incl?: number;
   total_discounts_tax_excl?: number;
@@ -100,24 +70,20 @@ export type OrderResource = {
   total_wrapping_tax_incl?: number;
   total_wrapping_tax_excl?: number;
 
-  // Champs documents
   invoice_number?: string;
   invoice_date?: string;
   delivery_number?: string;
   delivery_date?: string;
 
-  // Champs options & booleans
   valid?: boolean;
   recyclable?: boolean;
   gift?: boolean;
   mobile_theme?: boolean;
 
-  // Champs texte
   note?: string;
   gift_message?: string;
   secure_key?: string;
 
-  // Champs techniques
   round_mode?: number;
   round_type?: number;
 
@@ -134,26 +100,14 @@ export type OrderResource = {
   shipping_number?: string;
 };
 
-/**
- * Formulaire de création d'une commande
- */
 export type OrderForm = OrderResource;
 
-/**
- * Formulaire de création avec code de paiement
- */
 export type OrderCreateForm = OrderForm & {
   payment_code: string;
 };
 
-/**
- * Type pour les imports en masse
- */
 export type OrderImport = OrderResource;
 
-/**
- * États possibles des commandes (référence)
- */
 export const ORDER_STATES = [
   { id: 1, label: "En attente" },
   { id: 2, label: "Paiement accepté" },
@@ -166,9 +120,6 @@ export const ORDER_STATES = [
   { id: 9, label: "En attente de paiement" },
 ];
 
-/**
- * Formulaire par défaut pour une nouvelle commande
- */
 export const DEFAULT_ORDER_FORM: OrderForm = {
   id_customer: 0,
   id_address_delivery: 0,
@@ -211,11 +162,6 @@ export const DEFAULT_ORDER_FORM: OrderForm = {
   round_type: 0,
   secure_key: "",
 };
-
-// ============================================================
-// ✅ VALIDATEURS (héritiers des règles PrestaShop)
-// ============================================================
-
 /**
  * Validateur pour les champs requis
  */
@@ -266,26 +212,17 @@ const CREATE_ORDER_RULES: Array<RequiredFieldRule<OrderForm>> = [
   { key: "payment", message: "payment requis", validator: (v) => typeof v === "string" && v.trim().length > 0 },
   { key: "total_paid", message: "total_paid doit être >= 0", validator: (v) => validatePrice(v) },
   { key: "total_paid_real", message: "total_paid_real doit être >= 0", validator: (v) => validatePrice(v) },
+  { key: "total_paid_tax_incl", message: "total_paid_tax_incl doit être >= 0", validator: (v) => validatePrice(v) },
   { key: "total_products", message: "total_products doit être >= 0", validator: (v) => validatePrice(v) },
   { key: "total_products_wt", message: "total_products_wt doit être >= 0", validator: (v) => validatePrice(v) },
   { key: "conversion_rate", message: "conversion_rate doit être > 0", validator: (v) => validateFloat(v) },
 ];
 
 
-// ============================================================
-// 🔧 HELPERS EXTRACTORS & CONVERTERS
-// ============================================================
-
-/**
- * Récupère la méthode de paiement par son code
- */
 export function getPaymentMethod(code: string) {
   return PAYMENT_METHODS.find((p) => p.code === code);
 }
 
-/**
- * Extrait un OrderResource à partir d'une réponse XML PrestaShop
- */
 function extractOrderResource(orderXml: Record<string, unknown>): OrderResource {
   const noteValue = orderXml.note;
   const noteText = getFirstLanguageText(noteValue as any) || "";
@@ -353,19 +290,13 @@ function extractOrderListItem(orderXml: Record<string, unknown>): OrderListItem 
     reference: textFromUnknown(orderXml.reference).trim(),
     id_customer: numFromUnknown(orderXml.id_customer),
     payment: textFromUnknown(orderXml.payment).trim(),
-    total_paid: numFromUnknown(orderXml.total_paid),
+    total_paid_tax_incl: numFromUnknown(orderXml.total_paid_tax_incl),
     current_state: numFromUnknown(orderXml.current_state) || 1,
     date_add: textFromUnknown(orderXml.date_add).split(" ")[0],
   };
 }
-
-
-// ============================================================
-// 🔄 CRUD OPERATIONS
-// ============================================================
-
 /**
- * 📖 READ: Récupère la liste allégée des commandes
+ *  READ: Récupère la liste allégée des commandes
  * Format filtrable: reference, id_customer, payment, total_paid, current_state
  */
 export async function listOrders(
@@ -403,19 +334,16 @@ export async function listOrders(
   const orders = asArray(response.prestashop.orders.order);
   return orders.map(extractOrderListItem).filter((order) => {
     // Post-filter sur les montants
-    if (params?.minAmount && order.total_paid < params.minAmount) return false;
-    if (params?.maxAmount && order.total_paid > params.maxAmount) return false;
+    if (params?.minAmount && order.total_paid_tax_incl < params.minAmount) return false;
+    if (params?.maxAmount && order.total_paid_tax_incl > params.maxAmount) return false;
     return true;
   });
 }
 
-/**
- * Alias pour compatibilité
- */
 export const listOrdersLight = listOrders;
 
 /**
- * 📖 READ: Récupère une commande complète par ID
+ * READ: Récupère une commande complète par ID
  */
 export async function getOrder(id: number): Promise<OrderResource> {
   if (!validateUnsignedId(id)) {
@@ -434,14 +362,14 @@ export async function getOrder(id: number): Promise<OrderResource> {
 }
 
 /**
- * ✅ CREATE: Crée une nouvelle commande
+ *CREATE: Crée une nouvelle commande
  * Valide les champs obligatoires et applique les règles PrestaShop
  */
 export async function createOrder(form: OrderCreateForm): Promise<number> {
-  // ✅ Validation des champs requis
+  // Validation des champs requis
   validateRequiredFields("Commande", form, CREATE_ORDER_RULES);
 
-  // 🔑 Récupère la clé sécurisée du client
+  // Récupère la clé sécurisée du client
   let secureKey = form.secure_key;
   if (!secureKey) {
     try {
@@ -452,13 +380,13 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     }
   }
 
-  // 💳 Valide la méthode de paiement
+  // Valide la méthode de paiement
   const paymentMethod = getPaymentMethod(form.payment_code || "cash");
   if (!paymentMethod?.module) {
     throw new Error(`Méthode de paiement invalide: ${form.payment_code}`);
   }
 
-  // 🛠️ Prépare le formulaire sécurisé
+  // Prépare le formulaire sécurisé
   const safeForm: OrderForm = {
     ...form,
     module: paymentMethod.module,
@@ -468,7 +396,7 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     id_shop_group: form.id_shop_group ?? 1,
   };
 
-  // 📤 Envoie la création
+  // Envoie la création
   const xml = buildOrderXmlForCreation(safeForm);
   const response = await requestPrestashopXml<{
     prestashop: { order: { id: unknown } };
@@ -485,13 +413,11 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
   return orderId;
 }
 
-/**
- * Alias pour compatibilité
- */
+
 export const createCommande = createOrder;
 
 /**
- * ✏️ UPDATE: Met à jour une commande existante
+ * UPDATE: Met à jour une commande existante
  */
 export async function updateOrder(id: number, form: OrderForm): Promise<void> {
   if (!validateUnsignedId(id)) {
@@ -509,8 +435,9 @@ export async function updateOrder(id: number, form: OrderForm): Promise<void> {
 }
 
 /**
- * ✏️ UPDATE: Change l'état d'une commande
+ * UPDATE: Change l'état d'une commande
  * Utilise le workflow cohérent de PrestaShop
+ * Envoie uniquement l'état + les champs obligatoires requis par PrestaShop
  */
 export async function updateOrderState(id: number, newState: number): Promise<void> {
   if (!validateUnsignedId(id)) {
@@ -521,18 +448,40 @@ export async function updateOrderState(id: number, newState: number): Promise<vo
     throw new Error(`État invalide: ${newState}`);
   }
 
-  const order = await getOrder(id);
-  await updateOrder(id, { ...order, current_state: newState });
+  // Changer l'état via la ressource `order_history` évite d'altérer la commande
+  const xml = buildPrestashopXml({
+    prestashop: {
+      order_history: {
+        id_order: id,
+        id_order_state: newState,
+        // Certains shops exigent un employee; essayer avec 1 par défaut
+        id_employee: 1,
+      },
+    },
+  });
+
+  await requestPrestashopXml(`/order_histories`, {
+    method: "POST",
+    bodyXml: xml,
+  });
+
+  // Vérifier que PrestaShop a bien appliqué le nouvel état
+  try {
+    const updated = await getOrder(id);
+    if (Number(updated.current_state) !== Number(newState)) {
+      throw new Error(`Échec du changement d'état (current_state=${updated.current_state})`);
+    }
+  } catch (err) {
+    // Relever l'erreur mais ne pas masquer l'appel original
+    throw new Error(`Erreur vérification changement d'état: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
-/**
- * Alias pour compatibilité
- */
 export const updateEtatCommande = updateOrderState;
 
 /**
- * 🗑️ DELETE: Supprime une commande
- * ⚠️ Attention: Opération irréversible
+ * DELETE: Supprime une commande
+ * Attention: Opération irréversible
  */
 export async function deleteOrder(id: number): Promise<void> {
   if (!validateUnsignedId(id)) {
@@ -548,7 +497,7 @@ export async function deleteOrder(id: number): Promise<void> {
 export const deleteCommande = deleteOrder;
 
 /**
- * 📤 BATCH: Import en masse de commandes
+ * BATCH: Import en masse de commandes
  */
 export async function importOrders(items: OrderListItem[]): Promise<void> {
   const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer ${items.length} commande(s)?`);
@@ -562,11 +511,6 @@ export async function importOrders(items: OrderListItem[]): Promise<void> {
     throw new Error(`Erreur lors de l'initialisation: ${err}`);
   }
 }
-
-// ============================================================
-// 🏗️ XML BUILDERS
-// ============================================================
-
 /**
  * Construit le XML minimal pour la création d'une commande
  * Exclut les champs générés automatiquement par PrestaShop
@@ -620,6 +564,7 @@ function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
     module: form.module,
     payment: form.payment,
     secure_key: form.secure_key || "",
+    reference: form.reference || "", // champ additionnel
 
     // Montants
     total_paid: form.total_paid || 0,
@@ -653,7 +598,7 @@ function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
     invoice_date: form.invoice_date || "",
     delivery_number: form.delivery_number || "",
     delivery_date: form.delivery_date || "",
-    shipping_number: form.shipping_number || "",
+    shipping_number: form.shipping_number || "", // ✅ Champ additionnel
   };
 
   // Champs multilingues
@@ -668,7 +613,7 @@ function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
 }
 
 // ============================================================
-// 🛠️ UTILITIES & FORMATTERS
+// UTILITIES & FORMATTERS
 // ============================================================
 
 /**
@@ -698,7 +643,7 @@ export const formatCurrency = formatCurrencyEur;
 
 /**
  * Initialise l'import en masse (supprime toutes les commandes)
- * ⚠️ Opération destructrice
+ * Opération destructrice
  */
 export async function initCommande(items: OrderListItem[]): Promise<void> {
   const confirmed = window.confirm(

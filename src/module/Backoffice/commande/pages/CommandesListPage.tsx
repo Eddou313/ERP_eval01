@@ -1,15 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  deleteOrder,
-  formatCurrency,
-  listOrdersLight,
-  updateOrder,
-  updateOrderState,
-  type OrderListItem
-} from "../api/commandesApi";
+import { Link, useNavigate} from "react-router-dom";
+import {deleteOrder,formatCurrency,listOrdersLight,updateOrder,updateOrderState,type OrderListItem} from "../api/commandesApi";
 import "./Commandes.css";
 import {listOrderStates, type OrderStateListItem} from "../api/EtatCommande";
+import { IconSettings } from "@tabler/icons-react";
 
 type OrderFilters = {
   reference: string;
@@ -29,11 +23,13 @@ const DEFAULT_FILTERS: OrderFilters = {
   state: "all",
 };
 
-// 👉 états PrestaShop (à adapter selon ton shop)
-const ORDER_STATES = [
-  { id: 2, label: "Paiement accepté" },
-  { id: 6, label: "Annulé" },
+// États autorisés pour modification
+const ALLOWED_STATES = [
+  { id: 2, name: "Paiement accepter" },
+  { id: 6, name: "Annulé" },
 ];
+
+
 
 export default function CommandesListPage() {
   const [items, setItems] = useState<OrderListItem[]>([]);
@@ -48,6 +44,8 @@ export default function CommandesListPage() {
   const [editingOrder, setEditingOrder] = useState<OrderListItem | null>(null);
   const [newState, setNewState] = useState<number>(0);
   const [saving, setSaving] = useState(false);
+
+  const navigate = useNavigate();
 
   async function refresh() {
     setLoading(true);
@@ -74,8 +72,8 @@ export default function CommandesListPage() {
       if (appliedFilters.reference && !item.reference.toLowerCase().includes(appliedFilters.reference.toLowerCase())) return false;
       if (appliedFilters.idCustomer && item.id_customer !== Number(appliedFilters.idCustomer)) return false;
       if (appliedFilters.payment && !item.payment.toLowerCase().includes(appliedFilters.payment.toLowerCase())) return false;
-      if (appliedFilters.minAmount && item.total_paid < Number(appliedFilters.minAmount)) return false;
-      if (appliedFilters.maxAmount && item.total_paid > Number(appliedFilters.maxAmount)) return false;
+      if (appliedFilters.minAmount && item.total_paid_tax_incl < Number(appliedFilters.minAmount)) return false;
+      if (appliedFilters.maxAmount && item.total_paid_tax_incl > Number(appliedFilters.maxAmount)) return false;
       if (appliedFilters.state !== "all" && item.current_state !== appliedFilters.state) return false;
       return true;
     });
@@ -83,6 +81,11 @@ export default function CommandesListPage() {
 
   async function handleSaveState() {
     if (!editingOrder) return;
+
+    if (newState === editingOrder.current_state) {
+      setEditingOrder(null);
+      return;
+    }
 
     try {
       setSaving(true);
@@ -100,7 +103,8 @@ export default function CommandesListPage() {
     <div className="commandesPage">
       <div className="header">
         <h2>Commandes</h2>
-        <Link to="/commandes/new">+ Nouvelle commande</Link>
+        {/* <Link to="/commandes/new">+ Nouvelle commande</Link> */}
+        <IconSettings size={20} stroke={1.8} onClick={()=>navigate("/commandes/etat")}/>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -124,14 +128,15 @@ export default function CommandesListPage() {
               <td>{order.reference}</td>
               <td>{order.id_customer}</td>
               <td>{order.payment}</td>
-              <td>{formatCurrency(order.total_paid)}</td>
+              <td>{formatCurrency(order.total_paid_tax_incl)}</td>
               <td>{orderStates.find((state) => state.id === order.current_state)?.name || "État inconnu"}</td>
               <td>
                 <button
                   className="btn-edit"
                   onClick={() => {
                     setEditingOrder(order);
-                    setNewState(order.current_state);
+                    const isAllowedCurrentState = ALLOWED_STATES.some((state) => state.id === order.current_state);
+                    setNewState(isAllowedCurrentState ? order.current_state : ALLOWED_STATES[0].id);
                   }}
                 >
                   Modifier
@@ -154,9 +159,9 @@ export default function CommandesListPage() {
               value={newState}
               onChange={(e) => setNewState(Number(e.target.value))}
             >
-              {ORDER_STATES.map((s) => (
+              {ALLOWED_STATES.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.label}
+                  {s.name}
                 </option>
               ))}
             </select>
