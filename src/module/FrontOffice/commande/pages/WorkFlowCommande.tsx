@@ -5,6 +5,7 @@ import {
 	getOrCreateGuestCart,
 	getLatestCartForCustomerId,
 	getCart,
+	createCart,
 	deleteCart,
 	type CartDetail,
 } from "../../../Backoffice/panier/api/panierApi";
@@ -15,6 +16,7 @@ import { asArray, textFromUnknown } from "../../../../utils/helper";
 import "./WorkFlowCommande.css";
 import { getAllModeLivraison, PRIX_LIVRAISON_STANDARD, type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/LivraisonApi";
 import { PAYMENT_METHODS, type PaymentMethod } from "../../../Backoffice/paiement/api/PaiementApi";
+import { useNavigate } from "react-router-dom";
 
 type AddressMode = "existing" | "new";
 
@@ -54,6 +56,7 @@ export default function WorkFlowCommande() {
 	const [selectedModeLivraisonId, setSelectedModeLivraisonId] = useState<number>(0);
 	const [shippingPrice, setShippingPrice] = useState<number>(PRIX_LIVRAISON_STANDARD);
 	const [clearCartAfterOrder, setClearCartAfterOrder] = useState<boolean>(true);
+	const navigate = useNavigate();
 
 	useEffect(() => {
 		const load = async () => {
@@ -142,30 +145,31 @@ export default function WorkFlowCommande() {
 		if (!selectedModeLivraisonId) return alert("Veuillez choisir un mode de livraison.");
 
 		(async () => {
+			let freshCart: CartDetail | null = null;
+			let cartItems: CartDetail["items"] = [];
+			let cartTotalProducts = 0;
+			let shippingCost = 0;
+			let orderGrandTotal = 0;
+			let deliveryAddressId = 1;
+			let invoiceAddressId = 1;
+			let form: any = null;
+
 			try {
 				setCreatingOrder(true);
 
 				// === RÈGLE PROPRE ===
 				// 1. Récupérer le cart frais
-				const freshCart = await getCart(cart.id);
-				
+				freshCart = await getCart(cart.id);
+
 				// 2. Récupérer les produits du cart
-				const cartItems = freshCart.items || [];
-				
+				cartItems = freshCart.items || [];
+
 				// 3. Calculer les totaux à partir des produits
-				const cartTotalProducts = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
-				const shippingCost = Number(shippingPrice) || 0;
-				const orderGrandTotal = cartTotalProducts + shippingCost;
-				
-				console.debug("=== Order Totals ===");
-				console.debug("Cart Items:", cartItems.length);
-				console.debug("Total Products:", cartTotalProducts);
-				console.debug("Shipping Cost:", shippingCost);
-				console.debug("Grand Total:", orderGrandTotal);
+				cartTotalProducts = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
+				shippingCost = Number(shippingPrice) || 0;
+				orderGrandTotal = cartTotalProducts + shippingCost;
 
-				let deliveryAddressId = 0;
-				let invoiceAddressId = 0;
-
+				// Si le panier ne contient pas d'information de shop, recréer un panier lié au shop 1
 				if (addressMode === "new") {
 					if (!newAddress.firstname.trim() || !newAddress.lastname.trim() || !newAddress.address1.trim() || !newAddress.postcode.trim() || !newAddress.city.trim()) {
 						alert("Veuillez remplir les champs obligatoires de la nouvelle adresse.");
@@ -195,7 +199,38 @@ export default function WorkFlowCommande() {
 					invoiceAddressId = deliveryAddressId;
 				}
 
-				const form = {
+				const existingCartShop = Number((freshCart as any)?.id_shop) || 0;
+				if (existingCartShop <= 0) {
+					try {
+						const recreatedId = await createCart({
+							id_customer: Number(session.id),
+							id_lang: 1,
+							id_currency: 1,
+							id_address_delivery: deliveryAddressId,
+							id_address_invoice: invoiceAddressId || deliveryAddressId,
+							id_carrier: selectedModeLivraisonId,
+							id_shop: 1,
+							id_shop_group: 1,
+							items: cartItems.map((item) => ({ id_product: item.product_id, id_product_attribute: item.id_product_attribute, quantity: item.quantity })),
+						});
+
+						const recreated = await getCart(recreatedId);
+						freshCart = recreated;
+						cartItems = recreated.items || [];
+						cartTotalProducts = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
+						orderGrandTotal = cartTotalProducts + shippingCost;
+					} catch (e) {
+						console.warn('Impossible de recréer un panier avec id_shop; on continue avec le panier original', e);
+					}
+				}
+
+				console.debug("=== Order Totals ===");
+				console.debug("Cart Items:", cartItems.length);
+				console.debug("Total Products:", cartTotalProducts);
+				console.debug("Shipping Cost:", shippingCost);
+				console.debug("Grand Total:", orderGrandTotal);
+
+				form = {
 					...DEFAULT_ORDER_FORM,
 					id_customer: Number(session.id),
 					id_cart: freshCart.id,
@@ -222,6 +257,8 @@ export default function WorkFlowCommande() {
 					gift: false,
 					gift_message: "",
 					payment_code: paymentMethod.code,
+					// Transmettre les lignes de commande (associations) minimalistes
+					order_rows: cartItems.map((item) => ({ product_id: item.product_id, product_quantity: item.quantity })),
 				};
 
 				const orderId = await createCommande(form);
@@ -231,8 +268,61 @@ export default function WorkFlowCommande() {
 					setCart(null);
 				}
 
-				alert(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
+				// alert(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
+				navigate(`Mescommande`);
 			} catch (err: any) {
+				const errorMessage = String(err?.message || err || "");
+				if (errorMessage.includes('idShop') || errorMessage.includes('id_shop')) {
+					try {
+						if (!freshCart || !form) {
+							throw new Error("Contexte de commande incomplet pour le retry");
+						}
+
+						const freshCartId = await createCart({
+							id_customer: Number(session.id),
+							id_lang: form.id_lang,
+							id_currency: form.id_currency,
+							id_address_delivery: deliveryAddressId,
+							id_address_invoice: invoiceAddressId || deliveryAddressId,
+							id_carrier: selectedModeLivraisonId,
+							id_shop: 1,
+							id_shop_group: 1,
+							items: cartItems.map((item) => ({
+								id_product: item.product_id,
+								id_product_attribute: item.id_product_attribute,
+								quantity: item.quantity,
+							})),
+						});
+
+						const retryCart = await getCart(freshCartId);
+						const retryTotalProducts = retryCart.items.reduce((sum, item) => sum + (item.total || 0), 0);
+						const retryGrandTotal = retryTotalProducts + shippingCost;
+						const retryForm = {
+							...form,
+							id_cart: freshCartId,
+							total_paid: retryGrandTotal,
+							total_paid_tax_incl: retryGrandTotal,
+							total_paid_tax_excl: retryGrandTotal,
+							total_paid_real: retryGrandTotal,
+							total_products: retryTotalProducts,
+							total_products_wt: retryTotalProducts,
+							order_rows: retryCart.items.map((item) => ({ product_id: item.product_id, product_quantity: item.quantity })),
+						};
+
+						const retryOrderId = await createCommande(retryForm);
+						// if (clearCartAfterOrder) {
+						// 	await deleteCart(freshCartId);
+						// 	setCart(null);
+						// }
+						// alert(`Commande recréée (ID: ${retryOrderId}) — total: ${retryGrandTotal.toFixed(2)} €`);
+						navigate(`/Mescommande`);
+						return;
+					} catch (retryErr: any) {
+						console.error("Erreur création commande (retry):", retryErr);
+						alert("Erreur lors de la création de la commande: " + (retryErr?.message || String(retryErr)));
+						return;
+					}
+				}
 				console.error("Erreur création commande:", err);
 				alert("Erreur lors de la création de la commande: " + (err?.message || String(err)));
 			} finally {
@@ -290,7 +380,7 @@ export default function WorkFlowCommande() {
 											}}
 										>
 											{addresses.map((address) => (
-												<option key={address.id} value={String(address.id)}>
+												<option key={address.id} value={address.id}>
 													{address.label}
 												</option>
 											))}
@@ -454,14 +544,14 @@ export default function WorkFlowCommande() {
 									<div className="workflow-total">
 										<strong>Adresse livraison:</strong> {String(selectedAddressId ?? "nouvelle adresse")}
 									</div>
-									<label className="billing-check" style={{ display: "block", marginBottom: 12 }}>
+									{/* <label className="billing-check" style={{ display: "block", marginBottom: 12 }}>
 										<input
 											type="checkbox"
 											checked={clearCartAfterOrder}
 											onChange={(e) => setClearCartAfterOrder(e.target.checked)}
 										/>
 										Vider le panier après la commande
-									</label>
+									</label> */}
 									<button className="confirm-button" onClick={handleConfirm} disabled={creatingOrder || !canCreateOrder}>
 										{creatingOrder ? "Création..." : "Confirmer la commande"}
 									</button>

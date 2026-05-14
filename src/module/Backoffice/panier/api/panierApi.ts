@@ -73,6 +73,8 @@ export type CartCreate = {
   id_currency?: number;
   id_lang?: number;
   id_carrier?: number;
+  id_shop?: number;
+  id_shop_group?: number;
   secure_key?: string;
   date_add?: string;
 };
@@ -568,6 +570,8 @@ export function buildCartXml(form: CartCreate | CartImport) {
   if (form.id_currency) payload.cart.id_currency = form.id_currency;
   if (form.id_lang) payload.cart.id_lang = form.id_lang;
   if (form.id_carrier) payload.cart.id_carrier = form.id_carrier;
+  payload.cart.id_shop = form.id_shop || 1;
+  payload.cart.id_shop_group = form.id_shop_group || 1;
   if ((form as CartCreate).secure_key) payload.cart.secure_key = (form as CartCreate).secure_key;
 
   if ("items" in form && Array.isArray(form.items) && form.items.length > 0) {
@@ -603,7 +607,35 @@ export async function importCart(form: CartImport): Promise<number> {
 }
 
 export async function deleteCart(id: number): Promise<void> {
-  await requestPrestashopXml(`/carts/${id}`, { method: "DELETE" });
+  try {
+    // Pré-vérification: si le panier est associé à une commande, ne pas tenter la suppression
+    // (PrestaShop refuse avec erreur 88)
+    const cartDetail = await getCart(id).catch(() => null);
+    if (cartDetail?.id_order && cartDetail.id_order > 0) {
+      console.log(`Panier #${id} lié à la commande #${cartDetail.id_order} — suppression ignorée`);
+      return;
+    }
+
+    await requestPrestashopXml(`/carts/${id}`, { method: "DELETE" });
+  } catch (err: any) {
+    // Gestion gracieuse des erreurs de suppression (ex: code 88 Id(s) wasn't deleted)
+    const msg = err?.responseText || err?.message || String(err);
+    console.warn(`Impossible de supprimer le panier #${id} via l'API PrestaShop:`, msg);
+    // Marquer localement pour nettoyage ultérieur
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const key = "erp_orphaned_deletes";
+        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+        existing.push({ resource: "cart", id, message: msg, date: new Date().toISOString() });
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+    } catch (storeErr) {
+      console.warn("Echec enregistrement orphan delete:", storeErr);
+    }
+
+    // Ne pas remonter l'erreur vers l'UI (comportement de fallback)
+    return;
+  }
 }
 
 export async function initPanier(items: CartListItem[]): Promise<void> {
@@ -645,6 +677,8 @@ export async function getOrCreateGuestCart(defaultLang = 1, defaultCurrency = 1)
     id_customer: 0,
     id_lang: lang,
     id_currency: currency,
+    id_shop: 1,
+    id_shop_group: 1,
   });
 
   saveGuestCartCookiePayload({
@@ -703,6 +737,8 @@ export async function createCartForConnectedCustomer(customerId: number): Promis
     secure_key: client.secure_key || undefined,
     id_address_delivery: addressId,
     id_address_invoice: addressId,
+    id_shop: 1,
+    id_shop_group: 1,
   });
 
   // If there was a guest cart found in cookies, merge its items into the new customer cart
@@ -746,6 +782,8 @@ function buildCartUpdateXml(cartId: number, customerId: number, items: Array<{ i
         id_customer: customerId,
         id_lang: idLang,
         id_currency: idCurrency,
+        id_shop: 1,
+        id_shop_group: 1,
         associations: {
           cart_rows: {
             cart_row: items.map((item) => ({

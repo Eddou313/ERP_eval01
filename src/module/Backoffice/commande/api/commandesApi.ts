@@ -128,7 +128,7 @@ export const DEFAULT_ORDER_FORM: OrderForm = {
   id_currency: 1,
   id_lang: 1,
   id_carrier: 0,
-  payment: "Virement bancaire",
+  payment: "Paiement à la livraison",
   module: "",
   current_state: 1,
   total_paid: 0,
@@ -200,11 +200,12 @@ function validateRequiredFields<T extends Record<string, unknown>>(
 /**
  * Règles de validation pour la création de commande
  * Basées sur les colonnes Required=✔️ de l'API PrestaShop
+ * IMPORTANT: Les adresses de livraison et facturation DOIVENT être choisies (jamais 0)
  */
 const CREATE_ORDER_RULES: Array<RequiredFieldRule<OrderForm>> = [
   { key: "id_customer", message: "id_customer doit être > 0", validator: (v) => validateUnsignedId(v) },
-  { key: "id_address_delivery", message: "id_address_delivery doit être > 0", validator: (v) => validateUnsignedId(v) },
-  { key: "id_address_invoice", message: "id_address_invoice doit être > 0", validator: (v) => validateUnsignedId(v) },
+  { key: "id_address_delivery", message: "Veuillez choisir une adresse de livraison (ne doit pas être 0)", validator: (v) => validateUnsignedId(v) },
+  { key: "id_address_invoice", message: "Veuillez choisir une adresse de facturation (ne doit pas être 0)", validator: (v) => validateUnsignedId(v) },
   { key: "id_cart", message: "id_cart doit être > 0", validator: (v) => validateUnsignedId(v) },
   { key: "id_currency", message: "id_currency doit être > 0", validator: (v) => validateUnsignedId(v) },
   { key: "id_lang", message: "id_lang doit être > 0", validator: (v) => validateUnsignedId(v) },
@@ -364,6 +365,7 @@ export async function getOrder(id: number): Promise<OrderResource> {
 /**
  *CREATE: Crée une nouvelle commande
  * Valide les champs obligatoires et applique les règles PrestaShop
+ * NOTE: id_shop et id_shop_group sont omis lors de la création - PrestaShop les définit automatiquement
  */
 export async function createOrder(form: OrderCreateForm): Promise<number> {
   // Validation des champs requis
@@ -386,20 +388,18 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     throw new Error(`Méthode de paiement invalide: ${form.payment_code}`);
   }
 
-  // Prépare le formulaire sécurisé
+  // Prépare le formulaire sécurisé (SANS id_shop/id_shop_group)
   const safeForm: OrderForm = {
     ...form,
     module: paymentMethod.module,
     payment: paymentMethod.label,
     secure_key: secureKey,
-    id_shop: form.id_shop ?? 1,
-    id_shop_group: form.id_shop_group ?? 1,
   };
 
   // Envoie la création
   const xml = buildOrderXmlForCreation(safeForm);
   const response = await requestPrestashopXml<{
-    prestashop: { order: { id: unknown } };
+    prestashop: { order: { id: number } };
   }>("/orders", {
     method: "POST",
     bodyXml: xml,
@@ -488,7 +488,24 @@ export async function deleteOrder(id: number): Promise<void> {
     throw new Error(`ID commande invalide: ${id}`);
   }
 
-  await requestPrestashopXml(`/orders/${id}`, { method: "DELETE" });
+  try {
+    await requestPrestashopXml(`/orders/${id}`, { method: "DELETE" });
+  } catch (err: any) {
+    const msg = err?.responseText || err?.message || String(err);
+    console.warn(`Impossible de supprimer la commande #${id} via l'API PrestaShop:`, msg);
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        const key = "erp_orphaned_deletes";
+        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+        existing.push({ resource: "order", id, message: msg, date: new Date().toISOString() });
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+    } catch (storeErr) {
+      console.warn("Echec enregistrement orphan delete:", storeErr);
+    }
+
+    return;
+  }
 }
 
 /**
@@ -516,6 +533,21 @@ export async function importOrders(items: OrderListItem[]): Promise<void> {
  * Exclut les champs générés automatiquement par PrestaShop
  */
 function buildOrderXmlForCreation(form: OrderForm): string {
+  return buildOrderXmlForCreationWithRows(form);
+}
+
+function buildOrderXmlForCreationWithRows(form: OrderForm): string {
+  // PrestaShop exige les montants principaux à la création.
+  // On garde des valeurs cohérentes TTC: total_paid = total_paid_tax_incl.
+  
+  // VALIDATION: Les adresses doivent être choisies (jamais 0)
+  if (!validateUnsignedId(form.id_address_delivery) || form.id_address_delivery === 0) {
+    throw new Error("Erreur interne: id_address_delivery invalide ou 0 - une adresse de livraison doit être choisie");
+  }
+  if (!validateUnsignedId(form.id_address_invoice) || form.id_address_invoice === 0) {
+    throw new Error("Erreur interne: id_address_invoice invalide ou 0 - une adresse de facturation doit être choisie");
+  }
+  
   const order = {
     id_cart: form.id_cart,
     id_customer: form.id_customer,
@@ -524,25 +556,64 @@ function buildOrderXmlForCreation(form: OrderForm): string {
     id_currency: form.id_currency,
     id_lang: form.id_lang || 1,
     id_carrier: form.id_carrier,
+    // Champs multi-shop requis par certains environnements PrestaShop
+    id_shop: form.id_shop ?? 1,
+    id_shop_group: form.id_shop_group ?? 1,
     module: form.module,
     payment: form.payment,
     secure_key: form.secure_key || "",
-    total_paid: form.total_paid || 0,
+    total_paid: form.total_paid_tax_incl ?? form.total_paid ?? 0,
     total_paid_tax_incl: form.total_paid_tax_incl ?? form.total_paid ?? 0,
     total_paid_tax_excl: form.total_paid_tax_excl ?? form.total_paid ?? 0,
-    total_paid_real: form.total_paid_real || form.total_paid || 0,
-    total_products: form.total_products || 0,
-    total_products_wt: form.total_products_wt || form.total_products || 0,
-    total_shipping: form.total_shipping || 0,
+    total_paid_real: form.total_paid_real ?? form.total_paid_tax_incl ?? form.total_paid ?? 0,
+    total_products: form.total_products ?? 0,
+    total_products_wt: form.total_products_wt ?? form.total_products ?? 0,
+    total_shipping: form.total_shipping ?? 0,
     conversion_rate: form.conversion_rate || 1,
   };
+
+  // if (orderRows && orderRows.length > 0) {
+  //   (order as any).associations = {
+  //     order_rows: {
+  //       order_row: orderRows.map((row) => ({
+  //         id: 0,
+  //         product_id: row.product_id,
+  //         product_attribute_id: row.id_product_attribute ?? 0,
+  //         product_quantity: row.quantity,
+  //         product_name: row.name,
+  //         product_reference: row.reference || "",
+  //         product_ean13: "",
+  //         product_isbn: "",
+  //         product_upc: "",
+  //         product_price: row.unit_price,
+  //         id_customization: 0,
+  //         unit_price_tax_incl: row.unit_price,
+  //         unit_price_tax_excl: row.unit_price,
+  //       })),
+  //     },
+  //   };
+  // }
 
   // Ajoute les champs multilingues si présents
   if (form.note) {
     (order as any).note = languageField(form.note);
   }
 
-  return buildPrestashopXml({ prestashop: { order } });
+  // Associations (lignes de commande) si transmises par le frontend
+  const orderRows = (form as any)?.order_rows || (form as any)?.orderRows || [];
+  if (Array.isArray(orderRows) && orderRows.length > 0) {
+    (order as any).associations = {
+      order_rows: {
+        order_row: orderRows.map((row: any) => ({
+          product_id: row.product_id,
+          product_quantity: row.product_quantity,
+        })),
+      },
+    };
+  }
+
+  // Inclure l'attribut xmlns:xlink attendu par PrestaShop
+  return buildPrestashopXml({ prestashop: { "@_xmlns:xlink": "http://www.w3.org/1999/xlink", order } });
 }
 
 /**
@@ -551,8 +622,6 @@ function buildOrderXmlForCreation(form: OrderForm): string {
 function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
   const order: Record<string, unknown> = {
     id: form.id,
-    id_shop: form.id_shop || 1,
-    id_shop_group: form.id_shop_group || 1,
     id_cart: form.id_cart,
     id_customer: form.id_customer,
     id_address_delivery: form.id_address_delivery,
