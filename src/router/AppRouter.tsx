@@ -63,7 +63,7 @@ function AppRouter() {
           </Route>
 
           {/* <Route path="/produit/:id" element={<ProductDetailPage />} /> */}
-          <Route path="*" element={<ClientLogin />} />
+          {/* <Route path="*" element={<ClientLogin />} /> */}
           <Route path="/home" element={<Home/>} />
       </Routes>
     </BrowserRouter>

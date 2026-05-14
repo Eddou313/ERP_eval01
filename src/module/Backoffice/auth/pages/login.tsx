@@ -13,7 +13,7 @@ export function Login() {
 
     useEffect(() => {
         if (getStoredAuthSession()) {
-            navigate("/Dashbord", { replace: true });
+            navigate("/Dashboard", { replace: true });
         }
     }, [navigate]);
 
@@ -26,7 +26,7 @@ export function Login() {
         try {
             const session = await loginEmployee(credentials.gmail, credentials.password);
             const fromPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
-            navigate(fromPath ?? "/Dashbord", { replace: true, state: { employee: session.employee } });
+            navigate(fromPath ?? "/Dashboard", { replace: true, state: { employee: session.employee } });
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "Connexion impossible.");
         } finally {

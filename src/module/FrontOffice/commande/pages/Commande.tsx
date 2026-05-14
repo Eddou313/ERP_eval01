@@ -97,7 +97,7 @@ export function Commande() {
                                         <td>{o.date_add}</td>
                                         <td className="commande-total">{o.total_paid_tax_incl.toFixed(2)}</td>
                                         <td>{o.payment}</td>
-                                        <td>
+                                        <td style={{backgroundColor:OrderStates.find((state) => state.id === o.current_state)?.color || "transparent", color:"#fff", fontWeight:"bold", textAlign:"center"}}>
                                             {OrderStates.find((state) => state.id === o.current_state)?.name || "État inconnu"}
                                         </td>
                                         {/* <td className="commande-note">{o.note || "-"}</td> */}
