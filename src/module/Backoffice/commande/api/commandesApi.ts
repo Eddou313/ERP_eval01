@@ -109,7 +109,7 @@ export type OrderCreateForm = OrderForm & {
 export type OrderImport = OrderResource;
 
 export const ORDER_STATES = [
-  { id: 1, label: "En attente" },
+  { id: 1, label: "En attente du paiement par chèque" },
   { id: 2, label: "Paiement accepté" },
   { id: 3, label: "Préparation en cours" },
   { id: 4, label: "Expédié" },
@@ -117,7 +117,6 @@ export const ORDER_STATES = [
   { id: 6, label: "Annulé" },
   { id: 7, label: "Remboursé" },
   { id: 8, label: "Retour accepté" },
-  { id: 9, label: "En attente de paiement" },
 ];
 
 export const DEFAULT_ORDER_FORM: OrderForm = {

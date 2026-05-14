@@ -9,7 +9,7 @@ import {
 	type CartDetail,
 	updateCartItems,
 } from "../../../Backoffice/panier/api/panierApi";
-import { createCommande, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
+import { createCommande, DEFAULT_ORDER_FORM, updateOrderState } from "../../../Backoffice/commande/api/commandesApi";
 import { createClientAddress, type ClientAddressImportForm } from "../../../Backoffice/client/api/clientAdresAPI";
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, textFromUnknown } from "../../../../utils/helper";
@@ -262,6 +262,7 @@ export default function WorkFlowCommande() {
 				};
 
 				const orderId = await createCommande(form);
+				await updateOrderState(orderId, 1);
 
 				if (clearCartAfterOrder) {
 					await updateCartItems(
@@ -317,7 +318,8 @@ export default function WorkFlowCommande() {
 							order_rows: retryCart.items.map((item) => ({ product_id: item.product_id, product_quantity: item.quantity })),
 						};
 
-						await createCommande(retryForm);
+						const retryOrderId = await createCommande(retryForm);
+						await updateOrderState(retryOrderId, 1);
 						if (clearCartAfterOrder) {
 							await updateCartItems(
 								freshCartId,
