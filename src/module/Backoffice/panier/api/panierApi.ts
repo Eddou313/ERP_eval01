@@ -510,7 +510,10 @@ export  async function getCart(id: number): Promise<CartDetail> {
     }),
   );
 
-  const totalProducts = items.reduce((s: number, it: { total: number }) => s + (it.total || 0), 0);
+  // Certains retours PrestaShop conservent encore la ligne avec quantity = 0.
+  // On masque ces lignes à la lecture pour éviter qu'un produit supprimé réapparaisse dans le panier.
+  const visibleItems = items.filter((item) => Number(item.quantity) > 0);
+  const totalProducts = visibleItems.reduce((s: number, it: { total: number }) => s + (it.total || 0), 0);
 
   return {
     id,
@@ -523,7 +526,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
     customerSpentAmount: customerInfo.customerSpentAmount,
     date_add: textFromUnknown(cart.date_add),
     date_upd: textFromUnknown(cart.date_upd),
-    items,
+    items: visibleItems,
     total_products: totalProducts,
     total: totalProducts,
   };
@@ -610,11 +613,11 @@ export async function deleteCart(id: number): Promise<void> {
   try {
     // Pré-vérification: si le panier est associé à une commande, ne pas tenter la suppression
     // (PrestaShop refuse avec erreur 88)
-    const cartDetail = await getCart(id).catch(() => null);
-    if (cartDetail?.id_order && cartDetail.id_order > 0) {
-      console.log(`Panier #${id} lié à la commande #${cartDetail.id_order} — suppression ignorée`);
-      return;
-    }
+    // const cartDetail = await getCart(id).catch(() => null);
+    // if (cartDetail?.id_order && cartDetail.id_order > 0) {
+    //   console.log(`Panier #${id} lié à la commande #${cartDetail.id_order} — suppression ignorée`);
+    //   return;
+    // }
 
     await requestPrestashopXml(`/carts/${id}`, { method: "DELETE" });
   } catch (err: any) {
@@ -809,11 +812,6 @@ export async function updateCartItems(
   idLang = 1,
   idCurrency = 1,
 ): Promise<void> {
-  if (!items || items.length === 0) {
-    await deleteCart(cartId);
-    return;
-  }
-
   const xml = buildCartUpdateXml(cartId, customerId, items, idLang, idCurrency);
   await requestPrestashopXml(`/carts/${cartId}`, { method: "PUT", bodyXml: xml });
 }
@@ -854,3 +852,4 @@ export async function addProductToCart(params: {cartId: number;customerId: numbe
 
   return getCart(params.cartId);
 }
+// quantier

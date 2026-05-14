@@ -556,6 +556,8 @@ function buildOrderXmlForCreationWithRows(form: OrderForm): string {
     id_currency: form.id_currency,
     id_lang: form.id_lang || 1,
     id_carrier: form.id_carrier,
+    // Fix: Forcer l'état initial de la commande à '1' lors de la création
+    current_state: 1,
     // Champs multi-shop requis par certains environnements PrestaShop
     id_shop: form.id_shop ?? 1,
     id_shop_group: form.id_shop_group ?? 1,

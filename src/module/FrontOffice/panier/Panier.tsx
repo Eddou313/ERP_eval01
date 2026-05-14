@@ -91,21 +91,22 @@ export function Panier()
                         quantity: sameLine ? normalizedQty : line.quantity,
                     };
                 })
-                .filter((line) => line.quantity > 0);
+                // PrestaShop supprime vraiment la ligne quand elle est envoyée avec quantity = 0.
+                // On conserve donc la ligne ciblée dans le payload au lieu de la filtrer.
 
             await updateCartItems(cart.id, cart.id_customer, payloadItems);
-            if (payloadItems.length === 0) {
-                setCart(null);
-            } else {
-                const refreshed = await getCart(cart.id);
-                setCart(refreshed);
-            }
+            const refreshed = await getCart(cart.id);
+            setCart(refreshed);
         } catch (e) {
             console.error("Erreur mise à jour quantité panier:", e);
             setError("Impossible de mettre à jour la quantité du panier.");
         } finally {
             setUpdatingLineKey(null);
         }
+    };
+
+    const removeLineFromCart = async (productId: number, productAttributeId: number | undefined) => {
+        await updateQuantity(productId, productAttributeId, 0);
     };
 
     return (
@@ -190,7 +191,7 @@ export function Panier()
                                             type="button"
                                             className="panier_delete"
                                             aria-label="Supprimer"
-                                            onClick={() => updateQuantity(item.product_id, item.id_product_attribute, 0)}
+                                            onClick={() => removeLineFromCart(item.product_id, item.id_product_attribute)}
                                             disabled={isUpdatingLine}
                                         >
                                             🗑

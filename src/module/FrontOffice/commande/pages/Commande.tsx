@@ -1,14 +1,7 @@
 import { useEffect, useState } from "react";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getStoredClientSession } from "../../client/api/clientAPI";
-import {
-    listOrdersLight,
-    getOrder,
-    updateOrder,
-    type OrderListItem,
-    type OrderForm,
-    ORDER_STATES,
-} from "../../../Backoffice/commande/api/commandesApi";
+import {listOrdersLight,getOrder,getOrderStateLabel,type OrderListItem} from "../../../Backoffice/commande/api/commandesApi";
 import { Link } from "react-router-dom";
 import "./Commande.css";
 
@@ -101,28 +94,7 @@ export function Commande() {
                                         <td className="commande-total">{o.total_paid_tax_incl.toFixed(2)}</td>
                                         <td>{o.payment}</td>
                                         <td>
-                                            <select
-                                                className="etat-select"
-                                                value={String(o.current_state)}
-                                                onChange={async (e) => {
-                                                    const newState = Number(e.target.value);
-                                                    try {
-                                                        const full = await getOrder(o.id);
-                                                        const updated: OrderForm = { ...full, current_state: newState };
-                                                        await updateOrder(o.id, updated);
-                                                        setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, current_state: newState } : x)));
-                                                    } catch (err) {
-                                                        console.error("Erreur mise à jour état:", err);
-                                                        alert("Impossible de mettre à jour l'état de la commande.");
-                                                    }
-                                                }}
-                                            >
-                                                {ORDER_STATES.map((s) => (
-                                                    <option key={s.id} value={String(s.id)}>
-                                                        {s.label}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            {getOrderStateLabel(o.current_state)}
                                         </td>
                                         {/* <td className="commande-note">{o.note || "-"}</td> */}
                                     </tr>

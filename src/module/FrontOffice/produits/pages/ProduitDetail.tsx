@@ -219,7 +219,8 @@ export function ProduitDetail() {
         });
 
         console.log("Panier client mis à jour:", updatedCart);
-        alert(`${quantity}x "${product.name}" ajouté au panier`);
+        // alert(`${quantity}x "${product.name}" ajouté au panier`);
+        navigate("/panier");
         return;
       }
 

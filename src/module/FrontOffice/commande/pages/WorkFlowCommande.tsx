@@ -6,8 +6,8 @@ import {
 	getLatestCartForCustomerId,
 	getCart,
 	createCart,
-	deleteCart,
 	type CartDetail,
+	updateCartItems,
 } from "../../../Backoffice/panier/api/panierApi";
 import { createCommande, DEFAULT_ORDER_FORM } from "../../../Backoffice/commande/api/commandesApi";
 import { createClientAddress, type ClientAddressImportForm } from "../../../Backoffice/client/api/clientAdresAPI";
@@ -54,8 +54,8 @@ export default function WorkFlowCommande() {
 
 	const [ModeLivraison, setModeLivraison] = useState<ModeLivraisonListItem[]>([]);
 	const [selectedModeLivraisonId, setSelectedModeLivraisonId] = useState<number>(0);
-	const [shippingPrice, setShippingPrice] = useState<number>(PRIX_LIVRAISON_STANDARD);
-	const [clearCartAfterOrder, setClearCartAfterOrder] = useState<boolean>(true);
+	const [shippingPrice] = useState<number>(PRIX_LIVRAISON_STANDARD);
+	const [clearCartAfterOrder] = useState<boolean>(true);
 	const navigate = useNavigate();
 
 	useEffect(() => {
@@ -264,12 +264,20 @@ export default function WorkFlowCommande() {
 				const orderId = await createCommande(form);
 
 				if (clearCartAfterOrder) {
-					await deleteCart(freshCart.id);
+					await updateCartItems(
+						freshCart.id,
+						freshCart.id_customer,
+						cartItems.map((item) => ({
+							id_product: item.product_id,
+							id_product_attribute: item.id_product_attribute,
+							quantity: 0,
+						})),
+					);
 					setCart(null);
 				}
 
-				// alert(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
-				navigate(`Mescommande`);
+				console.log(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
+				navigate(`/Mescommande`);
 			} catch (err: any) {
 				const errorMessage = String(err?.message || err || "");
 				if (errorMessage.includes('idShop') || errorMessage.includes('id_shop')) {
@@ -309,11 +317,19 @@ export default function WorkFlowCommande() {
 							order_rows: retryCart.items.map((item) => ({ product_id: item.product_id, product_quantity: item.quantity })),
 						};
 
-						const retryOrderId = await createCommande(retryForm);
-						// if (clearCartAfterOrder) {
-						// 	await deleteCart(freshCartId);
-						// 	setCart(null);
-						// }
+						await createCommande(retryForm);
+						if (clearCartAfterOrder) {
+							await updateCartItems(
+								freshCartId,
+								retryCart.id_customer,
+								retryCart.items.map((item) => ({
+									id_product: item.product_id,
+									id_product_attribute: item.id_product_attribute,
+									quantity: 0,
+								})),
+							);
+							setCart(null);
+						}
 						// alert(`Commande recréée (ID: ${retryOrderId}) — total: ${retryGrandTotal.toFixed(2)} €`);
 						navigate(`/Mescommande`);
 						return;
@@ -503,7 +519,7 @@ export default function WorkFlowCommande() {
 											</option>
 										))}
 									</select>
-									<div className="field" style={{ marginTop: 12 }}>
+									{/* <div className="field" style={{ marginTop: 12 }}>
 										<label>Prix de livraison</label>
 										<input
 											type="number"
@@ -512,7 +528,7 @@ export default function WorkFlowCommande() {
 											value={shippingPrice}
 											onChange={(e) => setShippingPrice(Math.max(0, Number(e.target.value) || 0))}
 										/>
-									</div>
+									</div> */}
 								</div>
 							</div>
 
