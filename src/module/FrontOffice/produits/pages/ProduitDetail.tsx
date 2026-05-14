@@ -295,7 +295,8 @@ export function ProduitDetail() {
                 />
               )}
               {product.on_sale && (
-                <div className="discountBadgeLarge">-20%</div>
+                // <div className="discountBadgeLarge">-20%</div>
+                <div></div>
               )}
               {/* Availability badge in detail */}
               {(() => {

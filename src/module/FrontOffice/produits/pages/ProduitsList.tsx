@@ -1,31 +1,45 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
-import { listProductsLightPaginated, listProductIds, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
+import { listProductsLight, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
+import { listCategoriesLight, type CategoryListItem } from "../../../Backoffice/categorie/api/categoriesApi";
 import { getProductImageUrl } from "../../../../utils/helper";
+import { filterProducts, getCategoryOptions, type ProductSearchCriteria } from "./productSearch";
 import "../pages/produits.css";
+import { IconFilter } from '@tabler/icons-react';
 
 export function ProduitsList() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<ProductListItem[]>([]);
+  const [allProducts, setAllProducts] = useState<ProductListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [totalProducts, setTotalProducts] = useState(0);
+  const [categoriesData, setCategoriesData] = useState<CategoryListItem[]>([]);
+  const [criteria, setCriteria] = useState<ProductSearchCriteria>({
+    name: "",
+    category: "",
+    minPrice: "",
+    maxPrice: "",
+  });
+  const [appliedCriteria, setAppliedCriteria] = useState<ProductSearchCriteria>(criteria);
   const pageSize = 8;
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(totalProducts / pageSize)), [totalProducts]);
+  const filteredProducts = useMemo(() => filterProducts(allProducts, appliedCriteria), [allProducts, appliedCriteria]);
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredProducts.length / pageSize)), [filteredProducts.length]);
+  const categories = useMemo(() => getCategoryOptions(allProducts, categoriesData), [allProducts, categoriesData]);
+  
+  const paginatedProducts = useMemo(() => {
+    const offset = (page - 1) * pageSize;
+    return filteredProducts.slice(offset, offset + pageSize);
+  }, [filteredProducts, page]);
 
   useEffect(() => {
     const loadProducts = async () => {
       try {
         setLoading(true);
-        const allIds = await listProductIds();
-        setTotalProducts(allIds.length);
-        const offset = (page - 1) * pageSize;
-        // Récupérer les produits depuis l'API PrestaShop
-        const productsData = await listProductsLightPaginated(pageSize, offset);
-        setProducts(productsData);
+        const [loadedProducts, loadedCategories] = await Promise.all([listProductsLight(), listCategoriesLight()]);
+        setAllProducts(loadedProducts);
+        setCategoriesData(loadedCategories);
       } catch (err) {
         console.error("Erreur lors du chargement des produits:", err);
         setError("Impossible de charger les produits. Vérifiez votre connexion à PrestaShop.");
@@ -35,33 +49,95 @@ export function ProduitsList() {
     };
 
     loadProducts();
-  }, [page]);
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [appliedCriteria]);
 
   const handleProductClick = (product: ProductListItem) => {
     navigate(`/produit/${product.id}`, { state: { product } });
   };
+
+  const handleFilterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAppliedCriteria(criteria);
+  };
+
+  const initialiser = () => {
+    setCriteria({
+      name: "",
+      category: "",
+      minPrice: "",
+      maxPrice: "",
+    });
+  }
 
   return (
     <div className="productsPage">
       <FrontOfficeHeader />
       <div className="productsShell">
         <div className="productsIntro">
-          <h1>Nos Produits</h1>
-          <p className="introText">Découvrez notre large gamme de produits de qualité avec des designs uniques et inspirants.</p>
+          <form className="productsSearchPanel" onSubmit={handleFilterSubmit}>
+            <input
+              type="text"
+              className="searchInput"
+              placeholder="Rechercher par nom"
+              value={criteria.name}
+              onChange={(event) => setCriteria((current) => ({ ...current, name: event.target.value }))}
+            />
+            <select
+              className="searchInput"
+              value={criteria.category}
+              onChange={(event) => setCriteria((current) => ({ ...current, category: event.target.value }))}
+            >
+              <option value="">Toutes les categories</option>
+              {categories.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              className="searchInput"
+              placeholder="Prix min"
+              min={0}
+              value={criteria.minPrice}
+              onChange={(event) => setCriteria((current) => ({ ...current, minPrice: event.target.value }))}
+            />
+            <input
+              type="number"
+              className="searchInput"
+              placeholder="Prix max"
+              min={0}
+              value={criteria.maxPrice}
+              onChange={(event) => setCriteria((current) => ({ ...current, maxPrice: event.target.value }))}
+            />
+
+            <button type="submit" className="filterButton" style={{ alignItems: "center" }}>
+              <IconFilter size={22} stroke={1.8} />
+            </button>
+            <button onClick={initialiser}>Initialiser</button>
+          </form>
         </div>
 
         {loading && <p className="loading">Chargement des produits...</p>}
 
         {error && <p className="error">{error}</p>}
 
-        {!loading && !error && products.length === 0 && (
+        {!loading && !error && allProducts.length === 0 && (
           <p className="noProducts">Aucun produit disponible pour le moment.</p>
         )}
 
-        {!loading && !error && products.length > 0 && (
+        {!loading && !error && allProducts.length > 0 && filteredProducts.length === 0 && (
+          <p className="noProducts">Aucun produit ne correspond aux filtres selectionnes.</p>
+        )}
+
+        {!loading && !error && paginatedProducts.length > 0 && (
           <>
             <div className="productsGrid">
-              {products.map((product) => (
+              {paginatedProducts.map((product) => (
                 <div
                   key={product.id}
                   className="productCard"

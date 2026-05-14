@@ -56,6 +56,29 @@
   line-height: 1.6;
 }
 
+.productsSearchPanel {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d7d2db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: #fff;
+  color: #312b37;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #2a6f9a;
+  box-shadow: 0 0 0 3px rgba(42, 111, 154, 0.12);
+}
+
 /* Loading & Error states */
 .loading,
 .error,
@@ -677,6 +700,10 @@
 
 /* RESPONSIVE */
 @media (max-width: 768px) {
+  .productsSearchPanel {
+    grid-template-columns: 1fr;
+  }
+
   .productsGrid {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 16px;
