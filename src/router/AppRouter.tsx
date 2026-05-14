@@ -39,7 +39,7 @@ function AppRouter() {
           <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}
             
-            <Route path="/Dashbord" element={<DashboardPage />} />
+            <Route path="/Dashboard" element={<DashboardPage />} />
 
             {/* <Route path="catalogue/categories" element={<CategoriesListPage />} /> */}
             {/* <Route path="catalogue/produits" element={<ProductsListPage />} /> */}

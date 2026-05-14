@@ -45,16 +45,16 @@ export default function SidebarNav() {
         </div>
 
         <nav className="homeNav" aria-label="Navigation">
-        {/* <NavLink
+        <NavLink
           className={({ isActive }) =>
             `homeNavItem${isActive ? " homeNavItemActive" : ""}`
           }
-          to="/"
+          to="/Dashboard"
           end
         >
           <IconLayoutDashboard className="homeNavItemIcon" />
           <span>Tableau de bord</span>
-        </NavLink> */}
+        </NavLink>
 
         <details className="homeNavDropdown" open={openDropdownId === "commandes"}>
           <summary
