@@ -2,15 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {logoutEmployee} from "../module/Backoffice/auth/api/authAPI";
 import "./SidebarNav.css";
-import {
-  IconList,
-  IconShoppingCart,
-  IconBox,
-  IconPackage,
-  IconLayoutGrid,
-  IconFileText,
-  IconAdjustments,
-} from "@tabler/icons-react";
+import {IconEye,IconLogout,IconLayoutDashboard,IconList,IconShoppingCart,IconBox,IconPackage,IconLayoutGrid,IconFileText,IconAdjustments,IconReceipt,IconReceiptRefund,IconTruckDelivery,IconTimeline,IconArchive,IconPercentage,IconBuildingStore,IconUsers,IconMapPin,IconTool,IconArrowBackUp,} from "@tabler/icons-react";
 
 export default function SidebarNav() {
   const location = useLocation();
@@ -47,6 +39,7 @@ export default function SidebarNav() {
       <div className="homeSidebarInner">
         <div className="homeSidebarActions">
           <button className="homeSidebarButton homeSidebarButton--view" onClick={VueBoutique}>
+            {/* <IconEye size={20} stroke={1.8} /> */}
             Vue Boutique
           </button>
         </div>
@@ -59,7 +52,7 @@ export default function SidebarNav() {
           to="/"
           end
         >
-          <DashboardIcon />
+          <IconLayoutDashboard className="homeNavItemIcon" />
           <span>Tableau de bord</span>
         </NavLink> */}
 
@@ -98,29 +91,29 @@ export default function SidebarNav() {
               to="/commandes/Facture"
               onClick={() => setOpenDropdownId("commandes")}
             >
-              <OrdersIcon />
+              <IconReceipt className="homeNavItemIcon" />
               <span>Facture</span>
-            </NavLink> */}
-            {/* <NavLink
+            </NavLink>
+            <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
               }
               to="/commandes/avoirs"
               onClick={() => setOpenDropdownId("commandes")}
             >
-              <CreditNoteIcon />
+              <IconReceiptRefund className="homeNavItemIcon" />
               <span>Avoirs</span>
-            </NavLink> */}
-            {/* <NavLink
+            </NavLink>
+            <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
               }
               to="/commandes/bons-de-livraison"
               onClick={() => setOpenDropdownId("commandes")}
             >
-              <DeliveryIcon />
+              <IconTruckDelivery className="homeNavItemIcon" />
               <span>Bons de livraison</span>
-            </NavLink> */}
+            </NavLink>
             <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
@@ -130,7 +123,7 @@ export default function SidebarNav() {
             >
               <IconShoppingCart className="homeNavItemIcon" />
               <span>Panier</span>
-            </NavLink>
+            </NavLink> */}
           </div>
         </details>
 
@@ -151,7 +144,7 @@ export default function SidebarNav() {
             </span>
           </summary>
           <div className="homeNavDropdownItems">
-            <NavLink
+            {/* <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
               }
@@ -171,14 +164,14 @@ export default function SidebarNav() {
               <IconLayoutGrid className="homeNavItemIcon" />
               <span>Categories</span>
             </NavLink>
-            {/* <NavLink
+            <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
               }
               to="/catalogue/suivi"
               onClick={() => setOpenDropdownId("catalogue")}
             >
-              <TrackingIcon />
+              <IconTimeline className="homeNavItemIcon" />
               <span>Suivi</span>
             </NavLink>
             <NavLink
@@ -188,7 +181,7 @@ export default function SidebarNav() {
               to="/catalogue/stock"
               onClick={() => setOpenDropdownId("catalogue")}
             >
-              <StockIcon />
+              <IconArchive className="homeNavItemIcon" />
               <span>Stock</span>
             </NavLink>
             <NavLink
@@ -198,8 +191,8 @@ export default function SidebarNav() {
               to="/catalogue/reductions"
               onClick={() => setOpenDropdownId("catalogue")}
             >
-              <DiscountIcon />
-              <span>Reductions</span>
+              <IconPercentage className="homeNavItemIcon" />
+              <span>{"Reductions"}</span>
             </NavLink>
             <NavLink
               className={({ isActive }) =>
@@ -208,7 +201,7 @@ export default function SidebarNav() {
               to="/catalogue/marques-fournisseurs"
               onClick={() => setOpenDropdownId("catalogue")}
             >
-              <BrandSupplierIcon />
+          <IconBuildingStore className="homeNavItemIcon" />
               <span>Marque &amp; fournisseur</span>
             </NavLink> */}
             <NavLink
@@ -221,7 +214,7 @@ export default function SidebarNav() {
               <IconFileText className="homeNavItemIcon" />
               <span>Fichier</span>
             </NavLink>
-            <NavLink
+            {/* <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
               }
@@ -230,7 +223,7 @@ export default function SidebarNav() {
             >
               <IconAdjustments className="homeNavItemIcon" />
               <span>Attributs &amp; caracteristique</span>
-            </NavLink>
+            </NavLink> */}
           </div>
         </details>
 
@@ -243,7 +236,7 @@ export default function SidebarNav() {
             }}
           >
             <span className="homeNavDropdownSummaryLeft">
-              <ClientsIcon />
+              <IconUsers className="homeNavItemIcon" />
               <span>Clients</span>
             </span>
             <span className="homeNavDropdownChevron" aria-hidden="true">
@@ -258,7 +251,7 @@ export default function SidebarNav() {
               to="/clients/clients"
               onClick={() => setOpenDropdownId("clients")}
             >
-              <ClientsIcon />
+              <IconUsers className="homeNavItemIcon" />
               <span>Clients</span>
             </NavLink>
             <NavLink
@@ -268,13 +261,13 @@ export default function SidebarNav() {
               to="/clients/adresses"
               onClick={() => setOpenDropdownId("clients")}
             >
-              <AddressIcon />
+              <IconMapPin className="homeNavItemIcon" />
               <span>Adresses</span>
             </NavLink>
           </div>
-        </details>
+        </details> */}
 
-        <details className="homeNavDropdown" open={openDropdownId === "sav"}>
+        {/* <details className="homeNavDropdown" open={openDropdownId === "sav"}>
           <summary
             className={`homeNavDropdownSummary${activeGroupId === "sav" ? " homeNavItemActive" : ""}`}
             onClick={(e) => {
@@ -283,7 +276,7 @@ export default function SidebarNav() {
             }}
           >
             <span className="homeNavDropdownSummaryLeft">
-              <SavIcon />
+              <IconTool className="homeNavItemIcon" />
               <span>SAV</span>
             </span>
             <span className="homeNavDropdownChevron" aria-hidden="true">
@@ -298,7 +291,7 @@ export default function SidebarNav() {
               to="/sav/sav"
               onClick={() => setOpenDropdownId("sav")}
             >
-              <SavIcon />
+              <IconTool className="homeNavItemIcon" />
               <span>SAV</span>
             </NavLink>
             <NavLink
@@ -308,7 +301,7 @@ export default function SidebarNav() {
               to="/sav/retours-produit"
               onClick={() => setOpenDropdownId("sav")}
             >
-              <ReturnIcon />
+              <IconArrowBackUp className="homeNavItemIcon" />
               <span>Retours produit</span>
             </NavLink>
           </div>
@@ -318,6 +311,7 @@ export default function SidebarNav() {
         <div className="homeSidebarActions homeSidebarActions--bottom">
           <button className="homeSidebarButton homeSidebarButton--logout" onClick={handleLogout}>
             Déconnexion
+            {/* <IconLogout style={{ marginLeft: "0.5rem" ,top: 20 }} size={20} stroke={1.8} /> */}
           </button>
         </div>
       </div>
