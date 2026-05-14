@@ -1,0 +1,215 @@
+/* ─── Layout ───────────────────────────────────────────────── */
+.db-page {
+
+  /* --bg: #f7f8fa; */
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text-primary: #0d1117;
+  --text-secondary: #5b6270;
+  --accent: #1a56db;
+  --font: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+
+  min-height: 100vh;
+  width: calc(100%  );
+  margin-left: var(--sidebar);
+  padding: 40px 40px 64px;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font);
+}
+
+/* ─── En-tête ──────────────────────────────────────────────── */
+.db-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.db-eyebrow {
+  margin: 0 0 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.db-title {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.db-subtitle {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.db-subtitle strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* ─── KPIs ─────────────────────────────────────────────────── */
+.db-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 40px;
+}
+
+.db-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+}
+
+.db-kpi-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.db-kpi-value {
+  display: block;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* ─── États (chargement / erreur) ──────────────────────────── */
+.db-state {
+  margin: 0 0 24px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.db-state--error {
+  color: #c0392b;
+}
+
+/* ─── Tableau ──────────────────────────────────────────────── */
+.db-table-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px 24px 8px;
+}
+
+.db-section-title {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.db-section-title span {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.db-table-wrap {
+  overflow-x: auto;
+}
+
+.db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.db-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.db-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.db-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.db-table tbody tr:hover td {
+  background: #f0f4ff;
+}
+
+.db-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.db-table th:not(:first-child) {
+  text-align: right;
+}
+
+.db-empty {
+  margin: 0 0 16px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* ─── Responsive ───────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .db-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .db-page {
+    width: 100%;
+    margin-left: 0;
+    padding: 24px 20px 48px;
+  }
+
+  .db-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .db-subtitle {
+    text-align: left;
+  }
+}
+
+@media (max-width: 560px) {
+  .db-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .db-kpi-value {
+    font-size: 1.35rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .db-kpis {
+    grid-template-columns: 1fr;
+  }
+}
