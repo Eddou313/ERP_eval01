@@ -388,9 +388,15 @@ export async function InitOrder(): Promise<void> {
   // if (!confirmed) return;
   try {
     const orders = await listOrders();
-    const deletePromises = orders.map((order) => deleteOrder(order.id));
+    const deletableOrders = orders.filter((order) => Number(order.id) > 0);
+    const ignoredVirtualOrders = orders.length - deletableOrders.length;
+    if (ignoredVirtualOrders > 0) {
+      console.log(`${ignoredVirtualOrders} panier(s) en attente ignoré(s) pendant l'initialisation des commandes.`);
+    }
+
+    const deletePromises = deletableOrders.map((order) => deleteOrder(order.id));
     await Promise.all(deletePromises);
-    alert("Toutes les commandes ont été supprimées. Vous pouvez maintenant importer de nouvelles commandes.");
+    // alert("Toutes les commandes ont été supprimées. Vous pouvez maintenant importer de nouvelles commandes.");
   }
   catch (err) {
     console.error("Erreur lors de l'initialisation des commandes:", err);

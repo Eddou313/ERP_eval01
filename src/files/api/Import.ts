@@ -1,6 +1,6 @@
 import { ensureCategoryExists, listCategoriesSimple } from "../../module/Backoffice/categorie/api/categoriesApi";
 import { createProduct, listProductsLight, updateProduct } from "../../module/Backoffice/produit/api/productsApi";
-import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExists, getProductAttributeGroups, listAttributeGroupsLight, listAttributeValuesLight } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
+import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExists, getProductAttributeGroups, listAttributeGroupsLight, listAttributeValuesLight, updateCombination } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTaxesLight, listTaxRuleGroupsLight } from "../../module/Backoffice/taxes/taxes";
 import { normalizeText, slugify } from "../../utils/helper";
@@ -353,6 +353,15 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             let combinationId = await findCombinationIdByValues(product.id, attributeValueIds);
             if (!combinationId) {
                 combinationId = await createCombination(
+                    product.id,
+                    attributeValueIds,
+                    priceImpactHt,
+                    Number(row.stock_initial) || 0,
+                    `${product.reference ?? row.reference}-${slugify(row.karazany)}`,
+                );
+            } else {
+                await updateCombination(
+                    combinationId,
                     product.id,
                     attributeValueIds,
                     priceImpactHt,

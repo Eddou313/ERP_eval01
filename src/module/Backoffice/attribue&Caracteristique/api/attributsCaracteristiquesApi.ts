@@ -250,6 +250,30 @@ export async function createCombination(productId: number, attributeValueIds: nu
   return id;
 }
 
+export async function updateCombination(combinationId: number, productId: number, attributeValueIds: number[], priceImpactHt: number, quantity: number, reference?: string): Promise<void> {
+  await requestPrestashopXml(`/combinations/${combinationId}`, {
+    method: "PUT",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        combination: {
+          id: combinationId,
+          id_product: productId,
+          reference: reference || "",
+          price: priceImpactHt,
+          quantity,
+          default_on: 0,
+          minimal_quantity: 1,
+          associations: {
+            product_option_values: {
+              product_option_value: attributeValueIds.map((id) => ({ id })),
+            },
+          },
+        },
+      },
+    }),
+  });
+}
+
 async function listFeatureIds(): Promise<number[]> {
   const response = await requestPrestashopXml<PrestashopListResponse>("/product_features", {
     query: { display: "[id]" },
@@ -535,27 +559,43 @@ export async function getProductFeatures(productId: number): Promise<ProductFeat
 }
 
 export async function deleteAttributeGroup(id: number): Promise<void> {
-  await requestPrestashopXml(`/product_options/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/product_options/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err) {
+    console.warn(`Impossible de supprimer le groupe d'attribut #${id}`, err);
+  }
 }
 
 export async function deleteAttributeValue(id: number): Promise<void> {
-  await requestPrestashopXml(`/product_option_values/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/product_option_values/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err) {
+    console.warn(`Impossible de supprimer la valeur d'attribut #${id}`, err);
+  }
 }
 
 export async function deleteFeature(id: number): Promise<void> {
-  await requestPrestashopXml(`/product_features/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/product_features/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err) {
+    console.warn(`Impossible de supprimer la caractéristique #${id}`, err);
+  }
 }
 
 export async function deleteFeatureValue(id: number): Promise<void> {
-  await requestPrestashopXml(`/product_feature_values/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/product_feature_values/${id}`, {
+      method: "DELETE",
+    });
+  } catch (err) {
+    console.warn(`Impossible de supprimer la valeur de caractéristique #${id}`, err);
+  }
 }
 
 export async function InitAttributesAndCharacteristics(): Promise<void> {
@@ -570,12 +610,21 @@ export async function InitAttributesAndCharacteristics(): Promise<void> {
       listFeatureValueIds(),
     ]);
 
-    await Promise.all([
-      ...attributeValueIds.map((id) => deleteAttributeValue(id)),
-      ...attributeGroupIds.map((id) => deleteAttributeGroup(id)),
-      ...featureValueIds.map((id) => deleteFeatureValue(id)),
-      ...featureIds.map((id) => deleteFeature(id)),
-    ]);
+    for (const id of attributeValueIds) {
+      await deleteAttributeValue(id);
+    }
+
+    for (const id of featureValueIds) {
+      await deleteFeatureValue(id);
+    }
+
+    for (const id of attributeGroupIds) {
+      await deleteAttributeGroup(id);
+    }
+
+    for (const id of featureIds) {
+      await deleteFeature(id);
+    }
 
     console.log("Tous les attributs et caractéristiques ont été supprimés.");
   } catch (error) {
