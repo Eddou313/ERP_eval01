@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate} from "react-router-dom";
-import {deleteOrder,formatCurrency,listOrdersLight,updateOrder,updateOrderState,type OrderListItem} from "../api/commandesApi";
+import {formatCurrency,listOrdersLight,updateOrderState} from "../api/commandesApi";
 import "./Commandes.css";
-import {listOrderStates, type OrderStateListItem} from "../api/EtatCommande";
+import {listOrderStates} from "../api/EtatCommande";
 import { IconSettings } from "@tabler/icons-react";
+import { CART_PENDING_STATE_LABEL, type OrderListItem } from "../api/ObjetOrder";
+import type { OrderStateListItem } from "../api/ObjetEtat";
 
 type OrderFilters = {
   reference: string;
@@ -67,7 +69,8 @@ export default function CommandesListPage() {
     listOrderStates().then((states) => setOrderStates(states));
   }, []);
 
-  const filtered = useMemo(() => {
+  const filtered = useMemo(() => 
+  {
     return items.filter((item) => {
       if (appliedFilters.reference && !item.reference.toLowerCase().includes(appliedFilters.reference.toLowerCase())) return false;
       if (appliedFilters.idCustomer && item.id_customer !== Number(appliedFilters.idCustomer)) return false;
@@ -129,18 +132,22 @@ export default function CommandesListPage() {
               <td>{order.id_customer}</td>
               <td>{order.payment}</td>
               <td>{formatCurrency(order.total_paid_tax_incl)}</td>
-              <td>{orderStates.find((state) => state.id === order.current_state)?.name || "État inconnu"}</td>
+              <td>{order.id < 0 ? CART_PENDING_STATE_LABEL : (orderStates.find((state) => state.id === order.current_state)?.name || "État inconnu")}</td>
               <td>
-                <button
-                  className="btn-edit"
-                  onClick={() => {
-                    setEditingOrder(order);
-                    const isAllowedCurrentState = ALLOWED_STATES.some((state) => state.id === order.current_state);
-                    setNewState(isAllowedCurrentState ? order.current_state : ALLOWED_STATES[0].id);
-                  }}
-                >
-                  Modifier
-                </button>
+                {order.id > 0 ? (
+                  <button
+                    className="btn-edit"
+                    onClick={() => {
+                      setEditingOrder(order);
+                      const isAllowedCurrentState = ALLOWED_STATES.some((state) => state.id === order.current_state);
+                      setNewState(isAllowedCurrentState ? order.current_state : ALLOWED_STATES[0].id);
+                    }}
+                  >
+                    Modifier
+                  </button>
+                ) : (
+                  <span>Panier non valide</span>
+                )}
               </td>
             </tr>
           ))}

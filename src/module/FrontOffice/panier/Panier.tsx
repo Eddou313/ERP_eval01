@@ -1,10 +1,11 @@
 import FrontOfficeHeader from "../include/FrontOfficeHeader";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {getCart,getLatestCartForCustomerId,getOrCreateGuestCart,updateCartItems,type CartDetail} from "../../Backoffice/panier/api/panierApi";
+import {getCart,getLatestCartForCustomerId,getOrCreateGuestCart,updateCartItems} from "../../Backoffice/panier/api/panierApi";
 import { getStoredClientSession } from "../client/api/clientAPI";
 import { getProductImageUrl } from "../../../utils/helper";
 import "./Panier.css";
+import type { CartDetail } from "../../Backoffice/panier/api/object";
 
 export function Panier()
 {

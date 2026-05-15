@@ -1,200 +1,12 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
-import {
-  textFromUnknown,
-  numFromUnknown,
-  boolFromUnknown,
-  asArray,
-  getFirstLanguageText,
-  toPrestashopBool,
-  languageField,
-  validateUnsignedId,
-  validatePrice,
-  validateFloat,
-} from "../../../../utils/helper";
+import {textFromUnknown,numFromUnknown,boolFromUnknown,asArray,getFirstLanguageText,toPrestashopBool,languageField,validateUnsignedId,validatePrice,validateFloat,} from "../../../../utils/helper";
 import { getClient } from "../../client/api/clientApi";
+import { getCart } from "../../panier/api/panierApi";
 import { PAYMENT_METHODS } from "../../paiement/api/PaiementApi";
+import { CART_PENDING_STATE_ID, CART_PENDING_STATE_LABEL, ORDER_STATES, validateRequiredFields, type CartListResponse, type OrderCreateForm, type OrderForm, type OrderGetResponse, type OrderListItem, type OrderListResponse, type OrderResource, type RequiredFieldRule } from "./ObjetOrder";
 
-type OrderGetResponse = {
-  prestashop: {
-    order: Record<string, unknown>;
-  };
-};
+export { DEFAULT_ORDER_FORM } from "./ObjetOrder";
 
-type OrderListResponse = {
-  prestashop: {
-    orders: {
-      order: Array<Record<string, unknown>>;
-    };
-  };
-};
-
-export type OrderListItem = {
-  id: number;
-  reference: string;
-  id_customer: number;
-  payment: string;
-  total_paid_tax_incl: number;
-  current_state: number;
-  date_add: string;
-};
-
-export type OrderResource = {
-  id?: number;
-  id_address_delivery: number;
-  id_address_invoice: number;
-  id_cart: number;
-  id_currency: number;
-  id_lang: number;
-  id_customer: number;
-  id_carrier: number;
-  current_state: number;
-  module: string;
-  payment: string;
-
-  total_paid: number;
-  total_paid_real: number;
-  total_products: number;
-  total_products_wt: number;
-  conversion_rate: number;
-
-  total_discounts?: number;
-  total_discounts_tax_incl?: number;
-  total_discounts_tax_excl?: number;
-  total_paid_tax_incl?: number;
-  total_paid_tax_excl?: number;
-  total_shipping?: number;
-  total_shipping_tax_incl?: number;
-  total_shipping_tax_excl?: number;
-  carrier_tax_rate?: number;
-  total_wrapping?: number;
-  total_wrapping_tax_incl?: number;
-  total_wrapping_tax_excl?: number;
-
-  invoice_number?: string;
-  invoice_date?: string;
-  delivery_number?: string;
-  delivery_date?: string;
-
-  valid?: boolean;
-  recyclable?: boolean;
-  gift?: boolean;
-  mobile_theme?: boolean;
-
-  note?: string;
-  gift_message?: string;
-  secure_key?: string;
-
-  round_mode?: number;
-  round_type?: number;
-
-  // Champs multi-shop
-  id_shop_group?: number;
-  id_shop?: number;
-
-  // Champs audit
-  date_add?: string;
-  date_upd?: string;
-
-  // Champs additionnels
-  reference?: string;
-  shipping_number?: string;
-};
-
-export type OrderForm = OrderResource;
-
-export type OrderCreateForm = OrderForm & {
-  payment_code: string;
-};
-
-export type OrderImport = OrderResource;
-
-export const ORDER_STATES = [
-  { id: 1, label: "En attente du paiement par chèque" },
-  { id: 2, label: "Paiement accepté" },
-  { id: 3, label: "Préparation en cours" },
-  { id: 4, label: "Expédié" },
-  { id: 5, label: "Livré" },
-  { id: 6, label: "Annulé" },
-  { id: 7, label: "Remboursé" },
-  { id: 8, label: "Retour accepté" },
-];
-
-export const DEFAULT_ORDER_FORM: OrderForm = {
-  id_customer: 0,
-  id_address_delivery: 0,
-  id_address_invoice: 0,
-  id_cart: 0,
-  id_currency: 1,
-  id_lang: 1,
-  id_carrier: 0,
-  payment: "Paiement à la livraison",
-  module: "",
-  current_state: 1,
-  total_paid: 0,
-  total_paid_real: 0,
-  total_products: 0,
-  total_products_wt: 0,
-  total_shipping: 0,
-  conversion_rate: 1,
-  valid: false,
-  invoice_number: "",
-  invoice_date: new Date().toISOString().split("T")[0],
-  delivery_date: new Date().toISOString().split("T")[0],
-  delivery_number: "",
-  note: "",
-  gift: false,
-  gift_message: "",
-  recyclable: false,
-  mobile_theme: false,
-  total_discounts: 0,
-  total_discounts_tax_incl: 0,
-  total_discounts_tax_excl: 0,
-  total_paid_tax_incl: 0,
-  total_paid_tax_excl: 0,
-  total_shipping_tax_incl: 0,
-  total_shipping_tax_excl: 0,
-  carrier_tax_rate: 0,
-  total_wrapping: 0,
-  total_wrapping_tax_incl: 0,
-  total_wrapping_tax_excl: 0,
-  round_mode: 0,
-  round_type: 0,
-  secure_key: "",
-};
-/**
- * Validateur pour les champs requis
- */
-type RequiredFieldRule<T> = {
-  key: keyof T;
-  message: string;
-  validator?: (value: unknown) => boolean;
-};
-
-/**
- * Vérifie que les champs requis sont valides
- * Jette une erreur avec la liste des champs manquants
- */
-function validateRequiredFields<T extends Record<string, unknown>>(
-  resourceName: string,
-  form: T,
-  rules: Array<RequiredFieldRule<T>>,
-): void {
-  const errors = rules
-    .filter((rule) => {
-      const value = form[rule.key];
-      if (rule.validator) return !rule.validator(value);
-
-      // Validation par défaut
-      if (typeof value === "number") return value <= 0;
-      if (typeof value === "string") return value.trim().length === 0;
-      return value === undefined || value === null;
-    })
-    .map((rule) => rule.message);
-
-  if (errors.length > 0) {
-    throw new Error(`${resourceName}: ${errors.join(", ")}`);
-  }
-}
 
 /**
  * Règles de validation pour la création de commande
@@ -295,6 +107,8 @@ function extractOrderListItem(orderXml: Record<string, unknown>): OrderListItem 
     date_add: textFromUnknown(orderXml.date_add).split(" ")[0],
   };
 }
+
+// extractCartAsOrderListItem removed: we now enrich carts using getCart()
 /**
  *  READ: Récupère la liste allégée des commandes
  * Format filtrable: reference, id_customer, payment, total_paid, current_state
@@ -327,15 +141,69 @@ export async function listOrders(
     query,
   });
 
-  if (!response?.prestashop?.orders?.order) {
-    return [];
+  const orders = asArray(response?.prestashop?.orders?.order as any).map(extractOrderListItem);
+
+  // Ajouter les paniers actifs (quantité > 0) comme commandes en attente.
+  let pendingCartsAsOrders: OrderListItem[] = [];
+  try {
+    const cartsResponse = await requestPrestashopXml<CartListResponse>("/carts", {
+      query: {
+        display: "full",
+        limit: params?.limit ?? 200,
+        offset: params?.offset ?? 0,
+      },
+    });
+
+    const carts = asArray(cartsResponse?.prestashop?.carts?.cart as any);
+
+    // Enrichir chaque panier via getCart() pour obtenir des prix et quantités fiables
+    const enriched = await Promise.all(
+      carts.map(async (cart) => {
+        const cartId = numFromUnknown((cart as any).id ?? (cart as any)["@_id"]);
+        if (!validateUnsignedId(cartId)) return null;
+
+        // Ne pas dupliquer les paniers déjà liés à une commande
+        const linkedOrder = numFromUnknown((cart as any).id_order);
+        if (validateUnsignedId(linkedOrder)) return null;
+
+        const detail = await getCart(cartId).catch(() => null);
+        if (!detail) return null;
+
+        // Exclure les paniers avec quantité totale 0
+        const totalQty = (detail.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+        if (totalQty <= 0) return null;
+
+        return {
+          id: -cartId,
+          reference: `PANIER-${cartId}`,
+          id_customer: detail.id_customer,
+          payment: "Panier en cours",
+          total_paid_tax_incl: Number(detail.total) || 0,
+          current_state: CART_PENDING_STATE_ID,
+          date_add: detail.date_add || textFromUnknown((cart as any).date_add).split(" ")[0],
+        } as OrderListItem;
+      }),
+    );
+
+    pendingCartsAsOrders = enriched.filter((it): it is OrderListItem => it !== null);
+  } catch {
+    // Certains WS n'exposent pas /carts en lecture; on retourne au moins les vraies commandes.
+    pendingCartsAsOrders = [];
   }
 
-  const orders = asArray(response.prestashop.orders.order);
-  return orders.map(extractOrderListItem).filter((order) => {
+  const merged = [...orders, ...pendingCartsAsOrders];
+
+  return merged.filter((order) => {
     // Post-filter sur les montants
     if (params?.minAmount && order.total_paid_tax_incl < params.minAmount) return false;
     if (params?.maxAmount && order.total_paid_tax_incl > params.maxAmount) return false;
+
+    // Réappliquer les filtres pour les paniers fusionnés
+    if (params?.reference && !order.reference.toLowerCase().includes(params.reference.toLowerCase())) return false;
+    if (params?.id_customer && order.id_customer !== params.id_customer) return false;
+    if (params?.payment && !order.payment.toLowerCase().includes(params.payment.toLowerCase())) return false;
+    if (params?.state && order.current_state !== params.state) return false;
+
     return true;
   });
 }
@@ -704,6 +572,10 @@ function buildOrderXmlForUpdate(form: OrderForm & { id: number }): string {
  * Retourne le libellé d'un état de commande
  */
 export function getOrderStateLabel(stateId: number): string {
+  if (stateId === CART_PENDING_STATE_ID) {
+    return CART_PENDING_STATE_LABEL;
+  }
+
   const state = ORDER_STATES.find((s) => s.id === stateId);
   return state?.label || `État #${stateId}`;
 }

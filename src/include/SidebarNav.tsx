@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {logoutEmployee} from "../module/Backoffice/auth/api/authAPI";
 import "./SidebarNav.css";
-import {IconEye,IconLogout,IconLayoutDashboard,IconList,IconShoppingCart,IconBox,IconPackage,IconLayoutGrid,IconFileText,IconAdjustments,IconReceipt,IconReceiptRefund,IconTruckDelivery,IconTimeline,IconArchive,IconPercentage,IconBuildingStore,IconUsers,IconMapPin,IconTool,IconArrowBackUp,} from "@tabler/icons-react";
+import {IconLayoutDashboard,IconList,IconBox,IconFileText} from "@tabler/icons-react";
 
 export default function SidebarNav() {
   const location = useLocation();

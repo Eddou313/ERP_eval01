@@ -1,5 +1,5 @@
-import type { ProductListItem } from "../../../Backoffice/produit/api/productsApi";
-import type { CategoryListItem } from "../../../Backoffice/categorie/api/categoriesApi";
+import type { CategoryListItem } from "../../../Backoffice/categorie/api/object";
+import type { ProductListItem } from "../../../Backoffice/produit/api/object";
 
 export type ProductSearchCriteria = {
   name: string;

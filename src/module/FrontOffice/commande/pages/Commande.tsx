@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getStoredClientSession } from "../../client/api/clientAPI";
-import {listOrdersLight,getOrder,getOrderStateLabel,type OrderListItem} from "../../../Backoffice/commande/api/commandesApi";
+import {listOrdersLight,getOrder} from "../../../Backoffice/commande/api/commandesApi";
 import { Link } from "react-router-dom";
 import "./Commande.css";
-import {listOrderStates, type OrderStateListItem} from "../../../Backoffice/commande/api/EtatCommande";
+import {listOrderStates} from "../../../Backoffice/commande/api/EtatCommande";
+import { CART_PENDING_STATE_LABEL, type OrderListItem } from "../../../Backoffice/commande/api/ObjetOrder";
+import type { OrderStateListItem } from "../../../Backoffice/commande/api/ObjetEtat";
 
 
 export function Commande() {
@@ -97,8 +99,8 @@ export function Commande() {
                                         <td>{o.date_add}</td>
                                         <td className="commande-total">{o.total_paid_tax_incl.toFixed(2)}</td>
                                         <td>{o.payment}</td>
-                                        <td style={{backgroundColor:OrderStates.find((state) => state.id === o.current_state)?.color || "transparent", color:"#fff", fontWeight:"bold", textAlign:"center"}}>
-                                            {OrderStates.find((state) => state.id === o.current_state)?.name || "État inconnu"}
+                                        <td style={{backgroundColor:o.id < 0 ? "#6c757d" : (OrderStates.find((state) => state.id === o.current_state)?.color || "transparent"), color:"#fff", fontWeight:"bold", textAlign:"center"}}>
+                                            {o.id < 0 ? CART_PENDING_STATE_LABEL : (OrderStates.find((state) => state.id === o.current_state)?.name || "État inconnu")}
                                         </td>
                                         {/* <td className="commande-note">{o.note || "-"}</td> */}
                                     </tr>
