@@ -477,6 +477,8 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
         id_supplier: data.id_supplier ?? existing.id_supplier,
         id_category_default: data.id_category_default ?? existing.id_category_default,
         id_default_image: data.id_default_image ?? existing.id_default_image,
+        reference: data.reference ?? existing.reference ?? "",
+        supplier_reference: data.supplier_reference ?? "",
         price: data.price ?? existing.price,
         on_sale: data.on_sale !== undefined ? (data.on_sale ? "1" : "0") : (existing.on_sale ? "1" : "0"),
         active: data.active !== undefined ? (data.active ? "1" : "0") : (existing.active ? "1" : "0"),

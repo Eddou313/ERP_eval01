@@ -25,6 +25,14 @@ function normalizeImageReference(value: string): string {
     return normalizeText(String(value ?? "").replace(/\.[^.]+$/, ""));
 }
 
+function normalizeProductReference(value: string): string {
+    return normalizeText(String(value ?? "").trim());
+}
+
+function compactReference(value: string): string {
+    return normalizeProductReference(value).replace(/[^a-z0-9]/g, "");
+}
+
 /**
  * Parse le format "achat" : [("REF";qty;"variant"),("REF2";qty2;"")]
  * Retourne un tableau d'articles {reference, quantity, variant}
@@ -254,7 +262,7 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 type ProductLight = Awaited<ReturnType<typeof listProductsLight>>[number];
 
 async function findProductByReference(reference: string, cache: Map<string, ProductLight | null>): Promise<ProductLight | null> {
-    const normalizedReference = normalizeText(String(reference ?? "").trim());
+    const normalizedReference = normalizeProductReference(reference);
     if (!normalizedReference) {
         return null;
     }
@@ -264,7 +272,39 @@ async function findProductByReference(reference: string, cache: Map<string, Prod
     }
 
     const products = await listProductsLight();
-    const match = products.find((product) => normalizeText(product.reference ?? "") === normalizedReference) ?? null;
+    const compactTarget = compactReference(reference);
+    const match = products.find((product) => {
+        const productReference = normalizeProductReference(product.reference ?? "");
+        if (productReference === normalizedReference) return true;
+        return compactReference(productReference) === compactTarget;
+    }) ?? null;
+
+    if (match) {
+        cache.set(normalizedReference, match);
+        return match;
+    }
+
+    try {
+        const response = await requestPrestashopXml<any>("/products", {
+            query: {
+                display: "full",
+                "filter[reference]": `[${reference}]`,
+            },
+        });
+        const productsRaw = response?.prestashop?.products?.product;
+        const apiCandidates = Array.isArray(productsRaw) ? productsRaw : productsRaw ? [productsRaw] : [];
+        const apiMatch = apiCandidates.find((product: any) => compactReference(String(product?.reference ?? product?.name ?? "")) === compactTarget) ?? null;
+        if (apiMatch) {
+            const product = (await listProductsLight()).find((item) => item.id === Number(apiMatch?.id ?? apiMatch?.["@_id"])) ?? null;
+            if (product) {
+                cache.set(normalizedReference, product);
+                return product;
+            }
+        }
+    } catch {
+        // fallback below
+    }
+
     cache.set(normalizedReference, match);
     return match;
 }
@@ -314,7 +354,9 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
         try {
             const product = await findProductByReference(row.reference, productsCache);
             if (!product) {
-                throw new Error(`Produit parent introuvable pour la référence ${row.reference}`);
+                failed += 1;
+                console.warn(`Produit parent introuvable pour la référence ${row.reference}`);
+                continue;
             }
 
             // Attribute names from CSV

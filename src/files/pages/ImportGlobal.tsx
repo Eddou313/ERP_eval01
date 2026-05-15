@@ -195,7 +195,7 @@ export function ImportGlobal ()
                         />
                         <br />
                         {file3 && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file3.name}</span>}
-                        <label className="form-label" htmlFor="csv-file4">Fichier 4 (Image)</label>
+                        <label className="form-label" >Fichier 4 (Image)</label>
                         <ZipFile onZipSelected={setZipFile} />
                     </div>
                 </section>
