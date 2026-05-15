@@ -364,17 +364,41 @@ export async function createClient(form: ClientForm): Promise<number> {
 export async function importClient(form: ClientImport): Promise<number> {
     const xml = buildClientImportXml(form);
     console.debug("PrestaShop import customer XML:", xml);
-    const response = await requestPrestashopXml<{ prestashop: { customer: { id: unknown } } }>(
-        "/customers",
-        { method: "POST", bodyXml: xml },
-    );
+    try {
+        const response = await requestPrestashopXml<{ prestashop: { customer: { id: unknown } } }>(
+            "/customers",
+            { method: "POST", bodyXml: xml },
+        );
 
-    const id = Number(response?.prestashop?.customer?.id);
-    if (!Number.isFinite(id) || id <= 0) {
-        throw new Error("Erreur lors de l'import du client");
+        const id = Number(response?.prestashop?.customer?.id);
+        if (!Number.isFinite(id) || id <= 0) {
+            throw new Error("Erreur lors de l'import du client");
+        }
+
+        return id;
+    } catch (err: any) {
+        // If error indicates email already used, try to find existing customer by email
+        try {
+            const email = String(form.email || "").trim();
+            if (email) {
+                const search = await requestPrestashopXml<any>("/customers", {
+                    query: { display: "[id]", [`filter[email]`]: `[${email}]` },
+                });
+                const customers = search?.prestashop?.customers?.customer;
+                const list = asArray(customers || []);
+                const first = list[0];
+                const existingId = Number(first?.["@_id"] ?? first?.id);
+                if (Number.isFinite(existingId) && existingId > 0) {
+                    console.warn(`Client existant trouvé pour l'email ${email}, utilisation de l'ID ${existingId}`);
+                    return existingId;
+                }
+            }
+        } catch (searchErr) {
+            // ignore and rethrow original error below
+        }
+
+        throw err;
     }
-
-    return id;
 }
 
 export async function updateClient(id: number, form: ClientForm): Promise<void> {

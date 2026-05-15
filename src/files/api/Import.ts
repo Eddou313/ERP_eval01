@@ -9,6 +9,7 @@ import { importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { createCart, addProductToCart, updateCartItems } from "../../module/Backoffice/panier/api/panierApi";
 import { createOrder } from "../../module/Backoffice/commande/api/commandesApi";
+import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { numFromUnknown } from "../../utils/helper";
 import { isValidDate, toPrestashopDate } from "./utils";
@@ -68,17 +69,30 @@ export function parseCustomerName(fullName: string): { firstname: string; lastna
 /**
  * Create an order detail entry via POST /order_details
  */
-export async function createOrderDetail(orderId: number, productId: number, productAttributeId: number, quantity: number, unitPrice: number): Promise<number> {
+export async function createOrderDetail(
+    orderId: number,
+    productId: number,
+    productAttributeId: number,
+    quantity: number,
+    unitPrice: number,
+    shopId = 1,
+    warehouseId = 1,
+): Promise<number> {
     const payload = {
         prestashop: {
             order_detail: {
                 id_order: orderId,
                 id_product: productId,
                 id_product_attribute: productAttributeId,
+                id_shop: shopId,
+                id_warehouse: warehouseId,
+                quantity: quantity,
+                price: unitPrice,
                 product_quantity: quantity,
                 product_price: unitPrice,
                 unit_price_tax_incl: unitPrice,
                 unit_price_tax_excl: unitPrice,
+                product_name: `Produit ${productId} ${productAttributeId ? `(combinaison ${productAttributeId})` : ""}`,
             },
         },
     };
@@ -370,6 +384,8 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
 export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<{ customersCreated: number; cartsCreated: number; ordersCreated: number; failed: number }> {
     const productsCache = new Map<string, ProductLight | null>();
     const countryIdFrance = 8; // France
+    const carriers = await getAllModeLivraison().catch(() => []);
+    const defaultCarrierId = carriers[0]?.id || 1;
 
     let customersCreated = 0;
     let cartsCreated = 0;
@@ -485,7 +501,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 id_address_invoice: addressId,
                 id_currency: 1,
                 id_lang: 1,
-                id_carrier: 0,
+                id_carrier: defaultCarrierId,
                 payment_code: "cash",
                 total_paid_tax_incl: 0,
                 total_paid_tax_excl: 0,
@@ -529,7 +545,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 // Use product price as unit price (simplified; PrestaShop can recalculate)
                 const unitPrice = Number(product.price_ht ?? product.price ?? 0) || 0;
 
-                await createOrderDetail(orderId, product.id, attributeId, achatItem.quantity, unitPrice);
+                await createOrderDetail(orderId, product.id, attributeId, achatItem.quantity, unitPrice, 1, 1);
             }
 
             // 10. Clear cart (set quantities to 0)
