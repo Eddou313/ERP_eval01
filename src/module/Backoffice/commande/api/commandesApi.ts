@@ -141,7 +141,15 @@ export async function listOrders(
     query,
   });
 
-  const orders = asArray(response?.prestashop?.orders?.order as any).map(extractOrderListItem);
+  const ordersRaw = asArray(response?.prestashop?.orders?.order as any);
+  const orders = ordersRaw.map(extractOrderListItem);
+
+  // Collecte des id_cart déjà présents dans les commandes réelles
+  const linkedCartIds = new Set<number>(
+    ordersRaw
+      .map((o: any) => numFromUnknown(o.id_cart))
+      .filter((id: number) => validateUnsignedId(id)),
+  );
 
   // Ajouter les paniers actifs (quantité > 0) comme commandes en attente.
   let pendingCartsAsOrders: OrderListItem[] = [];
@@ -162,9 +170,10 @@ export async function listOrders(
         const cartId = numFromUnknown((cart as any).id ?? (cart as any)["@_id"]);
         if (!validateUnsignedId(cartId)) return null;
 
-        // Ne pas dupliquer les paniers déjà liés à une commande
+        // Ne pas dupliquer les paniers déjà liés à une commande (via champ id_order ou via commandes existantes)
         const linkedOrder = numFromUnknown((cart as any).id_order);
         if (validateUnsignedId(linkedOrder)) return null;
+        if (linkedCartIds.has(cartId)) return null;
 
         const detail = await getCart(cartId).catch(() => null);
         if (!detail) return null;
