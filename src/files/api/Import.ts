@@ -1,5 +1,5 @@
 import { ensureCategoryExists, listCategoriesSimple } from "../../module/Backoffice/categorie/api/categoriesApi";
-import { createProduct, listProductsLight, updateProduct } from "../../module/Backoffice/produit/api/productsApi";
+import { createProduct, listProductsLight, updateProduct, uploadProductImage } from "../../module/Backoffice/produit/api/productsApi";
 import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExists, getProductAttributeGroups, listAttributeGroupsLight, listAttributeValuesLight, updateCombination } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTaxesLight, listTaxRuleGroupsLight } from "../../module/Backoffice/taxes/taxes";
@@ -19,6 +19,11 @@ export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockI
 export type OrderImportRow = colonneCSV["Commande_client_produit"];
 
 type AchatItem = { reference: string; quantity: number; variant: string };
+type ZipImageAsset = { blob: Blob; fileName: string };
+
+function normalizeImageReference(value: string): string {
+    return normalizeText(String(value ?? "").replace(/\.[^.]+$/, ""));
+}
 
 /**
  * Parse le format "achat" : [("REF";qty;"variant"),("REF2";qty2;"")]
@@ -143,7 +148,7 @@ function parseTtcToHt(priceTtc: number, taxRate: number): number {
     return roundMoney(priceTtc / (1 + rate / 100));
 }
 
-export async function importProduitCsv(rows: ProductImportRow[]): Promise<{ imported: number; failed: number }> {
+export async function importProduitCsv(rows: ProductImportRow[], options?: { imageMap?: Map<string, ZipImageAsset> }): Promise<{ imported: number; failed: number }> {
     const categories = await listCategoriesSimple();
     const taxes = await listTaxesLight();
     const taxRuleGroups = await listTaxRuleGroupsLight();
@@ -215,6 +220,16 @@ export async function importProduitCsv(rows: ProductImportRow[]): Promise<{ impo
                 description: `Produit importé depuis CSV: ${row.nom}`,
                 description_short: `Import CSV - ${row.reference}`,
             });
+
+            const imageAsset = options?.imageMap?.get(normalizeImageReference(row.reference));
+            if (imageAsset) {
+                try {
+                    const imageId = await uploadProductImage(product.id, imageAsset.blob, imageAsset.fileName);
+                    await updateProduct(product.id, { id_default_image: imageId } as any);
+                } catch (imageError) {
+                    console.warn(`Impossible d'upload l'image du produit ${row.reference}:`, imageError);
+                }
+            }
 
             await upsertStockAvailable({
                 id_product: product.id,

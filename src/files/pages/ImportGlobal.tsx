@@ -1,10 +1,11 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
+import JSZip from 'jszip';
 import './import.css';
 // import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
 import {  parseCSVFile,  InitialisationGLobal } from "../api/Initialisation&export"
 import { importProduitAttributStockCsv, importProduitCsv, importProduitCommandeCsv } from "../api/Import";
 import type { colonneCSV } from "../api/object"
-import {formatDate,transformToObjects} from "../../utils/helper"
+import {formatDate,transformToObjects, normalizeText} from "../../utils/helper"
 
 import  {ZipFile} from "./ZipFile"
 export function ImportGlobal ()
@@ -20,6 +21,7 @@ export function ImportGlobal ()
 
     const [file3, setFile3] = useState<File | null>(null);
     const [Commande_client_produit,setCommande_client_produit] = useState<colonneCSV["Commande_client_produit"][]>([]);
+    const [zipFile, setZipFile] = useState<File | null>(null);
     
     // État pour les paramètres d'importation
     const [config, setConfig] = useState({
@@ -62,6 +64,36 @@ export function ImportGlobal ()
         });
     };
 
+    const normalizeImageKey = (fileName: string) => {
+        const baseName = fileName.split(/[\\/]/).pop() || fileName;
+        const stem = baseName.replace(/\.[^.]+$/, "");
+        return normalizeText(stem);
+    };
+
+    const buildImageMapFromZip = async (file: File) => {
+        const imageMap = new Map<string, { blob: Blob; fileName: string }>();
+        const zip = new JSZip();
+        const contents = await zip.loadAsync(file);
+
+        const imageExtensions = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp"]);
+        for (const entry of Object.values(contents.files)) {
+            if (entry.dir) continue;
+
+            const entryName = entry.name || "";
+            const extension = entryName.split(".").pop()?.toLowerCase() || "";
+            if (!imageExtensions.has(extension)) continue;
+
+            const fileName = entryName.split(/[\\/]/).pop() || entryName;
+            const key = normalizeImageKey(fileName);
+            if (!key || imageMap.has(key)) continue;
+
+            const blob = await entry.async("blob");
+            imageMap.set(key, { blob, fileName });
+        }
+
+        return imageMap;
+    };
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (!file && !file2 && !file3){
@@ -71,6 +103,7 @@ export function ImportGlobal ()
         try{
             setMes("Parsing en cours...");
             const summaryMessages: string[] = [];
+            const imageMap = zipFile ? await buildImageMapFromZip(zipFile) : new Map<string, { blob: Blob; fileName: string }>();
 
             const parsedProducts = file ? await parseFile<colonneCSV["produitImport"]>(file, config.separator) : [];
             const parsedAttributes = file2 ? await parseFile<colonneCSV["produit_Attribut_StockImport"]>(file2, config.separator) : [];
@@ -79,7 +112,7 @@ export function ImportGlobal ()
             if (file) {
                 console.log("Fichier 1 parsé:", parsedProducts);
                 setProduit(parsedProducts);
-                const result = await importProduitCsv(parsedProducts);
+                const result = await importProduitCsv(parsedProducts, { imageMap });
                 summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
             }
             if (file2) {
@@ -163,7 +196,7 @@ export function ImportGlobal ()
                         <br />
                         {file3 && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file3.name}</span>}
                         <label className="form-label" htmlFor="csv-file4">Fichier 4 (Image)</label>
-                        <ZipFile />
+                        <ZipFile onZipSelected={setZipFile} />
                     </div>
                 </section>
 

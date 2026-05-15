@@ -51,19 +51,20 @@ export default defineConfig(({ mode }) => {
                   options.headers['Content-Type'] = req.headers['content-type'];
                 }
 
-                let body = '';
+                const chunks: Buffer[] = [];
                 
                 if (req.method !== 'GET' && req.method !== 'HEAD') {
                   // Collecte le body
                   await new Promise((resolve) => {
                     req.on('data', (chunk: Buffer) => {
-                      body += chunk.toString('utf8');
+                      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
                     });
                     req.on('end', resolve);
                   });
 
-                  if (body) {
-                    options.headers['Content-Length'] = Buffer.byteLength(body);
+                  if (chunks.length > 0) {
+                    const body = Buffer.concat(chunks);
+                    options.headers['Content-Length'] = body.length;
                     (options as any).body = body;
                   }
                 }

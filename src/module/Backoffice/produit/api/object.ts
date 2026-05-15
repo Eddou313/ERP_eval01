@@ -5,6 +5,7 @@ export type ProductForm = {
   id_supplier?: number;
   id_category_default: number;
   id_tax_rules_group?: number;
+  id_default_image?: number;
   type?: string; // "simple", "pack", "virtual"
   reference?: string;
   supplier_reference?: string;

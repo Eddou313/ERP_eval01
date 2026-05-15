@@ -2,7 +2,11 @@ import { type ChangeEvent, useState, useRef } from 'react';
 import JSZip from 'jszip'; // Importation de JSZip
 import './zip.css';
 
-export function ZipFile() {
+type ZipFileProps = {
+  onZipSelected?: (file: File | null) => void;
+};
+
+export function ZipFile({ onZipSelected }: ZipFileProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileList, setFileList] = useState<string[]>([]); // Pour stocker les noms des fichiers
   const [error, setError] = useState<string>("");
@@ -36,12 +40,14 @@ export function ZipFile() {
       setError("Erreur : Seuls les fichiers .zip sont acceptés.");
       setSelectedFile(null);
       setFileList([]);
+      onZipSelected?.(null);
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
 
     setError("");
     setSelectedFile(file);
+    onZipSelected?.(file);
     
     // Appel de la fonction d'extraction dès que le fichier est sélectionné
     await extractZipContents(file);

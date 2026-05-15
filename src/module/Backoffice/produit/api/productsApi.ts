@@ -1,4 +1,5 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { xmlToJson } from "../../../../utils/xml";
 import {asArray,boolFromPrestashop,numFromPrestashop,stringFromPrestashop,keywordsFromPrestashop,getFirstLanguageText,} from "../../../../utils/helper";
 import { getStockByProductId } from "../../stock/api/stockApi";
 import type { PriceWorkflowBreakdown, ProductAttribute, ProductCreateForm, ProductGetResponse, ProductImage, ProductListItem, ProductListResponse, ProductUpdateForm } from "./object";
@@ -380,6 +381,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
         id_supplier: data.id_supplier || 0,
         id_category_default: data.id_category_default,
         id_tax_rules_group: data.id_tax_rules_group || 0,
+        id_default_image: data.id_default_image || 0,
         type: data.type || "simple",
         reference: data.reference || "",
         supplier_reference: data.supplier_reference || "",
@@ -474,6 +476,7 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
         id_manufacturer: data.id_manufacturer ?? existing.id_manufacturer,
         id_supplier: data.id_supplier ?? existing.id_supplier,
         id_category_default: data.id_category_default ?? existing.id_category_default,
+        id_default_image: data.id_default_image ?? existing.id_default_image,
         price: data.price ?? existing.price,
         on_sale: data.on_sale !== undefined ? (data.on_sale ? "1" : "0") : (existing.on_sale ? "1" : "0"),
         active: data.active !== undefined ? (data.active ? "1" : "0") : (existing.active ? "1" : "0"),
@@ -503,6 +506,38 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
     method: "PUT",
     bodyXml: buildPrestashopXml(payload),
   });
+}
+
+/**
+ * Upload an image for a product and return the created image ID.
+ */
+export async function uploadProductImage(productId: number, file: Blob, fileName: string): Promise<number> {
+  const formData = new FormData();
+  formData.append("image", file, fileName);
+
+  const response = await fetch(`/api/images/products/${productId}`, {
+    method: "POST",
+    body: formData,
+  });
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Erreur upload image produit (${response.status})`);
+  }
+
+  const parsed = xmlToJson<any>(text);
+  const imageId = Number(
+    parsed?.prestashop?.image?.id ??
+    parsed?.prestashop?.image?.id_image ??
+    parsed?.image?.id ??
+    parsed?.image?.id_image,
+  );
+
+  if (Number.isFinite(imageId) && imageId > 0) {
+    return imageId;
+  }
+
+  throw new Error("Impossible de récupérer l'ID de l'image uploadée");
 }
 
 /**
