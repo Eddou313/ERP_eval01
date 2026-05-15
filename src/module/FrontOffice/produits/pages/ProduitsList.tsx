@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
-import { listProductsLight, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
-import { listCategoriesLight, type CategoryListItem } from "../../../Backoffice/categorie/api/categoriesApi";
+import { listProductsLight } from "../../../Backoffice/produit/api/productsApi";
+import {  type ProductListItem } from "../../../Backoffice/produit/api/object";
+import { listCategoriesLight} from "../../../Backoffice/categorie/api/categoriesApi";
+import {  type CategoryListItem } from "../../../Backoffice/categorie/api/object";
 import { getProductImageUrl } from "../../../../utils/helper";
 import { filterProducts, getCategoryOptions, type ProductSearchCriteria } from "./productSearch";
 import "../pages/produits.css";
 import { IconFilter } from '@tabler/icons-react';
+import { getStockByProductId } from "../../../Backoffice/stock/api/stockApi";
 
 export function ProduitsList() {
   const navigate = useNavigate();
@@ -202,7 +205,11 @@ export function ProduitsList() {
                       <span className="currentPrice">€{(product.price || 0).toFixed(2)}</span>
                     </div>
                     {product.quantity && product.quantity > 0 ? (
-                      <span className="inStock">En stock</span>
+                      <span className="inStock">En stock 
+                        
+                          <span className="lowStockWarning"> {product.quantity}</span>
+                        
+                      </span>
                     ) : (
                       <span className="outOfStock">Rupture de stock</span>
                     )}

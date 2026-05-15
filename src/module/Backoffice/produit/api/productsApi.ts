@@ -1,5 +1,5 @@
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
-import {asArray,boolFromPrestashop,numFromPrestashop,stringFromPrestashop,keywordsFromPrestashop,getFirstLanguageText,type PrestashopLanguageField,} from "../../../../utils/helper";
+import {asArray,boolFromPrestashop,numFromPrestashop,stringFromPrestashop,keywordsFromPrestashop,getFirstLanguageText,} from "../../../../utils/helper";
 import { getStockByProductId } from "../../stock/api/stockApi";
 import type { PriceWorkflowBreakdown, ProductAttribute, ProductCreateForm, ProductGetResponse, ProductImage, ProductListItem, ProductListResponse, ProductUpdateForm } from "./object";
 

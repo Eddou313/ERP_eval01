@@ -1,7 +1,9 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
-import { getProductDetail, type ProductListItem } from "../../../Backoffice/produit/api/productsApi";
-import { getProductAttributeGroups, type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
+import { getProductDetail } from "../../../Backoffice/produit/api/productsApi";
+import { type ProductListItem } from "../../../Backoffice/produit/api/object";
+import { getProductAttributeGroups } from "../../../Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
+import {  type ProductAttributeGroupSelection } from "../../../Backoffice/attribue&Caracteristique/api/Objet";
 import { getStockByProductId } from "../../../Backoffice/stock/api/stockApi";
 import { addProductToCart, createCartForConnectedCustomer, getLatestCartForCustomerId, getOrCreateGuestCart } from "../../../Backoffice/panier/api/panierApi";
 import { getStoredClientSession } from "../../client/api/clientAPI";
