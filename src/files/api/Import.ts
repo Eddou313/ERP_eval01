@@ -1,5 +1,5 @@
 import { ensureCategoryExists, listCategoriesSimple } from "../../module/Backoffice/categorie/api/categoriesApi";
-import { createProduct, listProductsLight } from "../../module/Backoffice/produit/api/productsApi";
+import { createProduct, listProductsLight, updateProduct } from "../../module/Backoffice/produit/api/productsApi";
 import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExists, getProductAttributeGroups, listAttributeGroupsLight, listAttributeValuesLight } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTaxesLight, listTaxRuleGroupsLight } from "../../module/Backoffice/taxes/taxes";
@@ -288,8 +288,47 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 throw new Error(`Produit parent introuvable pour la référence ${row.reference}`);
             }
 
-            const groupId = await ensureAttributeGroupExists(row.specificité, attributeGroupCache, attributeGroups);
-            const valueId = await ensureAttributeValueExists(groupId, row.karazany, attributeValueCache, attributeValues);
+            // Attribute names from CSV
+            const specName = String(row.specificité ?? "").trim();
+            const valueName = String(row.karazany ?? "").trim();
+
+            // If specificité is empty -> standard product (no attribute)
+            if (!specName) {
+                const taxRate = Number(product.tax_rate ?? 20) || 0;
+                const targetPriceHt = parseTtcToHt(Number(row.prix_vente_ttc) || 0, taxRate);
+
+                // Update stock for main product
+                await upsertStockAvailable({
+                    id_product: product.id,
+                    id_product_attribute: 0,
+                    id_shop: 1,
+                    id_shop_group: 1,
+                    quantity: Number(row.stock_initial) || 0,
+                    depends_on_stock: false,
+                    out_of_stock: 2,
+                });
+
+                // If a price is provided, update product price (HT)
+                if (Number(row.prix_vente_ttc)) {
+                    try {
+                        await updateProduct(product.id, { price: targetPriceHt } as any);
+                    } catch (err) {
+                        console.warn(`Impossible de mettre à jour le prix du produit ${product.id}:`, err);
+                    }
+                }
+
+                imported += 1;
+                continue;
+            }
+
+            if (!valueName) {
+                failed += 1;
+                console.warn(`Ligne ignorée: valeur d'attribut vide pour la référence ${row.reference} (specificité=${specName})`);
+                continue;
+            }
+
+            const groupId = await ensureAttributeGroupExists(specName, attributeGroupCache, attributeGroups);
+            const valueId = await ensureAttributeValueExists(groupId, valueName, attributeValueCache, attributeValues);
 
             const taxRate = Number(product.tax_rate ?? 20) || 0;
             const basePriceHt = getProductPriceHt(product);
