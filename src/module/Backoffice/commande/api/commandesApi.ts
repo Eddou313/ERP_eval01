@@ -384,8 +384,8 @@ export async function deleteOrder(id: number): Promise<void> {
   }
 }
 export async function InitOrder(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
+  // if (!confirmed) return;
   try {
     const orders = await listOrders();
     const deletePromises = orders.map((order) => deleteOrder(order.id));
@@ -407,8 +407,8 @@ export const deleteCommande = deleteOrder;
  * BATCH: Import en masse de commandes
  */
 export async function importOrders(items: OrderListItem[]): Promise<void> {
-  const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer ${items.length} commande(s)?`);
-  if (!confirmed) return;
+  // const confirmed = window.confirm(`Êtes-vous sûr de vouloir supprimer ${items.length} commande(s)?`);
+  // if (!confirmed) return;
 
   try {
     const deletePromises = items.map((item) => deleteOrder(item.id));
@@ -611,10 +611,10 @@ export const formatCurrency = formatCurrencyEur;
  * Opération destructrice
  */
 export async function initCommande(items: OrderListItem[]): Promise<void> {
-  const confirmed = window.confirm(
-    `Êtes-vous sûr de vouloir supprimer tous les ${items.length} commandes?`,
-  );
-  if (!confirmed) return;
+  // const confirmed = window.confirm(
+  //   `Êtes-vous sûr de vouloir supprimer tous les ${items.length} commandes?`,
+  // );
+  // if (!confirmed) return;
 
   try {
     const deletePromises = items.map((item) => deleteOrder(item.id));

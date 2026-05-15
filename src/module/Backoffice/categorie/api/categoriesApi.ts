@@ -1,6 +1,14 @@
-import { requestPrestashopXml } from "../../../../utils/prestashopClient";
-import {asArray,boolFromPrestashop,numFromPrestashop,stringFromPrestashop,keywordsFromPrestashop,getFirstLanguageText,} from "../../../../utils/helper";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { asArray, boolFromPrestashop, getFirstLanguageText, keywordsFromPrestashop, numFromPrestashop, slugify, stringFromPrestashop, textFromUnknown } from "../../../../utils/helper";
 import type { CategoryGetResponse, CategoryGroup, CategoryListItem } from "./object";
+
+const DEFAULT_LANGUAGE_ID = 1;
+const ROOT_CATEGORY_ID = 2;
+
+type CreatedCategory = {
+  id: number;
+  name: string;
+};
 
 // Export local helpers for backward compatibility with pages
 export const localboolFromPrestashop = boolFromPrestashop;
@@ -58,6 +66,99 @@ export async function listCategoriesLight(limit?: number): Promise<CategoryListI
   return results;
 }
 
+export async function listCategoriesSimple(): Promise<CreatedCategory[]> {
+  try {
+    const categories = await listCategoriesLight();
+    return categories
+      .map((category) => ({
+        id: category.id,
+        name: category.name ?? "",
+      }))
+      .filter((category) => category.id > 0);
+  } catch {
+    return [];
+  }
+}
+
+export async function createCategory(name: string, parentId = ROOT_CATEGORY_ID): Promise<number> {
+  const response = await requestPrestashopXml<{ prestashop: { category: { id: unknown } } }>("/categories", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        category: {
+          id_parent: parentId,
+          active: 1,
+          id_shop_default: 1,
+          name: {
+            language: {
+              "@_id": DEFAULT_LANGUAGE_ID,
+              "#text": name,
+            },
+          },
+          link_rewrite: {
+            language: {
+              "@_id": DEFAULT_LANGUAGE_ID,
+              "#text": slugify(name),
+            },
+          },
+          description: {
+            language: {
+              "@_id": DEFAULT_LANGUAGE_ID,
+              "#text": name,
+            },
+          },
+          meta_title: {
+            language: {
+              "@_id": DEFAULT_LANGUAGE_ID,
+              "#text": name,
+            },
+          },
+          meta_description: {
+            language: {
+              "@_id": DEFAULT_LANGUAGE_ID,
+              "#text": name,
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const createdId = Number(response?.prestashop?.category?.id);
+  if (!Number.isFinite(createdId) || createdId <= 0) {
+    throw new Error(`Impossible de créer la catégorie ${name}`);
+  }
+
+  return createdId;
+}
+
+export async function ensureCategoryExists(
+  categoryName: string,
+  cache: Map<string, number>,
+  categories: CreatedCategory[],
+): Promise<number> {
+  const normalizedName = textFromUnknown(categoryName).trim();
+  if (!normalizedName) {
+    throw new Error("Le nom de catégorie est vide");
+  }
+
+  const cacheKey = normalizedName.toLowerCase();
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  let category = categories.find((item) => item.name.trim().toLowerCase() === cacheKey);
+  if (!category) {
+    const categoryId = await createCategory(normalizedName);
+    category = { id: categoryId, name: normalizedName };
+    categories.push(category);
+  }
+
+  cache.set(cacheKey, category.id);
+  return category.id;
+}
+
 export function groupCategoriesByParent(categories: CategoryListItem[]): CategoryGroup[] {
   const nameById = new Map(categories.map((category) => [category.id, category.name ?? `Catégorie ${category.id}`]));
   const grouped = new Map<number, CategoryListItem[]>();
@@ -88,8 +189,8 @@ export async function deleteCategory(id: number): Promise<void> {
 }
 
 export async function InitCategory(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les categories ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les categories ?");
+  // if (!confirmed) return;
 
   const data = await listCategoriesLight();
   // Sort by nright in descending order to delete children before parents

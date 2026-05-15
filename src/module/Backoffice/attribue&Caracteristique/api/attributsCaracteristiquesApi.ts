@@ -1,6 +1,23 @@
-import { requestPrestashopXml } from "../../../../utils/prestashopClient";
-import { asArray, boolFromUnknown, getFirstLanguageText, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { asArray, boolFromUnknown, getFirstLanguageText, normalizeText, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
 import { extractNumericId, type AttributeGroupListItem, type AttributeValueListItem, type FeatureListItem, type FeatureValueListItem, type PrestashopListResponse, type ProductAttributeGroupSelection, type ProductFeatureGroupSelection } from "./Objet";
+
+type CreatedAttributeGroup = {
+  id: number;
+  name: string;
+  publicName: string;
+  groupType: string;
+  isColorGroup: boolean;
+  position: number;
+};
+
+type CreatedAttributeValue = {
+  id: number;
+  attributeGroupId: number;
+  name: string;
+  color: string;
+  position: number;
+};
 
 async function listAttributeGroupIds(): Promise<number[]> {
   const response = await requestPrestashopXml<PrestashopListResponse>("/product_options", {
@@ -42,6 +59,18 @@ async function getAttributeGroup(id: number): Promise<Omit<AttributeGroupListIte
   };
 }
 
+export async function listAttributeGroupsSimple(): Promise<CreatedAttributeGroup[]> {
+  const groups = await listAttributeGroupsLight();
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    publicName: group.publicName,
+    groupType: group.groupType,
+    isColorGroup: group.isColorGroup,
+    position: group.position,
+  }));
+}
+
 async function listAttributeValueIds(): Promise<number[]> {
   const response = await requestPrestashopXml<PrestashopListResponse>("/product_option_values", {
     query: { display: "[id]" },
@@ -68,6 +97,157 @@ async function getAttributeValue(id: number): Promise<AttributeValueListItem> {
     color: textFromUnknown(item?.color),
     position: numFromUnknown(item?.position),
   };
+}
+
+export async function listAttributeValuesByGroup(attributeGroupId: number): Promise<CreatedAttributeValue[]> {
+  const values = await listAttributeValuesLight();
+  return values
+    .filter((value) => value.attributeGroupId === attributeGroupId)
+    .map((value) => ({
+      id: value.id,
+      attributeGroupId: value.attributeGroupId,
+      name: value.name,
+      color: value.color,
+      position: value.position,
+    }));
+}
+
+export async function createAttributeGroup(name: string, publicName = name, groupType = "select", isColorGroup = false, position = 0): Promise<number> {
+  const response = await requestPrestashopXml<{ prestashop: { product_option: { id: unknown } } }>("/product_options", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        product_option: {
+          name: {
+            language: {
+              "@_id": 1,
+              "#text": name,
+            },
+          },
+          public_name: {
+            language: {
+              "@_id": 1,
+              "#text": publicName,
+            },
+          },
+          group_type: groupType,
+          is_color_group: isColorGroup ? 1 : 0,
+          position,
+        },
+      },
+    }),
+  });
+
+  const id = numFromUnknown(response?.prestashop?.product_option?.id);
+  if (!id) {
+    throw new Error(`Impossible de créer le groupe d'attribut ${name}`);
+  }
+
+  return id;
+}
+
+export async function createAttributeValue(attributeGroupId: number, name: string, color = "", position = 0): Promise<number> {
+  const response = await requestPrestashopXml<{ prestashop: { product_option_value: { id: unknown } } }>("/product_option_values", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        product_option_value: {
+          id_attribute_group: attributeGroupId,
+          name: {
+            language: {
+              "@_id": 1,
+              "#text": name,
+            },
+          },
+          color,
+          position,
+        },
+      },
+    }),
+  });
+
+  const id = numFromUnknown(response?.prestashop?.product_option_value?.id);
+  if (!id) {
+    throw new Error(`Impossible de créer la valeur d'attribut ${name}`);
+  }
+
+  return id;
+}
+
+export async function ensureAttributeGroupExists(name: string, cache: Map<string, number>, groups: CreatedAttributeGroup[]): Promise<number> {
+  const normalized = normalizeText(textFromUnknown(name));
+  const cached = cache.get(normalized);
+  if (cached) return cached;
+
+  let group = groups.find((item) => normalizeText(item.name) === normalized || normalizeText(item.publicName) === normalized);
+  if (!group) {
+    const id = await createAttributeGroup(name, name, "select", false, groups.length + 1);
+    group = {
+      id,
+      name,
+      publicName: name,
+      groupType: "select",
+      isColorGroup: false,
+      position: groups.length + 1,
+    };
+    groups.push(group);
+  }
+
+  cache.set(normalized, group.id);
+  return group.id;
+}
+
+export async function ensureAttributeValueExists(attributeGroupId: number, name: string, cache: Map<string, number>, values: CreatedAttributeValue[]): Promise<number> {
+  const normalized = normalizeText(textFromUnknown(name));
+  const cacheKey = `${attributeGroupId}:${normalized}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  let value = values.find((item) => item.attributeGroupId === attributeGroupId && normalizeText(item.name) === normalized);
+  if (!value) {
+    const id = await createAttributeValue(attributeGroupId, name, "", values.length + 1);
+    value = {
+      id,
+      attributeGroupId,
+      name,
+      color: "",
+      position: values.length + 1,
+    };
+    values.push(value);
+  }
+
+  cache.set(cacheKey, value.id);
+  return value.id;
+}
+
+export async function createCombination(productId: number, attributeValueIds: number[], priceImpactHt: number, quantity: number, reference?: string): Promise<number> {
+  const response = await requestPrestashopXml<{ prestashop: { combination: { id: unknown } } }>("/combinations", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        combination: {
+          id_product: productId,
+          reference: reference || "",
+          price: priceImpactHt,
+          quantity,
+          default_on: 0,
+          minimal_quantity: 1,
+          associations: {
+            product_option_values: {
+              product_option_value: attributeValueIds.map((id) => ({ id })),
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const id = numFromUnknown(response?.prestashop?.combination?.id);
+  if (!id) {
+    throw new Error(`Impossible de créer la combinaison pour le produit ${productId}`);
+  }
+
+  return id;
 }
 
 async function listFeatureIds(): Promise<number[]> {
@@ -379,8 +559,8 @@ export async function deleteFeatureValue(id: number): Promise<void> {
 }
 
 export async function InitAttributesAndCharacteristics(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les attributs et caractéristiques ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les attributs et caractéristiques ?");
+  // if (!confirmed) return;
 
   try {
     const [attributeGroupIds, attributeValueIds, featureIds, featureValueIds] = await Promise.all([

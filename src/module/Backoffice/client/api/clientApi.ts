@@ -392,8 +392,8 @@ export async function deleteClient(id: number): Promise<void> {
 }
 
 export async function initClients(): Promise<void> {
-    const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
-    if (!confirmed) return;
+    // const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
+    // if (!confirmed) return;
     try {
         const ids = await listClientIds();
         await Promise.all(ids.map((id) => deleteClient(id)));

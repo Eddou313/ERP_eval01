@@ -746,8 +746,8 @@ export async function addProductToCart(params: {cartId: number;customerId: numbe
 }
 // quantier
 export async function initPanier(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les paniers ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les paniers ?");
+  // if (!confirmed) return;
   try {
     const items: CartListItem[] = await listCartsLight();
     await Promise.all(items.map((entry) => deleteCart(entry.id)));

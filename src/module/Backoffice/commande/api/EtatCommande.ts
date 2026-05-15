@@ -61,8 +61,8 @@ export async function deleteOrderState(stateId: number): Promise<void> {
 }
 
 export async function initEtatCommande(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les états de commande ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les états de commande ?");
+  // if (!confirmed) return;
 
   try {
     const items = await listOrderStates();

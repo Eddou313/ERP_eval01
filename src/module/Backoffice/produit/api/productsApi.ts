@@ -1,4 +1,4 @@
-import { requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import {asArray,boolFromPrestashop,numFromPrestashop,stringFromPrestashop,keywordsFromPrestashop,getFirstLanguageText,} from "../../../../utils/helper";
 import { getStockByProductId } from "../../stock/api/stockApi";
 import type { PriceWorkflowBreakdown, ProductAttribute, ProductCreateForm, ProductGetResponse, ProductImage, ProductListItem, ProductListResponse, ProductUpdateForm } from "./object";
@@ -394,6 +394,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
         depth: data.depth || 0,
         available_for_order: data.available_for_order !== false ? "1" : "0",
         show_price: data.show_price !== false ? "1" : "0",
+        available_date: data.available_date || "",
         name: {
           language: {
             "@_id": "1",
@@ -436,13 +437,22 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
             "#text": Array.isArray(data.meta_keywords) ? data.meta_keywords.join(",") : "",
           },
         },
+        associations: {
+          categories: {
+            category: [
+              {
+                id: data.id_category_default,
+              },
+            ],
+          },
+        },
       },
     },
   };
 
   const response = await requestPrestashopXml<any>("/products", {
     method: "POST",
-    bodyXml: JSON.stringify(payload),
+    bodyXml: buildPrestashopXml(payload),
   });
 
   const productId = numFromPrestashop(response?.prestashop?.product?.id);
@@ -491,7 +501,7 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
 
   await requestPrestashopXml(`/products/${id}`, {
     method: "PUT",
-    bodyXml: JSON.stringify(payload),
+    bodyXml: buildPrestashopXml(payload),
   });
 }
 
@@ -553,8 +563,8 @@ export async function getProductAttributes(productId: number): Promise<ProductAt
  * Delete all products except core ones
  */
 export async function InitProducts(): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les produits ?");
-  if (!confirmed) return;
+  // const confirmed = window.confirm("Vous etes sur de supprimer tous les produits ?");
+  // if (!confirmed) return;
   try{
     const data = await listProductsLight();
     const sortedData = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));

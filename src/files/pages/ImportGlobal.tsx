@@ -1,10 +1,12 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import './import.css';
 // import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
-import { parseCSVFile,  InitialisationGLobal } from "../api/Initialisation&export"
+import {  parseCSVFile,  InitialisationGLobal } from "../api/Initialisation&export"
+import { importProduitAttributStockCsv, importProduitCsv, importProduitCommandeCsv } from "../api/Import";
 import type { colonneCSV } from "../api/object"
 import {formatDate,transformToObjects} from "../../utils/helper"
 
+import  {ZipFile} from "./ZipFile"
 export function ImportGlobal ()
 {
  
@@ -68,6 +70,7 @@ export function ImportGlobal ()
         }
         try{
             setMes("Parsing en cours...");
+            const summaryMessages: string[] = [];
 
             const parsedProducts = file ? await parseFile<colonneCSV["produitImport"]>(file, config.separator) : [];
             const parsedAttributes = file2 ? await parseFile<colonneCSV["produit_Attribut_StockImport"]>(file2, config.separator) : [];
@@ -76,19 +79,22 @@ export function ImportGlobal ()
             if (file) {
                 console.log("Fichier 1 parsé:", parsedProducts);
                 setProduit(parsedProducts);
-                // await importDataToPrestashop(parsedProducts, "produitImport" as ImportDataType);
+                const result = await importProduitCsv(parsedProducts);
+                summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
             }
             if (file2) {
-                console.log("Fichier 2 parsé:", parsedAttributes);
-                setProduit_Attribut_Stock(parsedAttributes);
-                // await importDataToPrestashop(parsedAttributes, "produit_Attribut_StockImport" as ImportDataType);
+                // console.log("Fichier 2 parsé:", parsedAttributes);
+                // setProduit_Attribut_Stock(parsedAttributes);
+                // const result = await importProduitAttributStockCsv(parsedAttributes);
+                // summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
             }
             if (file3) {
-                console.log("Fichier 3 parsé:", parsedOrders);
-                setCommande_client_produit(parsedOrders);
-                // await importDataToPrestashop(parsedOrders, "Commande_client_produit" as ImportDataType);
+                // console.log("Fichier 3 parsé:", parsedOrders);
+                // setCommande_client_produit(parsedOrders);
+                // const result = await importProduitCommandeCsv(parsedOrders);
+                // summaryMessages.push(`Commandes: ${result.customersCreated} clients, ${result.cartsCreated} paniers, ${result.ordersCreated} commandes, ${result.failed} en échec`);
             }
-            setMes("Fichiers importés avec succès !");
+            setMes(summaryMessages.length > 0 ? summaryMessages.join(" | ") : "Fichiers importés avec succès !");
             setTimeout(() => setMes(""), 3000);
         }
         catch (error) {
@@ -154,7 +160,10 @@ export function ImportGlobal ()
                             onChange={handleFile3Change}
                             className="file-input"
                         />
+                        <br />
                         {file3 && <span style={{fontSize: '0.9em', color: 'green'}}>✓ {file3.name}</span>}
+                        <label className="form-label" htmlFor="csv-file4">Fichier 4 (Image)</label>
+                        <ZipFile />
                     </div>
                 </section>
 

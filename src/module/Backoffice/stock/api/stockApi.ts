@@ -1,6 +1,6 @@
-import {requestPrestashopXml,} from "../../../../utils/prestashopClient";
-import { asArray, textFromUnknown, numFromUnknown } from "../../../../utils/helper";
-import { extractStockAvailableEntries, extractStockMovementItems, fetchStockMovementsResponse, type PrestashopStockAvailableListResponse, type PrestashopStockAvailableResponse, type StockItem, type StockMovement } from "./object";
+import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { extractStockAvailableEntries, extractStockMovementItems, fetchStockMovementsResponse, type PrestashopStockAvailableListResponse, type PrestashopStockAvailableResponse, type StockItem, type StockMovement, type StockCreateForm } from "./object";
 
 export async function listStockItems(): Promise<StockItem[]> {
   try {
@@ -278,6 +278,63 @@ export async function getStockByProductId(productId: number,productAttributeId?:
 
     return null;
   }
+}
+
+async function getStockAvailableEntryId(productId: number, productAttributeId = 0): Promise<number | null> {
+  try {
+    const response = await requestPrestashopXml<PrestashopStockAvailableResponse>(
+      "/stock_availables",
+      {
+        query: {
+          display: "full",
+          "filter[id_product]": `[${productId}]`,
+          "filter[id_product_attribute]": `[${productAttributeId}]`,
+        },
+      }
+    );
+
+    const entries = extractStockAvailableEntries(response);
+    const first = entries[0];
+    const id = numFromUnknown(first?.id);
+    return id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function upsertStockAvailable(form: StockCreateForm): Promise<number> {
+  const productAttributeId = form.id_product_attribute ?? 0;
+  const existingId = await getStockAvailableEntryId(form.id_product, productAttributeId);
+  const payload = buildPrestashopXml({
+    prestashop: {
+      stock_available: {
+        id: existingId || undefined,
+        id_product: form.id_product,
+        id_product_attribute: productAttributeId,
+        id_shop: form.id_shop ?? 1,
+        id_shop_group: form.id_shop_group ?? 1,
+        quantity: form.quantity,
+        depends_on_stock: form.depends_on_stock ? 1 : 0,
+        out_of_stock: form.out_of_stock ?? 2,
+        location: form.location ?? "",
+      },
+    },
+  });
+
+  const path = existingId ? `/stock_availables/${existingId}` : "/stock_availables";
+  const method = existingId ? "PUT" : "POST";
+
+  const response = await requestPrestashopXml<any>(path, {
+    method,
+    bodyXml: payload,
+  });
+
+  const responseId = numFromUnknown(response?.prestashop?.stock_available?.id ?? response?.prestashop?.stock_available?.["@_id"]);
+  if (responseId > 0) {
+    return responseId;
+  }
+
+  return existingId ?? (await getStockAvailableEntryId(form.id_product, productAttributeId)) ?? 0;
 }
 
 

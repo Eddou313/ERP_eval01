@@ -2,9 +2,11 @@ import { buildPrestashopXml, requestPrestashopXml } from "../../../utils/prestas
 import { asArray, languageField, textFromUnknown, normalizeText } from "../../../utils/helper";
 
 type CreatedTax = { id: number; name: string; rate: number };
+type CreatedTaxRuleGroup = { id: number; name: string; active: boolean };
 
 
 const DEFAULT_LANGUAGE_ID = 1;
+const DEFAULT_COUNTRY_ID = 8;
 
 const formatTaxLabel = (rate: number): string => {
     const formattedRate = Number.isInteger(rate)
@@ -24,6 +26,22 @@ export const  listTaxesLight = async (): Promise<CreatedTax[]> => {
                 id: Number(item?.id ?? item?.['@_id'] ?? 0),
                 name: textFromUnknown(item?.name),
                 rate: Number(textFromUnknown(item?.rate) || 0),
+            }))
+            .filter((item) => Number.isFinite(item.id) && item.id > 0);
+    } catch {
+        return [];
+    }
+};
+
+export const listTaxRuleGroupsLight = async (): Promise<CreatedTaxRuleGroup[]> => {
+    try {
+        const response = await requestPrestashopXml<any>('/tax_rule_groups', { query: { display: 'full' } });
+        const items = asArray(response?.prestashop?.tax_rule_groups?.tax_rule_group);
+        return items
+            .map((item: any) => ({
+                id: Number(item?.id ?? item?.['@_id'] ?? 0),
+                name: textFromUnknown(item?.name),
+                active: textFromUnknown(item?.active) === '1',
             }))
             .filter((item) => Number.isFinite(item.id) && item.id > 0);
     } catch {
@@ -70,4 +88,88 @@ export const ensureTaxExists = async (
 
     cache.set(key, tax.id);
     return tax.id;
+};
+
+export const ensureTaxRuleGroupExists = async (
+    groupName: string,
+    cache: Map<string, number>,
+    groups: CreatedTaxRuleGroup[],
+): Promise<number> => {
+    const normalizedName = textFromUnknown(groupName).trim();
+    if (!normalizedName) {
+        throw new Error('Le nom du tax rule group est vide');
+    }
+
+    const key = normalizeText(normalizedName);
+    const cached = cache.get(key);
+    if (cached) {
+        return cached;
+    }
+
+    let group = groups.find((item) => normalizeText(item.name ?? '') === key);
+    if (!group) {
+        const createdGroup = await requestPrestashopXml<{ prestashop: { tax_rule_group: { id: unknown } } }>('/tax_rule_groups', {
+            method: 'POST',
+            bodyXml: buildPrestashopXml({
+                prestashop: {
+                    tax_rule_group: {
+                        name: languageField(normalizedName, DEFAULT_LANGUAGE_ID),
+                        active: 1,
+                    },
+                },
+            }),
+        });
+
+        const groupId = Number(createdGroup?.prestashop?.tax_rule_group?.id);
+        if (!Number.isFinite(groupId) || groupId <= 0) {
+            throw new Error(`Impossible de créer le tax rule group ${normalizedName}`);
+        }
+
+        group = { id: groupId, name: normalizedName, active: true };
+        groups.push(group);
+    }
+
+    cache.set(key, group.id);
+    return group.id;
+};
+
+export const ensureTaxRuleExists = async (
+    taxRuleGroupId: number,
+    taxId: number,
+    taxRate: number,
+    cache: Map<string, number>,
+    description: string,
+    countryId = DEFAULT_COUNTRY_ID,
+): Promise<number> => {
+    const key = `${taxRuleGroupId}:${taxId}:${countryId}:${taxRate.toFixed(4)}`;
+    const cached = cache.get(key);
+    if (cached) {
+        return cached;
+    }
+
+    const createdRule = await requestPrestashopXml<{ prestashop: { tax_rule: { id: unknown } } }>('/tax_rules', {
+        method: 'POST',
+        bodyXml: buildPrestashopXml({
+            prestashop: {
+                tax_rule: {
+                    id_tax_rules_group: taxRuleGroupId,
+                    id_tax: taxId,
+                    id_country: countryId,
+                    id_state: 0,
+                    zipcode_from: 0,
+                    zipcode_to: 0,
+                    behavior: 0,
+                    description,
+                },
+            },
+        }),
+    });
+
+    const ruleId = Number(createdRule?.prestashop?.tax_rule?.id);
+    if (!Number.isFinite(ruleId) || ruleId <= 0) {
+        throw new Error(`Impossible de créer la règle de taxe ${description}`);
+    }
+
+    cache.set(key, ruleId);
+    return ruleId;
 };

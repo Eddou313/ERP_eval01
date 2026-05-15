@@ -1,0 +1,64 @@
+/* ZipFile.css */
+.zip-container {
+  max-width: 400px;
+  margin: 20px auto;
+  padding: 24px;
+  border: 2px dashed #3b82f6; /* Bordure pointillée style "dropzone" */
+  border-radius: 12px;
+  background-color: #f8fafc;
+  text-align: center;
+  transition: all 0.3s ease;
+  font-family: sans-serif;
+}
+
+.zip-container:hover {
+  border-color: #2563eb;
+  background-color: #eff6ff;
+}
+
+.zip-label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #1e293b;
+  cursor: pointer;
+}
+
+.zip-input {
+  display: block;
+  width: 100%;
+  font-size: 14px;
+  color: #64748b;
+}
+
+/* Style spécifique pour le bouton d'upload natif */
+.zip-input::file-selector-button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background-color: #3b82f6;
+  color: white;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background 0.2s;
+}
+
+.zip-input::file-selector-button:hover {
+  background-color: #2563eb;
+}
+
+.msg-error {
+  color: #dc2626;
+  font-size: 0.875rem;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.msg-success {
+  color: #059669;
+  font-size: 0.875rem;
+  margin-top: 12px;
+  background: #ecfdf5;
+  padding: 8px;
+  border-radius: 6px;
+}
