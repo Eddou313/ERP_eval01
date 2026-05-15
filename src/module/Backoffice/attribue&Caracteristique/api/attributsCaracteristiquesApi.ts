@@ -333,17 +333,6 @@ export async function listFeatureValuesLight(): Promise<FeatureValueListItem[]> 
   return values.sort((left, right) => left.position - right.position || left.value.localeCompare(right.value));
 }
 
-export async function initializeAttributesAndCharacteristics(): Promise<AttributesAndCharacteristicsState> {
-  const [attributes, attributeValues, features, featureValues] = await Promise.all([
-    listAttributeGroupsLight(),
-    listAttributeValuesLight(),
-    listFeatureGroupsLight(),
-    listFeatureValuesLight(),
-  ]);
-
-  return { attributes, attributeValues, features, featureValues };
-}
-
 async function getProductCombinationAttributeValueIds(productId: number): Promise<number[]> {
   try {
     const response = await requestPrestashopXml<any>("/combinations", {
@@ -518,5 +507,54 @@ export async function getProductFeatures(productId: number): Promise<ProductFeat
   } catch (error) {
     console.error("Erreur getProductFeatures:", error);
     return [];
+  }
+}
+
+export async function deleteAttributeGroup(id: number): Promise<void> {
+  await requestPrestashopXml(`/product_options/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteAttributeValue(id: number): Promise<void> {
+  await requestPrestashopXml(`/product_option_values/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteFeature(id: number): Promise<void> {
+  await requestPrestashopXml(`/product_features/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteFeatureValue(id: number): Promise<void> {
+  await requestPrestashopXml(`/product_feature_values/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function InitAttributesAndCharacteristics(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les attributs et caractéristiques ?");
+  if (!confirmed) return;
+
+  try {
+    const [attributeGroupIds, attributeValueIds, featureIds, featureValueIds] = await Promise.all([
+      listAttributeGroupIds(),
+      listAttributeValueIds(),
+      listFeatureIds(),
+      listFeatureValueIds(),
+    ]);
+
+    await Promise.all([
+      ...attributeValueIds.map((id) => deleteAttributeValue(id)),
+      ...attributeGroupIds.map((id) => deleteAttributeGroup(id)),
+      ...featureValueIds.map((id) => deleteFeatureValue(id)),
+      ...featureIds.map((id) => deleteFeature(id)),
+    ]);
+
+    console.log("Tous les attributs et caractéristiques ont été supprimés.");
+  } catch (error) {
+    console.error("Erreur lors de l'initialisation des attributs et caractéristiques :", error);
   }
 }

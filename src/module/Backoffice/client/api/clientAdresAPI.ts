@@ -163,12 +163,14 @@ export async function deleteAddress(id: number): Promise<void> {
     });
 }
 
-export async function InitAdresse(items: ClientAddressListItem[]): Promise<void> 
+export async function InitAdresse(): Promise<void> 
 {
     const confirmed = window.confirm("Vous etes sur de supprimer tous les adresses ?");
     if (!confirmed) return;
     try{
-        await Promise.all(items.map((entry) => deleteAddress(entry.id)));
+        const ids = await listAddressIds();
+        await Promise.all(ids.map((id) => deleteAddress(id)));
+        console.log("Toutes les adresses ont été supprimées.");
     }
     catch (caught: any) {
         console.error("Erreur lors de l'initialisation des adresses :", caught);

@@ -181,7 +181,11 @@ export async function deleteCategory(id: number): Promise<void> {
   });
 }
 
-export async function InitCategory(data: CategoryListItem[]): Promise<void> {
+export async function InitCategory(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les categories ?");
+  if (!confirmed) return;
+
+  const data = await listCategoriesLight();
   // Sort by nright in descending order to delete children before parents
   const sortedData = [...data].sort((a, b) => (b.nright ?? 0) - (a.nright ?? 0));
 
@@ -194,4 +198,5 @@ export async function InitCategory(data: CategoryListItem[]): Promise<void> {
       }
     }
   }
+  console.log("Toutes les catégories ont été supprimées.");
 }

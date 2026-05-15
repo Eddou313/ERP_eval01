@@ -506,6 +506,20 @@ export async function deleteOrder(id: number): Promise<void> {
     return;
   }
 }
+export async function InitOrder(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
+  if (!confirmed) return;
+  try {
+    const orders = await listOrders();
+    const deletePromises = orders.map((order) => deleteOrder(order.id));
+    await Promise.all(deletePromises);
+    alert("Toutes les commandes ont été supprimées. Vous pouvez maintenant importer de nouvelles commandes.");
+  }
+  catch (err) {
+    console.error("Erreur lors de l'initialisation des commandes:", err);
+    throw new Error(`Erreur lors de l'initialisation: ${err}`);
+  }
+}
 
 /**
  * Alias pour compatibilité
@@ -538,7 +552,7 @@ function buildOrderXmlForCreation(form: OrderForm): string {
 function buildOrderXmlForCreationWithRows(form: OrderForm): string {
   // PrestaShop exige les montants principaux à la création.
   // On garde des valeurs cohérentes TTC: total_paid = total_paid_tax_incl.
-  
+
   // VALIDATION: Les adresses doivent être choisies (jamais 0)
   if (!validateUnsignedId(form.id_address_delivery) || form.id_address_delivery === 0) {
     throw new Error("Erreur interne: id_address_delivery invalide ou 0 - une adresse de livraison doit être choisie");
@@ -546,7 +560,7 @@ function buildOrderXmlForCreationWithRows(form: OrderForm): string {
   if (!validateUnsignedId(form.id_address_invoice) || form.id_address_invoice === 0) {
     throw new Error("Erreur interne: id_address_invoice invalide ou 0 - une adresse de facturation doit être choisie");
   }
-  
+
   const order = {
     id_cart: form.id_cart,
     id_customer: form.id_customer,

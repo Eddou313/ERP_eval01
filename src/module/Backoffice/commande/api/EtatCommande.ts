@@ -93,9 +93,14 @@ export async function deleteOrderState(stateId: number): Promise<void> {
   await requestPrestashopXml(`/order_states/${stateId}`, { method: "DELETE" });
 }
 
-export async function initEtatCommande(items: OrderStateListItem[]): Promise<void> {
+export async function initEtatCommande(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les états de commande ?");
+  if (!confirmed) return;
+
   try {
+    const items = await listOrderStates();
     await Promise.all(items.map((entry) => deleteOrderState(entry.id)));
+    console.log("Tous les états de commande ont été supprimés.");
   } catch {
     alert("Erreur lors de l'initialisation des états de commande");
   }

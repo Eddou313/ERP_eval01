@@ -749,18 +749,23 @@ export async function getProductAttributes(productId: number): Promise<ProductAt
 /**
  * Delete all products except core ones
  */
-export async function InitProducts(data: ProductListItem[]): Promise<void> {
-  const sortedData = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
+export async function InitProducts(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les produits ?");
+  if (!confirmed) return;
+  try{
+    const data = await listProductsLight();
+    const sortedData = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
 
-  for (const product of sortedData) {
-    if (product.id > 0) {
-      try {
-        await deleteProduct(product.id);
-      } catch (error) {
-        console.error(`Erreur lors de la suppression du produit ${product.id}:`, error);
+    for (const product of sortedData) {
+      if (product.id > 0) {
+          await deleteProduct(product.id);
       }
     }
   }
+  catch (caught: any) {
+    console.error("Erreur lors de l'initialisation des produits :", caught);
+  }
+  console.log("Tous les produits ont été supprimés.");
 }
 
 // workflow prix

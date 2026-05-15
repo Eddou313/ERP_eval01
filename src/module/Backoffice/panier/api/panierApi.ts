@@ -641,16 +641,6 @@ export async function deleteCart(id: number): Promise<void> {
   }
 }
 
-export async function initPanier(items: CartListItem[]): Promise<void> {
-  const confirmed = window.confirm("Vous etes sur de supprimer tous les paniers ?");
-  if (!confirmed) return;
-  try {
-    await Promise.all(items.map((entry) => deleteCart(entry.id)));
-  } catch (e: any) {
-    alert(e?.message ?? "Erreur lors de l'initialisation des paniers");
-  }
-}
-
 export async function getLatestCartForCustomerId(customerId: number): Promise<CartDetail | null> {
   const cartIds = await listCartIdsByCustomerId(customerId);
   if (cartIds.length === 0) return null;
@@ -853,3 +843,14 @@ export async function addProductToCart(params: {cartId: number;customerId: numbe
   return getCart(params.cartId);
 }
 // quantier
+export async function initPanier(): Promise<void> {
+  const confirmed = window.confirm("Vous etes sur de supprimer tous les paniers ?");
+  if (!confirmed) return;
+  try {
+    const items: CartListItem[] = await listCartsLight();
+    await Promise.all(items.map((entry) => deleteCart(entry.id)));
+    console.log(`Suppression terminée pour ${items.length} paniers`);
+  } catch (e: any) {
+    alert(e?.message ?? "Erreur lors de l'initialisation des paniers");
+  }
+}

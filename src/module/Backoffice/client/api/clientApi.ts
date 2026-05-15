@@ -391,11 +391,13 @@ export async function deleteClient(id: number): Promise<void> {
     });
 }
 
-export async function initClients(items:ClientListItem[]): Promise<void> {
+export async function initClients(): Promise<void> {
     const confirmed = window.confirm("Vous etes sur de supprimer tous les clients ?");
     if (!confirmed) return;
     try {
-        await Promise.all(items.map((entry) => deleteClient(entry.id)));
+        const ids = await listClientIds();
+        await Promise.all(ids.map((id) => deleteClient(id)));
+        console.log("Tous les clients ont été supprimés.");
 
     } catch (caught: any) {
         console.log(caught?.message ?? "Erreur lors de l'initialisation des clients");
