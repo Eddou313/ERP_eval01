@@ -218,6 +218,7 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
                 name: row.nom,
                 reference: row.reference,
                 price: priceHt,
+                state: 1,
                 wholesale_price: Number(row.prix_achat) || 0,
                 active: true,
                 available_for_order: true,

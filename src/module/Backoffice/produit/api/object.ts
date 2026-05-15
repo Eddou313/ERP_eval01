@@ -34,6 +34,7 @@ export type ProductForm = {
   available_for_order?: boolean;
   show_price?: boolean;
   available_date?: string;
+  state?: number;
 };
 
 export type ProductCreateForm = ProductForm;
@@ -54,6 +55,7 @@ export type ProductListItem = {
   final_price?: number;
   default_combination_id?: number;
   active?: boolean;
+  state?: number;
   quantity?: number;
   id_category_default?: number;
   id_manufacturer?: number;
@@ -94,7 +96,7 @@ export type ProductGetResponse = {
       cache_is_pack?: any;
       cache_has_attachments?: any;
       is_virtual?: any;
-      state?: any;
+      state?: number;
       on_sale?: any;
       online_only?: any;
       ecotax?: any;
