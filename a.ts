@@ -1,0 +1,7 @@
+date_availability_produit	
+nom
+reference
+prix_ttc
+Taxe
+categorie
+prix_achat

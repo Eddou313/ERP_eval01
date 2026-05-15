@@ -2,7 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import './import.css';
 // import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
 import { parseCSVFile,  InitialisationGLobal } from "../api/Initialisation&export"
-import type { colonneCSV } from "../api/Initialisation&export"
+import type { colonneCSV } from "../api/object"
 import {formatDate,transformToObjects} from "../../utils/helper"
 
 export function ImportGlobal ()
@@ -290,7 +290,7 @@ export function ImportGlobal ()
                                                         </div>
                                                     ))}
                                                 </td>
-                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.etat}</td>
+                                                <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.etat||"dans le panier"}</td>
                                                 <td style={{ border: '1px solid #ccc', padding: '0.5rem' }}>{item.pwd}</td>
                                             </tr>
                                         ))}

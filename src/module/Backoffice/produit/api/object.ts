@@ -65,8 +65,6 @@ export type ProductListItem = {
   link_rewrite?: string;
   description_short?: string;
   available_date?: string;
-
-  stock_quantity?: number; // from stock API
 };
 
 export type ProductGetResponse = {

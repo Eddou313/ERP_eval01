@@ -12,39 +12,6 @@ import Papa from 'papaparse';
  * @param separator Le caractère délimiteur (ex: , ou ;)
  * @param onComplete Callback appelé avec les données castées dans le bon type
  */
-
-export type colonneCSV = {
-        produitImport : {
-            date_availability_produit: string;
-            nom	:string;
-            reference : string;
-            prix_ttc : number;
-            Taxe : string;
-            categorie : string; 
-            prix_achat :number;
-        },
-
-        produit_Attribut_StockImport:{
-            reference : string;	
-            specificité	: string ;
-            karazany : string;
-            stock_initial : number;
-            prix_vente_ttc : number;
-        };
-
-        Commande_client_produit:{
-            date: string;	
-            nom	: string;
-            email: string;
-            pwd	: string;
-            adresse	: string;
-            achat : string;
-            etat :string;
-        }
-    }
-
-export type ImportDataType = keyof colonneCSV;
-
 // Convertir les nombres français (virgule) en nombres JavaScript (point)
 const convertFrenchNumbersInObject = (obj: any): any => {
     if (Array.isArray(obj)) {
