@@ -1,10 +1,10 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import {
-  asArray,
-  textFromUnknown,
-  numFromUnknown,
-  boolFromUnknown,
-  toPrestashopBool,
+    asArray,
+    textFromUnknown,
+    numFromUnknown,
+    boolFromUnknown,
+    toPrestashopBool,
 } from "../../../../utils/helper";
 
 type CustomerGetResponse = {
@@ -187,8 +187,8 @@ export async function listClientIds(): Promise<number[]> {
         prestashop?: {
             customers?: {
                 customer?:
-                    | Array<{ "@_id"?: number | string; id?: number | string }>
-                    | { "@_id"?: number | string; id?: number | string };
+                | Array<{ "@_id"?: number | string; id?: number | string }>
+                | { "@_id"?: number | string; id?: number | string };
             };
         };
     }>("/customers", {
@@ -281,26 +281,26 @@ export const DEFAULT_CLIENT_IMPORT: ClientImport = {
 function buildClientXml(form: ClientForm): string {
     const payload = {
         prestashop: {
-        customer: {
-            id_gender: form.id_gender,
-            id_default_group: form.id_default_group,
-            id_lang: form.id_lang,
-            firstname: form.firstname,
-            lastname: form.lastname,
-            email: form.email,
-            passwd: form.passwd,
-            birthday: form.birthday,
-            active: form.active ? 1 : 0,
-            newsletter: form.newsletter ? 1 : 0,
-            optin: form.optin ? 1 : 0,
-            company: form.company,
-            siret: form.siret,
-            ape: form.ape,
-            website: form.website,
-            note: form.note,
-            is_guest: form.is_guest ? 1 : 0,
-            deleted: form.deleted ? 1 : 0,
-        },
+            customer: {
+                id_gender: form.id_gender,
+                id_default_group: form.id_default_group,
+                id_lang: form.id_lang,
+                firstname: form.firstname,
+                lastname: form.lastname,
+                email: form.email,
+                passwd: form.passwd,
+                birthday: form.birthday,
+                active: form.active ? 1 : 0,
+                newsletter: form.newsletter ? 1 : 0,
+                optin: form.optin ? 1 : 0,
+                company: form.company,
+                siret: form.siret,
+                ape: form.ape,
+                website: form.website,
+                note: form.note,
+                is_guest: form.is_guest ? 1 : 0,
+                deleted: form.deleted ? 1 : 0,
+            },
         },
     };
 
@@ -315,31 +315,31 @@ function buildClientImportXml(form: ClientImport): string {
 
     const payload = {
         prestashop: {
-        customer: {
-            id_shop_group: form.id_shop_group,
-            id_shop: form.id_shop,
-            id_gender: form.id_gender,
-            id_default_group: form.id_default_group,
-            id_lang: form.id_lang,
-            id_risk: form.id_risk,
-            company: form.company,
-            siret: form.siret,
-            ape: form.ape,
-            firstname: form.firstname,
-            lastname: form.lastname,
-            email: form.email,
-            passwd: password,
-            birthday: form.birthday,
-            newsletter: toPrestashopBool(form.newsletter),
-            optin: toPrestashopBool(form.optin),
-            website: form.website,
-            note: form.note,
-            active: toPrestashopBool(form.active),
-            is_guest: toPrestashopBool(form.is_guest),
-            deleted: toPrestashopBool(form.deleted),
-            ...(form.date_add ? { date_add: form.date_add } : {}),
-            ...(form.date_upd ? { date_upd: form.date_upd } : {}),
-        },
+            customer: {
+                id_shop_group: form.id_shop_group,
+                id_shop: form.id_shop,
+                id_gender: form.id_gender,
+                id_default_group: form.id_default_group,
+                id_lang: form.id_lang,
+                id_risk: form.id_risk,
+                company: form.company,
+                siret: form.siret,
+                ape: form.ape,
+                firstname: form.firstname,
+                lastname: form.lastname,
+                email: form.email,
+                passwd: password,
+                birthday: form.birthday,
+                newsletter: toPrestashopBool(form.newsletter),
+                optin: toPrestashopBool(form.optin),
+                website: form.website,
+                note: form.note,
+                active: toPrestashopBool(form.active),
+                is_guest: toPrestashopBool(form.is_guest),
+                deleted: toPrestashopBool(form.deleted),
+                ...(form.date_add ? { date_add: form.date_add } : {}),
+                ...(form.date_upd ? { date_upd: form.date_upd } : {}),
+            },
         },
     };
 
@@ -420,10 +420,38 @@ export async function initClients(): Promise<void> {
     // if (!confirmed) return;
     try {
         const ids = await listClientIds();
-        await Promise.all(ids.map((id) => deleteClient(id)));
+        await Promise.all(ids.map((id) => 
+        {
+            if(id>1)
+            {
+                deleteClient(id)
+            }
+        }));
         console.log("Tous les clients ont été supprimés.");
 
     } catch (caught: any) {
         console.log(caught?.message ?? "Erreur lors de l'initialisation des clients");
-    } 
+    }
 }
+import {saveClientSession} from "../../../FrontOffice/client/api/clientAPI";
+export async function createSession(id:number): Promise<boolean>
+{
+    try
+    {
+        const client = await getClient(id);
+        if(!client)  return false;
+        saveClientSession({
+            id: textFromUnknown(client.id),
+            email: textFromUnknown(client.email),
+            prenom: textFromUnknown(client.firstname),
+            nom: textFromUnknown(client.lastname),
+            token: textFromUnknown(client.secure_key) 
+          });
+        return true;
+    }
+    catch(e:any)
+    {
+        console.error(`Erreur lors de la creation session : ${e.message}`);
+        return false;
+    }
+} 

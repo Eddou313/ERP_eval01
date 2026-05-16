@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import FrontOfficeHeader from "../../include/FrontOfficeHeader";
+// import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { listClientsLight, type ClientListItem } from "../../../Backoffice/client/api/clientApi";
 import { useNavigate } from "react-router-dom";
+import {createSession} from "../../../Backoffice/client/api/clientApi"
 import { logoutClient } from "../api/clientAPI";
 import "./ClientListe.css";
 export function ClientListe() {
@@ -27,40 +28,50 @@ export function ClientListe() {
         load();
     }, []);
 
-    const handleChooseClient = (email: string) => {
-        navigate("/login", { state: { email } });
+    const handleChooseClient = async (email: string, id: number) => {
+        // navigate("/login", { state: { email } });
+        const chec =  await createSession(id);
+        if(chec) navigate("/produits");
+        else console.error(`erreur lors de la login`);
     };
 
-    const handleAnonymous = () => {
-        try { logoutClient(); } catch {}
-        navigate("/produits");
-    };
+    // const handleAnonymous = () => {
+    //     try { logoutClient(); } catch { }
+    //     navigate("/produits");
+    // };
 
     return (
         <div className="clientListPage">
             <main style={{ padding: 20 }}>
                 <h1>Choisissez un utilisateur</h1>
-
-                <div style={{ margin: "12px 0" }}>
-                    <button onClick={handleAnonymous} className="btn">Visiter en tant qu'utilisateur anonyme</button>
-                </div>
-
                 {loading && <p>Chargement...</p>}
                 {error && <p className="error">{error}</p>}
 
                 {!loading && !error && (
                     <div style={{ display: "grid", gap: 12 }}>
-                        {clients.map((c) => (
-                            <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                <div>
-                                    <div style={{ fontWeight: 600 }}>{c.fullName || c.email}</div>
-                                    <div style={{ fontSize: 12, color: "#666" }}>{c.email}</div>
-                                </div>
-                                <div>
-                                    <button onClick={() => handleChooseClient(c.email)} className="btn">Se connecter</button>
-                                </div>
-                            </div>
-                        ))}
+                        {clients.map((c) => {
+                            if (c.id === 1) {
+                                return (
+                                    <div style={{ margin: "12px 0" }}>
+                                        <button onClick={() => handleChooseClient(c.email, c.id)} className="btn">continuer en tant qu'utilisateur anonyme</button>
+                                    </div>
+                                );
+                            }
+                            else {
+                                return (
+                                    <div key={c.id} style={{ border: "1px solid #eee", padding: 12, borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <div>
+                                            <div style={{ fontWeight: 600 }}>{c.fullName || c.email}</div>
+                                            <div style={{ fontSize: 12, color: "#666" }}>{c.email}</div>
+                                        </div>
+                                        <div>
+                                            <button onClick={() => handleChooseClient(c.email, c.id)} className="btn">Se connecter</button>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                        }
+                        )}
                     </div>
                 )}
             </main>

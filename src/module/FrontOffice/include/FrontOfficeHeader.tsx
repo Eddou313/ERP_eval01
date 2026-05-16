@@ -29,7 +29,7 @@ export default function FrontOfficeHeader() {
           </Link>
           <nav className="headerNav">
             <Link to="/produits" className="navLink"><IconHome size={18} /> Accueil</Link>
-            {client && (
+            {client?.email!=="anonymous@psgdpr.com" && (
               <Link to="/Mescommande" className="navLink"><IconReceipt size={18} /> Mes Commandes</Link>
             )}
           </nav>
