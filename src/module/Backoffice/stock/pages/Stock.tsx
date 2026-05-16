@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./Stock.css";
-import { listStockItemsPaged, upsertStockAvailable } from "../api/stockApi";
+import { listStockItemsPaged } from "../api/stockApi";
+import { applyStockModification } from "../api/stockMovementService";
 import { IconSettings } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { getProductImageUrlWithFallback } from "../../../../utils/helper";
@@ -14,6 +15,7 @@ export function Stock() {
     const [selected, setSelected] = useState<any | null>(null);
     const [delta, setDelta] = useState<number>(0);
     const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
     const [page, setPage] = useState<number>(1);
     const pageSize = 10;
@@ -48,33 +50,54 @@ export function Stock() {
     async function confirmAdd() {
         if (!selected) return;
         const add = Number(delta) || 0;
-        if (add === 0) return closeModal();
+        
+        // Vérifier que la quantité n'est pas 0
+        if (add === 0) {
+            setMessage({ type: "error", text: "La quantité doit être différente de 0" });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
 
         setSaving(true);
         try {
-            const newQuantity = (selected.availableQuantity || 0) + add;
-            await upsertStockAvailable({
-                id_product: selected.id_product,
-                id_product_attribute: selected.id_product_attribute || 0,
-                quantity: newQuantity,
-                depends_on_stock: selected.depends_on_stock ?? false,
-                out_of_stock: selected.out_of_stock ?? 2,
-                location: selected.location ?? "",
-                id_shop: selected.id_shop ?? 1,
-                id_shop_group: selected.id_shop_group ?? 1,
-            } as any);
+            // Appliquer la modification de stock avec enregistrement du mouvement
+            const result = await applyStockModification(
+                selected.id_product,
+                selected.availableQuantity || 0,
+                add,
+                selected.id_product_attribute || 0,
+                "adjustment"
+            );
 
-            // refresh list
-            await fetchProducts();
+            if (result.success) {
+                setMessage({ type: "success", text: result.message });
+                // Rafraîchir la liste
+                await fetchProducts();
+                setTimeout(() => {
+                    closeModal();
+                    setMessage(null);
+                }, 1500);
+            } else {
+                setMessage({ type: "error", text: result.message });
+                setTimeout(() => setMessage(null), 3000);
+            }
+        } catch (error) {
+            console.error("Erreur:", error);
+            setMessage({ type: "error", text: "Erreur lors de la modification du stock" });
+            setTimeout(() => setMessage(null), 3000);
         } finally {
             setSaving(false);
-            closeModal();
         }
     }
     const navigate = useNavigate();
 
     return (
         <div className="stock-page">
+            {message && (
+                <div className={`message message-${message.type}`}>
+                    {message.text}
+                </div>
+            )}
             <h1>Stock <IconSettings size={20} stroke={1.8} onClick={()=>navigate("/stock/etat")}/></h1>
             <div className="stock-table-wrap">
                 <table className="stock-table">
@@ -135,7 +158,7 @@ export function Stock() {
                         <h3>Ajouter quantité — {selected.productName}</h3>
                         <p>Quantité actuelle: <strong>{selected.availableQuantity}</strong></p>
                         <div className="modal-row">
-                            <label>Ajouter (nombre entier)</label>
+                            <label>quantiter</label>
                             <input type="number" value={delta} onChange={(e) => setDelta(Number(e.target.value))} />
                         </div>
                         <div className="modal-actions">

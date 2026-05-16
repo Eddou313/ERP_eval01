@@ -117,9 +117,9 @@ export async function requestPrestashopXml<T>(
 
     const text = await response.text();
 
-    console.log(
-      `\n===== XML IN ${method} ${resourcePath} =====\n${text}\n===== END XML IN =====\n`,
-    );
+    // console.log(
+    //   `\n===== XML IN ${method} ${resourcePath} =====\n${text}\n===== END XML IN =====\n`,
+    // );
 
     if (!response.ok) {
       throw new PrestashopWebserviceError(

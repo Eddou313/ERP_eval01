@@ -34,8 +34,15 @@ export default defineConfig(({ mode }) => {
                   params.set(key, value);
                 }
 
-                // Reconstruit l'URL avec /api/ ajouté
-                const fullUrl = `${prestashopUrl}/api${resourcePath.split('?')[0]}?${params.toString()}`;;
+                // Reconstruit l'URL — si c'est un endpoint /module/* on ne préfixe pas par /api
+                let fullUrl: string;
+                if (resourcePath.startsWith('/module')) {
+                  fullUrl = `${prestashopUrl}${resourcePath.split('?')[0]}?${params.toString()}`;
+                  console.log(`[PrestaShop Proxy] (module) ${req.method} ${fullUrl}`);
+                } else {
+                  fullUrl = `${prestashopUrl}/api${resourcePath.split('?')[0]}?${params.toString()}`;
+                  console.log(`[PrestaShop Proxy] ${req.method} ${fullUrl}`);
+                }
 
                 console.log(`[PrestaShop Proxy] ${req.method} ${fullUrl}`);
 
