@@ -1,5 +1,5 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
-import {textFromUnknown,numFromUnknown,boolFromUnknown,asArray,getFirstLanguageText,toPrestashopBool,languageField,validateUnsignedId,validatePrice,validateFloat,} from "../../../../utils/helper";
+import { textFromUnknown, numFromUnknown, boolFromUnknown, asArray, getFirstLanguageText, toPrestashopBool, languageField, validateUnsignedId, validatePrice, validateFloat, } from "../../../../utils/helper";
 import { getClient } from "../../client/api/clientApi";
 import { getCart } from "../../panier/api/panierApi";
 import { PAYMENT_METHODS } from "../../paiement/api/PaiementApi";
@@ -123,7 +123,8 @@ export async function listOrders(
     state: number;
     limit: number;
     offset: number;
-  }>,
+    declencher?: number  // declencheur pour vrai commande
+    }>
 ): Promise<OrderListItem[]> {
   const query: Record<string, string | number | boolean> = {
     display: "full",
@@ -144,60 +145,64 @@ export async function listOrders(
   const ordersRaw = asArray(response?.prestashop?.orders?.order as any);
   const orders = ordersRaw.map(extractOrderListItem);
 
-  // Collecte des id_cart déjà présents dans les commandes réelles
-  const linkedCartIds = new Set<number>(
-    ordersRaw
-      .map((o: any) => numFromUnknown(o.id_cart))
-      .filter((id: number) => validateUnsignedId(id)),
-  );
-
-  // Ajouter les paniers actifs (quantité > 0) comme commandes en attente.
   let pendingCartsAsOrders: OrderListItem[] = [];
-  try {
-    const cartsResponse = await requestPrestashopXml<CartListResponse>("/carts", {
-      query: {
-        display: "full",
-        limit: params?.limit ?? 200,
-        offset: params?.offset ?? 0,
-      },
-    });
 
-    const carts = asArray(cartsResponse?.prestashop?.carts?.cart as any);
-
-    // Enrichir chaque panier via getCart() pour obtenir des prix et quantités fiables
-    const enriched = await Promise.all(
-      carts.map(async (cart) => {
-        const cartId = numFromUnknown((cart as any).id ?? (cart as any)["@_id"]);
-        if (!validateUnsignedId(cartId)) return null;
-
-        // Ne pas dupliquer les paniers déjà liés à une commande (via champ id_order ou via commandes existantes)
-        const linkedOrder = numFromUnknown((cart as any).id_order);
-        if (validateUnsignedId(linkedOrder)) return null;
-        if (linkedCartIds.has(cartId)) return null;
-
-        const detail = await getCart(cartId).catch(() => null);
-        if (!detail) return null;
-
-        // Exclure les paniers avec quantité totale 0
-        const totalQty = (detail.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-        if (totalQty <= 0) return null;
-
-        return {
-          id: -cartId,
-          reference: `PANIER-${cartId}`,
-          id_customer: detail.id_customer,
-          payment: "Panier en cours",
-          total_paid_tax_incl: Number(detail.total) || 0,
-          current_state: CART_PENDING_STATE_ID,
-          date_add: detail.date_add || textFromUnknown((cart as any).date_add).split(" ")[0],
-        } as OrderListItem;
-      }),
+  // SI 'declencher' EST PRÉSENT, ON SUTE TOUTE LA LOGIQUE DES PANIERS
+  if (!params?.declencher) {
+    // Collecte des id_cart déjà présents dans les commandes réelles
+    const linkedCartIds = new Set<number>(
+      ordersRaw
+        .map((o: any) => numFromUnknown(o.id_cart))
+        .filter((id: number) => validateUnsignedId(id)),
     );
 
-    pendingCartsAsOrders = enriched.filter((it): it is OrderListItem => it !== null);
-  } catch {
-    // Certains WS n'exposent pas /carts en lecture; on retourne au moins les vraies commandes.
-    pendingCartsAsOrders = [];
+    // Ajouter les paniers actifs (quantité > 0) comme commandes en attente.
+    try {
+      const cartsResponse = await requestPrestashopXml<CartListResponse>("/carts", {
+        query: {
+          display: "full",
+          limit: params?.limit ?? 200,
+          offset: params?.offset ?? 0,
+        },
+      });
+
+      const carts = asArray(cartsResponse?.prestashop?.carts?.cart as any);
+
+      // Enrichir chaque panier via getCart() pour obtenir des prix et quantités fiables
+      const enriched = await Promise.all(
+        carts.map(async (cart) => {
+          const cartId = numFromUnknown((cart as any).id ?? (cart as any)["@_id"]);
+          if (!validateUnsignedId(cartId)) return null;
+
+          // Ne pas dupliquer les paniers déjà liés à une commande
+          const linkedOrder = numFromUnknown((cart as any).id_order);
+          if (validateUnsignedId(linkedOrder)) return null;
+          if (linkedCartIds.has(cartId)) return null;
+
+          const detail = await getCart(cartId).catch(() => null);
+          if (!detail) return null;
+
+          // Exclure les paniers avec quantité totale 0
+          const totalQty = (detail.items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+          if (totalQty <= 0) return null;
+
+          return {
+            id: -cartId,
+            reference: `PANIER-${cartId}`,
+            id_customer: detail.id_customer,
+            payment: "Panier en cours",
+            total_paid_tax_incl: Number(detail.total) || 0,
+            current_state: CART_PENDING_STATE_ID,
+            date_add: detail.date_add || textFromUnknown((cart as any).date_add).split(" ")[0],
+          } as OrderListItem;
+        }),
+      );
+
+      pendingCartsAsOrders = enriched.filter((it): it is OrderListItem => it !== null);
+    } catch {
+      // Certains WS n'exposent pas /carts en lecture; on retourne au moins les vraies commandes.
+      pendingCartsAsOrders = [];
+    }
   }
 
   const merged = [...orders, ...pendingCartsAsOrders];
