@@ -69,6 +69,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
             <p className="productReference">{product.reference}</p>
             <div className="productPricing">
               <span className="currentPrice">€{(product.price || 0).toFixed(2)}</span>
+              <span className="currentPrice">date ajout: {product.date_add}</span>
             </div>
             {product.quantity && product.quantity > 0 ? (
               <span className="inStock">
