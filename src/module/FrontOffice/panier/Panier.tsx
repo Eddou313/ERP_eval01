@@ -227,6 +227,7 @@ export function Panier()
                             alert("Veuillez vous connecter pour continuer");
                             return;
                         }
+                        if(currentSession.email === "anonymous@psgdpr.com")
                         navigate('/Commande');
                     }} className="panier_checkout_btn" disabled={lines.length === 0}>
                         COMMANDER
