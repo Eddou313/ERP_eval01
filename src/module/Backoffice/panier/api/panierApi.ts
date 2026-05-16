@@ -165,6 +165,7 @@ export async function listCartIdsByCustomerId(customerId: number): Promise<numbe
     });
 
     const carts = json?.prestashop?.carts?.cart;
+    // Note: id_order is not available in list display, so we rely on the fallback getCart() to check it
     return asArray<any>(carts)
       .filter((c: any) => extractCustomerId(c) === customerId)
       .map((c: any) => extractId(c))
@@ -201,9 +202,10 @@ export async function listCartIdsByCustomerId(customerId: number): Promise<numbe
     for (const id of idsOnly) {
       try {
         const detail = await getCart(id);
-        if (detail.id_customer === customerId) {
-          resolvedIds.push(id);
-        }
+        if (!detail) continue;
+        if (Number(detail.id_customer) !== customerId) continue;
+        if (detail.id_order && Number(detail.id_order) > 0) continue; // exclure paniers liés à commande
+        resolvedIds.push(id);
       } catch {
         // ignorer les paniers non lisibles
       }
@@ -553,35 +555,13 @@ export async function getLatestCartForCustomerId(customerId: number): Promise<Ca
 }
 
 export async function getOrCreateGuestCart(defaultLang = 1, defaultCurrency = 1): Promise<CartDetail | null> {
-  const cookiePayload = getGuestCartCookiePayload();
-
-  // Réutiliser le panier invité existant si encore valide
-  if (cookiePayload?.id_cart && cookiePayload.id_cart > 0) {
-    try {
-      return await getCart(cookiePayload.id_cart);
-    } catch {
-      // panier expiré/supprimé: on le recrée ci-dessous
-    }
-  }
-
-  const sessionToken = cookiePayload?.session || buildGuestSessionToken();
-  const lang = cookiePayload?.langue || defaultLang;
-  const currency = cookiePayload?.devise || defaultCurrency;
-
+  // Cookies invités désactivés — créer et retourner un nouveau panier invité propre
   const newCartId = await createCart({
     id_customer: 0,
-    id_lang: lang,
-    id_currency: currency,
+    id_lang: defaultLang,
+    id_currency: defaultCurrency,
     id_shop: 1,
     id_shop_group: 1,
-  });
-
-  saveGuestCartCookiePayload({
-    id_cart: newCartId,
-    id_guest: cookiePayload?.id_guest || 0,
-    langue: lang,
-    devise: currency,
-    session: sessionToken,
   });
 
   return getCart(newCartId).catch(() => null);
@@ -620,10 +600,9 @@ export async function createCartForConnectedCustomer(customerId: number): Promis
   const client = await getClient(customerId);
   const addressId = await resolveDefaultCustomerAddressId(customerId);
 
-  // prefer cookie values for language/currency when present
-  const cookie = getGuestCartCookiePayload();
-  const lang = cookie?.langue || client.id_lang || 1;
-  const currency = cookie?.devise || 1;
+  // Use customer's language/currency from client; guest cookie handling removed
+  const lang = client.id_lang || 1;
+  const currency = 1;
 
   const newCartId = await createCart({
     id_customer: customerId,
@@ -636,35 +615,7 @@ export async function createCartForConnectedCustomer(customerId: number): Promis
     id_shop_group: 1,
   });
 
-  // If there was a guest cart found in cookies, merge its items into the new customer cart
-  if (cookie?.id_cart && cookie.id_cart > 0) {
-    try {
-      const guestCart = await getCart(cookie.id_cart).catch(() => null);
-      if (guestCart && Array.isArray(guestCart.items) && guestCart.items.length > 0) {
-        for (const line of guestCart.items) {
-          try {
-            await addProductToCart({
-              cartId: newCartId,
-              customerId,
-              id_product: line.product_id,
-              id_product_attribute: line.id_product_attribute ?? 0,
-              quantity: line.quantity || 0,
-              idLang: lang,
-              idCurrency: currency,
-            });
-          } catch (e) {
-            // ignore single-line failures and continue
-            console.warn("Impossible de merger une ligne du panier invité", e);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Erreur lors du merge du panier invité:", e);
-    }
-
-    // clear guest cookies after merge
-    clearGuestCartCookie();
-  }
+  // Guest cart merge removed: PrestaShop guest identity is used instead of local cookies.
 
   return newCartId;
 }

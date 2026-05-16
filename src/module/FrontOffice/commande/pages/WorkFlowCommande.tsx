@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
 import FrontOfficeHeader from "../../include/FrontOfficeHeader";
 import { getStoredClientSession } from "../../client/api/clientAPI";
-import {
-	getOrCreateGuestCart,
-	getLatestCartForCustomerId,
-	getCart,
-	createCart,
-	type CartDetail,
-	updateCartItems,
-} from "../../../Backoffice/panier/api/panierApi";
+import {getOrCreateGuestCart,getLatestCartForCustomerId,getCart,createCart} from "../../../Backoffice/panier/api/panierApi";
+import {type CartDetail} from "../../../Backoffice/panier/api/object";
 import { createCommande, DEFAULT_ORDER_FORM, updateOrderState } from "../../../Backoffice/commande/api/commandesApi";
 import { createClientAddress, type ClientAddressImportForm } from "../../../Backoffice/client/api/clientAdresAPI";
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, textFromUnknown } from "../../../../utils/helper";
 import "./WorkFlowCommande.css";
-import { getAllModeLivraison, PRIX_LIVRAISON_STANDARD, type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/LivraisonApi";
+import { getAllModeLivraison, PRIX_LIVRAISON_STANDARD } from "../../../Backoffice/Livraison/api/LivraisonApi";
+import {  type ModeLivraisonListItem } from "../../../Backoffice/Livraison/api/object";
 import { PAYMENT_METHODS, type PaymentMethod } from "../../../Backoffice/paiement/api/PaiementApi";
 import { useNavigate } from "react-router-dom";
 
@@ -169,7 +164,7 @@ export default function WorkFlowCommande() {
 				shippingCost = Number(shippingPrice) || 0;
 				orderGrandTotal = cartTotalProducts + shippingCost;
 
-				// Si le panier ne contient pas d'information de shop, recréer un panier lié au shop 1
+				// nouvelle adresse ? -> créer l'adresse et récupérer son ID
 				if (addressMode === "new") {
 					if (!newAddress.firstname.trim() || !newAddress.lastname.trim() || !newAddress.address1.trim() || !newAddress.postcode.trim() || !newAddress.city.trim()) {
 						alert("Veuillez remplir les champs obligatoires de la nouvelle adresse.");
@@ -197,31 +192,6 @@ export default function WorkFlowCommande() {
 
 				if (!invoiceAddressId) {
 					invoiceAddressId = deliveryAddressId;
-				}
-
-				const existingCartShop = Number((freshCart as any)?.id_shop) || 0;
-				if (existingCartShop <= 0) {
-					try {
-						const recreatedId = await createCart({
-							id_customer: Number(session.id),
-							id_lang: 1,
-							id_currency: 1,
-							id_address_delivery: deliveryAddressId,
-							id_address_invoice: invoiceAddressId || deliveryAddressId,
-							id_carrier: selectedModeLivraisonId,
-							id_shop: 1,
-							id_shop_group: 1,
-							items: cartItems.map((item) => ({ id_product: item.product_id, id_product_attribute: item.id_product_attribute, quantity: item.quantity })),
-						});
-
-						const recreated = await getCart(recreatedId);
-						freshCart = recreated;
-						cartItems = recreated.items || [];
-						cartTotalProducts = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
-						orderGrandTotal = cartTotalProducts + shippingCost;
-					} catch (e) {
-						console.warn('Impossible de recréer un panier avec id_shop; on continue avec le panier original', e);
-					}
 				}
 
 				console.debug("=== Order Totals ===");
@@ -265,17 +235,8 @@ export default function WorkFlowCommande() {
 				await updateOrderState(orderId, 1);
 
 				if (clearCartAfterOrder) {
-					await updateCartItems(
-						freshCart.id,
-						freshCart.id_customer,
-						cartItems.map((item) => ({
-							id_product: item.product_id,
-							id_product_attribute: item.id_product_attribute,
-							quantity: 0,
-						})),
-					);
-					setCart(null);
-				}
+				setCart(null);
+			}
 
 				console.log(`Commande créée (ID: ${orderId}) — total: ${orderGrandTotal.toFixed(2)} €`);
 				navigate(`/Mescommande`);
@@ -321,15 +282,7 @@ export default function WorkFlowCommande() {
 						const retryOrderId = await createCommande(retryForm);
 						await updateOrderState(retryOrderId, 1);
 						if (clearCartAfterOrder) {
-							await updateCartItems(
-								freshCartId,
-								retryCart.id_customer,
-								retryCart.items.map((item) => ({
-									id_product: item.product_id,
-									id_product_attribute: item.id_product_attribute,
-									quantity: 0,
-								})),
-							);
+
 							setCart(null);
 						}
 						// alert(`Commande recréée (ID: ${retryOrderId}) — total: ${retryGrandTotal.toFixed(2)} €`);
