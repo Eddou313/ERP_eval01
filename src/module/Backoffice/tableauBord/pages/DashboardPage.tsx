@@ -43,7 +43,8 @@ export function DashboardPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await listOrdersLight({declencher: 1});
+        const data = await listOrdersLight();
+        // const data = await listOrdersLight({declencher: 1});
         setOrders(data);
       } catch (e: any) {
         setError(e?.message || "Erreur lors du chargement du tableau de bord");
