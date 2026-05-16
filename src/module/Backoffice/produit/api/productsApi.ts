@@ -283,12 +283,12 @@ export async function getProductDetail(id: number): Promise<ProductListItem & {
 }
 
 /**
- * List products with pagination
+ * List products, optionally using Prestashop pagination.
  */
-export async function listProductsLight(limit?: number): Promise<ProductListItem[]> {
-  const ids = await listProductIds(limit);
+export async function listProductsLight(limit?: number, offset = 0): Promise<ProductListItem[]> {
+  const ids = limit === undefined ? await listProductIds() : await listProductIdsPaginated(limit, offset);
   const results = await Promise.all(ids.map((id) => getProduct(id)));
-  return results;
+  return limit === undefined ? results : results.sort((a, b) => b.id - a.id);
 }
 
 export async function listProductsLightPaginated(
