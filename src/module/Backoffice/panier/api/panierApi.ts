@@ -150,11 +150,37 @@ export async function listCartIds(): Promise<number[]> {
     .filter((id: number) => Number.isFinite(id) && id > 0);
 }
 
+async function getOrderedCartIdsByCustomerId(customerId: number): Promise<Set<number>> {
+  if (!Number.isFinite(customerId) || customerId <= 0) {
+    return new Set<number>();
+  }
+
+  try {
+    const response = await requestPrestashopXml<any>(`/orders`, {
+      query: {
+        display: "[id,id_cart]",
+        "filter[id_customer]": `[${customerId}]`,
+      },
+    });
+
+    const orders = asArray<any>(response?.prestashop?.orders?.order);
+    const cartIds = orders
+      .map((order: any) => numFromUnknown(order?.id_cart ?? order?.["id_cart"]))
+      .filter((id: number) => Number.isFinite(id) && id > 0);
+
+    return new Set(cartIds);
+  } catch {
+    return new Set<number>();
+  }
+}
+
 export async function listCartIdsByCustomerId(customerId: number): Promise<number[]> {
   if (!Number.isFinite(customerId) || customerId <= 0) return [];
 
   const extractId = (entry: any): number => numFromUnknown(entry?.["@_id"] ?? entry?.id);
   const extractCustomerId = (entry: any): number => numFromUnknown(entry?.id_customer ?? entry?.["id_customer"]);
+  const orderedCartIds = await getOrderedCartIdsByCustomerId(customerId);
+  const filterOutOrderedCarts = (ids: number[]) => ids.filter((id) => !orderedCartIds.has(id));
 
   try {
     const json = await requestPrestashopXml<any>(`/carts`, {
@@ -165,12 +191,13 @@ export async function listCartIdsByCustomerId(customerId: number): Promise<numbe
     });
 
     const carts = json?.prestashop?.carts?.cart;
-    // Note: id_order is not available in list display, so we rely on the fallback getCart() to check it
-    return asArray<any>(carts)
+    return filterOutOrderedCarts(
+      asArray<any>(carts)
       .filter((c: any) => extractCustomerId(c) === customerId)
       .map((c: any) => extractId(c))
       .filter((id: number) => Number.isFinite(id) && id > 0)
-      .sort((a, b) => b - a);
+      .sort((a, b) => b - a),
+    );
   } catch (error) {
     // Certaines versions PrestaShop renvoient 500 sur filter/sort malgré des champs valides.
     if (!(error instanceof PrestashopWebserviceError)) {
@@ -189,7 +216,7 @@ export async function listCartIdsByCustomerId(customerId: number): Promise<numbe
       .sort((a, b) => b - a);
 
     if (filteredByCustomer.length > 0) {
-      return filteredByCustomer;
+      return filterOutOrderedCarts(filteredByCustomer);
     }
 
     // Dernier recours: certains serveurs ne renvoient pas id_customer en mode liste.
@@ -201,6 +228,7 @@ export async function listCartIdsByCustomerId(customerId: number): Promise<numbe
     const resolvedIds: number[] = [];
     for (const id of idsOnly) {
       try {
+        if (orderedCartIds.has(id)) continue;
         const detail = await getCart(id);
         if (!detail) continue;
         if (Number(detail.id_customer) !== customerId) continue;
@@ -549,7 +577,7 @@ export async function getLatestCartForCustomerId(customerId: number): Promise<Ca
   const cartIds = await listCartIdsByCustomerId(customerId);
   if (cartIds.length === 0) return null;
 
-  // Le tri date_upd_DESC est demandé ci-dessus; on prend le premier
+  // On prend le panier actif le plus récent après exclusion des paniers déjà transformés en commande
   const latestCartId = cartIds[0];
   return getCart(latestCartId);
 }
