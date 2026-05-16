@@ -21,6 +21,8 @@ import ClientListe from "../module/FrontOffice/client/pages/ClientListe"
 import { Panier } from "../module/FrontOffice/panier/Panier"
 import Commande from "../module/FrontOffice/commande/pages/Commande"
 import WorkFlowCommande from "../module/FrontOffice/commande/pages/WorkFlowCommande"
+import { Stock } from "../module/Backoffice/stock/pages/Stock"
+import StockMovements from "../module/Backoffice/stock/pages/StockMovements"
 
 function AppRouter() {
   return (
@@ -45,7 +47,8 @@ function AppRouter() {
             {/* <Route path="catalogue/produits" element={<ProductsListPage />} /> */}
             {/* <Route path="catalogue/attributs-caracteristiques" element={<AttributsCaracteristiquesPage />} /> */}
             {/* <Route path="catalogue/marques-fournisseurs" element={<MarquesFournisseursPage />} /> */}
-            {/* <Route path="catalogue/stock" element={<StockPage />} /> */}
+            <Route path="/catalogue/stock" element={<Stock />} />
+            <Route path="/stock/etat"element={<StockMovements />} />
 
             <Route path="commandes/list" element={<CommandesListPage />} />
             <Route path="/catalogue/fichier" element={<ImportGlobal/>}/>

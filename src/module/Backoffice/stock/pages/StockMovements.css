@@ -1,0 +1,46 @@
+.movements-page { padding: 16px; }
+.movements-table-wrap { overflow-x: auto; margin-top: 12px; }
+.movements-table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.movements-table th, .movements-table td { padding: 8px 10px; border: 1px solid #e6e6e6; text-align: left; }
+.movements-table thead th { background: #fafafa; font-weight: 600; }
+.movements-table tr.negative td { background: #fff7f0; color: #9a3412; }
+
+.col-product { 
+  min-width: 220px; 
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.col-product img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.col-product > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.product-main { font-weight: 600; }
+.product-combination { margin-top: 4px; color: #6b7280; font-size: 12px; }
+
+.qty {
+  font-weight: 600;
+  text-align: center;
+  min-width: 60px;
+}
+.qty-positive {
+  color: #16a34a;
+  background: #f0fdf4;
+}
+.qty-negative {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
+@media (max-width: 720px) { .movements-table { min-width: 600px; } }
+
+.pagination { display:flex; gap:8px; align-items:center; margin-top:12px; }
+.page-info { font-weight:600; }

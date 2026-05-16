@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {logoutEmployee} from "../module/Backoffice/auth/api/authAPI";
 import "./SidebarNav.css";
-import {IconLayoutDashboard,IconList,IconBox,IconFileText} from "@tabler/icons-react";
+import {IconLayoutDashboard,IconList,IconBox,IconFileText, IconArchive} from "@tabler/icons-react";
 
 export default function SidebarNav() {
   const location = useLocation();
@@ -144,6 +144,16 @@ export default function SidebarNav() {
             </span>
           </summary>
           <div className="homeNavDropdownItems">
+            <NavLink
+              className={({ isActive }) =>
+                `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
+              }
+              to="/catalogue/stock"
+              onClick={() => setOpenDropdownId("catalogue")}
+            >
+              <IconArchive className="homeNavItemIcon" />
+              <span>Stock</span>
+            </NavLink>
             {/* <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
@@ -174,16 +184,7 @@ export default function SidebarNav() {
               <IconTimeline className="homeNavItemIcon" />
               <span>Suivi</span>
             </NavLink>
-            <NavLink
-              className={({ isActive }) =>
-                `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`
-              }
-              to="/catalogue/stock"
-              onClick={() => setOpenDropdownId("catalogue")}
-            >
-              <IconArchive className="homeNavItemIcon" />
-              <span>Stock</span>
-            </NavLink>
+            
             <NavLink
               className={({ isActive }) =>
                 `homeNavSubItem homeNavSubItemIndented${isActive ? " homeNavItemActive" : ""}`

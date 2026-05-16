@@ -7,7 +7,9 @@ export type StockItem = {
   id: number;
   id_product: number;
   id_product_attribute: number;
+  id_default_image?: number;
   productName: string;
+  combinationLabel?: string;
   reference: string;
   supplier?: string;
   physicalQuantity: number;
@@ -27,10 +29,13 @@ export type StockItem = {
 export type StockMovement = {
   id: number;
   id_product: number;
+  id_product_attribute?: number;
+  id_default_image?: number;
   id_order?: number;
   id_supply_order?: number;
   id_stock_mvt_reason?: number;
   productName: string;
+  combinationLabel?: string;
   reference: string;
   movementType: "import" | "sale" | "adjustment" | "other";
   quantity: number;

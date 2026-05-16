@@ -1,2 +1,2 @@
 http://localhost/prestashop/module/stockapi/update?token=MON_SECRET_TOKEN&id_product=96&quantity=55 (simple)
-http://localhost/prestashop/module/stockapi/update?token=8d7f9s6df87sdf98s7df&id_product=96&id_product_attribute=12&quantity=50 (avec combinaison)
+http://localhost/prestashop/module/stockapi/update?token=MON_SECRET_TOKEN&id_product=96&id_product_attribute=12&quantity=50 (avec combinaison)

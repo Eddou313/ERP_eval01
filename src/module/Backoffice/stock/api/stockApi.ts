@@ -1,6 +1,111 @@
 import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
-import { extractStockAvailableEntries, extractStockMovementItems, fetchStockMovementsResponse, type PrestashopStockAvailableListResponse, type PrestashopStockAvailableResponse, type StockItem, type StockMovement, type StockCreateForm } from "./object";
+import { extractStockAvailableEntries, extractStockMovementItems, fetchStockMovementsResponse, type PrestashopStockAvailableListResponse, type PrestashopStockAvailableResponse, type StockItem, type StockMovement, type StockCreateForm, type PrestashopStockMovementListResponse } from "./object";
+
+async function resolveCombinationLabel(productAttributeId: number): Promise<string> {
+  if (!productAttributeId || productAttributeId <= 0) {
+    return "";
+  }
+
+  try {
+    const combinationResponse = await requestPrestashopXml<any>(
+      `/combinations/${productAttributeId}`,
+      { query: { display: "full" } }
+    );
+
+    const combination = combinationResponse?.prestashop?.combination;
+    const comboReference = textFromUnknown(combination?.reference);
+    const optionValuesRaw = combination?.associations?.product_option_values?.product_option_value;
+    const optionValues = asArray(optionValuesRaw);
+
+    if (!optionValues.length) {
+      return comboReference || "";
+    }
+
+    const names = await Promise.all(
+      optionValues.map(async (optionValue: any) => {
+        const optionValueId = numFromUnknown(optionValue?.id ?? optionValue?.["@_id"]);
+        if (!optionValueId) return "";
+
+        try {
+          const optionValueResponse = await requestPrestashopXml<any>(
+            `/product_option_values/${optionValueId}`,
+            { query: { display: "full" } }
+          );
+          return textFromUnknown(optionValueResponse?.prestashop?.product_option_value?.name);
+        } catch {
+          return "";
+        }
+      })
+    );
+
+    const label = names.filter(Boolean).join(" / ");
+    if (label && comboReference) {
+      return `${label} (${comboReference})`;
+    }
+    return label || comboReference || "";
+  } catch {
+    return "";
+  }
+}
+
+async function resolveMovementProductIds(item: any): Promise<{
+  id_product: number;
+  id_product_attribute: number;
+}> {
+  const directProductId = numFromUnknown(item?.id_product);
+  const directAttributeId = numFromUnknown(item?.id_product_attribute);
+
+  if (directProductId > 0) {
+    return {
+      id_product: directProductId,
+      id_product_attribute: directAttributeId,
+    };
+  }
+
+  const id_stock = numFromUnknown(item?.id_stock ?? item?.id_stock_available);
+  if (id_stock <= 0) {
+    return { id_product: 0, id_product_attribute: 0 };
+  }
+
+  try {
+    const stockResponse = await requestPrestashopXml<any>(
+      `/stocks/${id_stock}`,
+      { query: { display: "full" } }
+    );
+    const stock = stockResponse?.prestashop?.stock;
+    const productIdFromStock = numFromUnknown(stock?.id_product);
+    const attributeIdFromStock = numFromUnknown(stock?.id_product_attribute);
+    if (productIdFromStock > 0) {
+      return {
+        id_product: productIdFromStock,
+        id_product_attribute: attributeIdFromStock,
+      };
+    }
+  } catch {
+    // Ignorer et tester l'autre source
+  }
+
+  try {
+    const stockAvailableResponse = await requestPrestashopXml<any>(
+      `/stock_availables/${id_stock}`,
+      { query: { display: "full" } }
+    );
+    const stockAvailable = stockAvailableResponse?.prestashop?.stock_available;
+    const productIdFromStockAvailable = numFromUnknown(stockAvailable?.id_product);
+    const attributeIdFromStockAvailable = numFromUnknown(stockAvailable?.id_product_attribute);
+    if (productIdFromStockAvailable > 0) {
+      return {
+        id_product: productIdFromStockAvailable,
+        id_product_attribute: attributeIdFromStockAvailable,
+      };
+    }
+  } catch {
+    // Ignorer et fallback final
+  }
+
+  return { id_product: 0, id_product_attribute: 0 };
+}
 
 export async function listStockItems(): Promise<StockItem[]> {
   try {
@@ -37,6 +142,8 @@ export async function listStockItems(): Promise<StockItem[]> {
         let productName = "Produit";
         let reference = "";
         let supplier = "";
+        let id_default_image = 0;
+        let combinationLabel = "";
 
         if (id_product > 0) {
           try {
@@ -54,12 +161,17 @@ export async function listStockItems(): Promise<StockItem[]> {
                   textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
               }
               reference = textFromUnknown(prod.reference);
+              id_default_image = numFromUnknown(prod.id_default_image);
             }
           } catch (e) {
             // Erreur silencieuse
           }
         } else {
           productName = "Produit introuvable";
+        }
+
+        if (id_product_attribute > 0) {
+          combinationLabel = await resolveCombinationLabel(id_product_attribute);
         }
 
         // Déterminer le statut
@@ -75,12 +187,14 @@ export async function listStockItems(): Promise<StockItem[]> {
           id_product,
           id_product_attribute,
           productName,
+          combinationLabel,
           reference,
           supplier,
           physicalQuantity,
           reservedQuantity,
           availableQuantity,
           status,
+          id_default_image,
 
           id_shop,
           id_shop_group,
@@ -99,29 +213,45 @@ export async function listStockItems(): Promise<StockItem[]> {
   }
 }
 
-// ========== API STOCK MOVEMENTS ==========
-
-export async function listStockMovements(): Promise<StockMovement[]> {
+// Version paginée pour éviter de récupérer trop d'éléments d'un coup.
+export async function listStockItemsPaged(page = 1, limit = 10): Promise<StockItem[]> {
   try {
-    const response = await fetchStockMovementsResponse();
-    const items = extractStockMovementItems(response);
-    if (items.length === 0) {
+    const offset = Math.max(0, (page - 1) * limit);
+    const response = await requestPrestashopXml<PrestashopStockAvailableListResponse>(
+      "/stock_availables",
+      { query: { display: "full", limit: `${offset},${limit}` } }
+    );
+
+    if (!response?.prestashop?.stock_availables?.stock_available) {
       return [];
     }
 
-    // Traiter les mouvements
-    const movements = await Promise.all(
+    const items = asArray(response.prestashop.stock_availables.stock_available);
+
+    // Récupérer les infos produit pour chaque stock
+    const stocks = await Promise.all(
       items.map(async (item: any) => {
         const id = numFromUnknown(item?.id);
         const id_product = numFromUnknown(item?.id_product);
-        const quantity = numFromUnknown(item?.physical_quantity);
-        const dateAdd = textFromUnknown(item?.date_add);
-        const employeeLastname = textFromUnknown(item?.employee_lastname);
-        const employeeFirstname = textFromUnknown(item?.employee_firstname);
-        const sign = numFromUnknown(item?.sign);
+        const id_product_attribute = numFromUnknown(item?.id_product_attribute);
+        const physicalQuantity = numFromUnknown(item?.physical_quantity);
+        const reservedQuantity = numFromUnknown(item?.reserved_quantity);
+        const availableQuantity = numFromUnknown(item?.quantity);
+        const id_shop = numFromUnknown(item?.id_shop);
+        const id_shop_group = numFromUnknown(item?.id_shop_group);
+        const quantity = availableQuantity;
+        const depends_on_stock = Boolean(numFromUnknown(item?.depends_on_stock));
+        const out_of_stock_raw = numFromUnknown(item?.out_of_stock);
+        const out_of_stock: 0 | 1 | 2 = [0, 1, 2].includes(out_of_stock_raw)
+          ? (out_of_stock_raw as 0 | 1 | 2)
+          : 2;
+        const location = textFromUnknown(item?.location) || undefined;
 
         let productName = "Produit";
         let reference = "";
+        let supplier = "";
+        let id_default_image = 0;
+        let combinationLabel = "";
 
         if (id_product > 0) {
           try {
@@ -139,12 +269,113 @@ export async function listStockMovements(): Promise<StockMovement[]> {
                   textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
               }
               reference = textFromUnknown(prod.reference);
+              id_default_image = numFromUnknown(prod.id_default_image);
             }
           } catch (e) {
             // Erreur silencieuse
           }
         } else {
           productName = "Produit introuvable";
+        }
+
+        if (id_product_attribute > 0) {
+          combinationLabel = await resolveCombinationLabel(id_product_attribute);
+        }
+
+        // Déterminer le statut
+        let status: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
+        if (availableQuantity === 0) {
+          status = "out_of_stock";
+        } else if (availableQuantity < 5) {
+          status = "low_stock";
+        }
+
+        return {
+          id,
+          id_product,
+          id_product_attribute,
+          productName,
+          combinationLabel,
+          reference,
+          supplier,
+          physicalQuantity,
+          reservedQuantity,
+          availableQuantity,
+          status,
+          id_default_image,
+
+          id_shop,
+          id_shop_group,
+          quantity,
+          depends_on_stock,
+          out_of_stock,
+          location,
+        };
+      })
+    );
+
+    return stocks;
+  } catch (error) {
+    console.error("Error fetching paged stock items:", error);
+    return [];
+  }
+}
+
+// ========== API STOCK MOVEMENTS ==========
+
+export async function listStockMovements(): Promise<StockMovement[]> {
+  try {
+    const response = await fetchStockMovementsResponse();
+    const items = extractStockMovementItems(response);
+    if (items.length === 0) {
+      return [];
+    }
+
+    // Traiter les mouvements
+    const movements = await Promise.all(
+      items.map(async (item: any) => {
+        const id = numFromUnknown(item?.id);
+        const resolvedIds = await resolveMovementProductIds(item);
+        const id_product = resolvedIds.id_product;
+        const id_product_attribute = resolvedIds.id_product_attribute;
+        const quantity = numFromUnknown(item?.physical_quantity);
+        const dateAdd = textFromUnknown(item?.date_add);
+        const employeeLastname = textFromUnknown(item?.employee_lastname);
+        const employeeFirstname = textFromUnknown(item?.employee_firstname);
+        const sign = numFromUnknown(item?.sign);
+
+        let productName = "Produit";
+        let reference = "";
+        let combinationLabel = "";
+        let id_default_image = 0;
+
+        if (id_product > 0) {
+          try {
+            const productResponse = await requestPrestashopXml<any>(
+              `/products/${id_product}`,
+              { query: { display: "full" } }
+            );
+
+            if (productResponse?.prestashop?.product) {
+              const prod = productResponse.prestashop.product;
+              const nameField = prod.name;
+              if (nameField) {
+                const nameObj = asArray(nameField)[0];
+                productName =
+                  textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
+              }
+              reference = textFromUnknown(prod.reference);
+              id_default_image = numFromUnknown(prod.id_default_image);
+            }
+          } catch (e) {
+            // Erreur silencieuse
+          }
+        } else {
+          productName = "Produit introuvable";
+        }
+
+        if (id_product_attribute > 0) {
+          combinationLabel = await resolveCombinationLabel(id_product_attribute);
         }
 
         // Déterminer le type de mouvement selon le signe
@@ -163,10 +394,14 @@ export async function listStockMovements(): Promise<StockMovement[]> {
         return {
           id,
           id_product,
+          id_product_attribute,
+          id_default_image,
           productName,
+          combinationLabel,
           reference,
           movementType,
           quantity: Math.abs(quantity),
+          sign,
           date: dateAdd,
           employeeName,
         };
@@ -177,6 +412,128 @@ export async function listStockMovements(): Promise<StockMovement[]> {
     return movements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   } catch (error) {
     console.error("Error fetching stock movements:", error);
+    return [];
+  }
+}
+
+/**
+ * Renvoie les mouvements de stock en pages pour limiter la quantité retournée.
+ * Essaie d'appeler l'endpoint avec le paramètre `limit=offset,limit` si possible,
+ * sinon retombe sur la récupération complète et retourne une tranche.
+ */
+export async function listStockMovementsPaged(page = 1, limit = 10): Promise<StockMovement[]> {
+  try {
+    const offset = Math.max(0, (page - 1) * limit);
+
+    // Essayer endpoints connus avec query limit
+    const candidates: Array<{
+      path: string;
+      query?: Record<string, string>;
+    }> = [
+      { path: "/stock_movements", query: { display: "full", limit: `${offset},${limit}` } },
+      { path: "/stock_mvts", query: { display: "full", limit: `${offset},${limit}` } },
+      { path: "/stock_movements", query: { limit: `${offset},${limit}` } },
+      { path: "/stock_mvts", query: { limit: `${offset},${limit}` } },
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const response = await requestPrestashopXml<PrestashopStockMovementListResponse>(
+          candidate.path,
+          { query: candidate.query }
+        );
+
+        const items = extractStockMovementItems(response);
+        if (!items || items.length === 0) {
+          return [];
+        }
+
+        // Process items similarly à listStockMovements
+        const movements = await Promise.all(
+          items.map(async (item: any) => {
+            const id = numFromUnknown(item?.id);
+            const resolvedIds = await resolveMovementProductIds(item);
+            const id_product = resolvedIds.id_product;
+            const id_product_attribute = resolvedIds.id_product_attribute;
+            const quantity = numFromUnknown(item?.physical_quantity);
+            const dateAdd = textFromUnknown(item?.date_add);
+            const employeeLastname = textFromUnknown(item?.employee_lastname);
+            const employeeFirstname = textFromUnknown(item?.employee_firstname);
+            const sign = numFromUnknown(item?.sign);
+
+            let productName = "Produit";
+            let reference = "";
+            let combinationLabel = "";
+            let id_default_image = 0;
+
+            if (id_product > 0) {
+              try {
+                const productResponse = await requestPrestashopXml<any>(
+                  `/products/${id_product}`,
+                  { query: { display: "full" } }
+                );
+
+                if (productResponse?.prestashop?.product) {
+                  const prod = productResponse.prestashop.product;
+                  const nameField = prod.name;
+                  if (nameField) {
+                    const nameObj = asArray(nameField)[0];
+                    productName =
+                      textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
+                  }
+                  reference = textFromUnknown(prod.reference);
+                  id_default_image = numFromUnknown(prod.id_default_image);
+                }
+              } catch (e) {
+                // Erreur silencieuse
+              }
+            } else {
+              productName = "Produit introuvable";
+            }
+
+            if (id_product_attribute > 0) {
+              combinationLabel = await resolveCombinationLabel(id_product_attribute);
+            }
+
+            let movementType: "import" | "sale" | "adjustment" | "other" = "other";
+            if (sign > 0) movementType = "import";
+            else if (sign < 0) movementType = "sale";
+
+            const employeeName =
+              employeeFirstname || employeeLastname
+                ? `${employeeFirstname} ${employeeLastname}`
+                : "Système";
+
+            return {
+              id,
+              id_product,
+              id_product_attribute,
+              id_default_image,
+              productName,
+              combinationLabel,
+              reference,
+              movementType,
+              quantity: Math.abs(quantity),
+              sign,
+              date: dateAdd,
+              employeeName,
+            };
+          })
+        );
+
+        return movements;
+      } catch (e) {
+        // essayer le prochain candidat
+        continue;
+      }
+    }
+
+    // Si aucun endpoint paginé n'a fonctionné, récupérer tout et slice
+    const all = await listStockMovements();
+    const start = offset;
+    return all.slice(start, start + limit);
+  } catch (error) {
+    console.error("Error fetching paged stock movements:", error);
     return [];
   }
 }
