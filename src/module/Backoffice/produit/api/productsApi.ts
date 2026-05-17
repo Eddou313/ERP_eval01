@@ -471,6 +471,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
  */
 export async function updateProduct(id: number, data: ProductUpdateForm): Promise<void> {
   const existing = await getProductDetail(id);
+  const existingAny = existing as any;
 
   const payload = {
     prestashop: {
@@ -479,13 +480,19 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
         id_manufacturer: data.id_manufacturer ?? existing.id_manufacturer,
         id_supplier: data.id_supplier ?? existing.id_supplier,
         id_category_default: data.id_category_default ?? existing.id_category_default,
+        id_tax_rules_group: data.id_tax_rules_group ?? existingAny.id_tax_rules_group ?? 0,
         id_default_image: data.id_default_image ?? existing.id_default_image,
         state: data.state ?? existing.state ?? 1,
         reference: data.reference ?? existing.reference ?? "",
         supplier_reference: data.supplier_reference ?? "",
         price: data.price ?? existing.price,
+        wholesale_price: data.wholesale_price ?? existingAny.wholesale_price ?? 0,
         on_sale: data.on_sale !== undefined ? (data.on_sale ? "1" : "0") : (existing.on_sale ? "1" : "0"),
         active: data.active !== undefined ? (data.active ? "1" : "0") : (existing.active ? "1" : "0"),
+        visibility: data.visibility ?? existing.type ?? "both",
+        available_for_order: data.available_for_order !== undefined ? (data.available_for_order ? "1" : "0") : (existingAny.available_for_order ? "1" : "0"),
+        show_price: data.show_price !== undefined ? (data.show_price ? "1" : "0") : (existingAny.show_price ? "1" : "0"),
+        available_date: data.available_date ?? existing.available_date ?? "",
         name: {
           language: {
             "@_id": "1",

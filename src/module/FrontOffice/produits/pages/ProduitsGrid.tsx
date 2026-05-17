@@ -36,7 +36,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
               </svg>
             )}
             {(() => {
-              const dateStr = product.available_date || product.date_add || "";
+              const dateStr = product.available_date  || "";
               if (!dateStr) return null;
 
               const date = new Date(dateStr);

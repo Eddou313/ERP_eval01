@@ -7,7 +7,7 @@ import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
-import { createCart, addProductToCart, updateCartItems } from "../../module/Backoffice/panier/api/panierApi";
+import { createCart, addProductToCart } from "../../module/Backoffice/panier/api/panierApi";
 import { createOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
@@ -156,7 +156,27 @@ function parseTtcToHt(priceTtc: number, taxRate: number): number {
     return roundMoney(priceTtc / (1 + rate / 100));
 }
 
-export async function importProduitCsv(rows: ProductImportRow[], options?: { imageMap?: Map<string, ZipImageAsset> }): Promise<{ imported: number; failed: number }> {
+function normalizeLookupKey(value: string): string {
+    return normalizeText(String(value ?? "").trim());
+}
+
+function taxRateKey(rate: number): string {
+    return Number(rate || 0).toFixed(4);
+}
+
+function formatTaxLabel(rate: number): string {
+    const formattedRate = Number.isInteger(rate)
+        ? rate.toFixed(0)
+        : rate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+    return `TVA ${formattedRate}%`;
+}
+
+type PreparedProductImportContext = {
+    categoryIdByKey: Map<string, number>;
+    taxByRateKey: Map<string, { taxId: number; taxRuleGroupId: number; taxRate: number; taxLabel: string }>;
+};
+
+async function prepareProductImportContext(rows: ProductImportRow[]): Promise<PreparedProductImportContext> {
     const categories = await listCategoriesSimple();
     const taxes = await listTaxesLight();
     const taxRuleGroups = await listTaxRuleGroupsLight();
@@ -167,28 +187,78 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
     const taxRuleCache = new Map<string, number>();
 
     for (const category of categories) {
-        categoryCache.set(normalizeText(category.name ?? ""), category.id);
+        categoryCache.set(normalizeLookupKey(category.name ?? ""), category.id);
     }
 
     for (const tax of taxes) {
-        taxCache.set(tax.rate.toFixed(4), tax.id);
+        taxCache.set(taxRateKey(tax.rate), tax.id);
     }
 
     for (const group of taxRuleGroups) {
-        taxRuleGroupCache.set(normalizeText(group.name ?? ""), group.id);
+        taxRuleGroupCache.set(normalizeLookupKey(group.name ?? ""), group.id);
     }
+
+    const uniqueCategories = new Map<string, string>();
+    const uniqueTaxRates = new Set<number>();
+
+    for (const row of rows) {
+        const categoryName = String(row.categorie ?? "").trim();
+        if (categoryName) {
+            uniqueCategories.set(normalizeLookupKey(categoryName), categoryName);
+        }
+
+        uniqueTaxRates.add(parseTaxRate(row.Taxe));
+    }
+
+    for (const categoryName of uniqueCategories.values()) {
+        await ensureCategoryExists(categoryName, categoryCache, categories);
+    }
+
+    const taxByRateKey = new Map<string, { taxId: number; taxRuleGroupId: number; taxRate: number; taxLabel: string }>();
+
+    for (const taxRate of uniqueTaxRates) {
+        const taxLabel = formatTaxLabel(taxRate);
+        const taxId = await ensureTaxExists(taxRate, taxCache, taxes);
+        const taxRuleGroupId = await ensureTaxRuleGroupExists(taxLabel, taxRuleGroupCache, taxRuleGroups);
+        await ensureTaxRuleExists(taxRuleGroupId, taxId, taxRate, taxRuleCache, taxLabel, 8);
+
+        taxByRateKey.set(taxRateKey(taxRate), {
+            taxId,
+            taxRuleGroupId,
+            taxRate,
+            taxLabel,
+        });
+    }
+
+    return {
+        categoryIdByKey: categoryCache,
+        taxByRateKey,
+    };
+}
+
+export async function importProduitCsv(rows: ProductImportRow[], options?: { imageMap?: Map<string, ZipImageAsset> }): Promise<{ imported: number; failed: number }> {
+    const importContext = await prepareProductImportContext(rows);
 
     let imported = 0;
     let failed = 0;
 
     for (const row of rows) {
         try {
-            const categoryId = await ensureCategoryExists(row.categorie, categoryCache, categories);
             const taxRate = parseTaxRate(row.Taxe);
-            const taxLabel = `TVA ${Number.isInteger(taxRate) ? taxRate.toFixed(0) : taxRate.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}%`;
-            const taxId = await ensureTaxExists(taxRate, taxCache, taxes);
-            const taxRuleGroupId = await ensureTaxRuleGroupExists(taxLabel, taxRuleGroupCache, taxRuleGroups);
-            await ensureTaxRuleExists(taxRuleGroupId, taxId, taxRate, taxRuleCache, taxLabel, 8);
+            const categoryName = String(row.categorie ?? "").trim();
+            if (!categoryName) {
+                throw new Error("Catégorie vide dans le CSV produit");
+            }
+
+            const categoryId = importContext.categoryIdByKey.get(normalizeLookupKey(categoryName));
+            if (!categoryId) {
+                throw new Error(`Catégorie introuvable: ${categoryName}`);
+            }
+
+            const taxContext = importContext.taxByRateKey.get(taxRateKey(taxRate));
+            if (!taxContext) {
+                throw new Error(`Contexte TVA introuvable pour le taux ${taxRate}`);
+            }
 
             const rawAvailableDate = String(row.date_availability_produit ?? "").trim();
             let availableDate = "";
@@ -214,16 +284,16 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 
             const product = await createProduct({
                 id_category_default: categoryId,
-                id_tax_rules_group: taxRuleGroupId,
+                id_tax_rules_group: taxContext.taxRuleGroupId,
                 name: row.nom,
                 reference: row.reference,
                 price: priceHt,
                 state: 1,
                 wholesale_price: Number(row.prix_achat) || 0,
-                active: true,
-                available_for_order: true,
-                show_price: true,
-                visibility: "both",
+                active: false,
+                available_for_order: false,
+                show_price: false,
+                visibility: "none",
                 link_rewrite: slugify(row.nom),
                 ...(availableDate ? { available_date: availableDate } : {}),
                 description: `Produit importé depuis CSV: ${row.nom}`,
@@ -249,6 +319,23 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
                 depends_on_stock: false,
                 out_of_stock: 2,
             });
+
+            await updateProduct(product.id, {
+                id_category_default: categoryId,
+                id_tax_rules_group: taxContext.taxRuleGroupId,
+                active: true,
+                available_for_order: true,
+                show_price: true,
+                visibility: "both",
+                available_date: availableDate || undefined,
+                reference: row.reference,
+                name: row.nom,
+                price: priceHt,
+                wholesale_price: Number(row.prix_achat) || 0,
+                description: `Produit importé depuis CSV: ${row.nom}`,
+                description_short: `Import CSV - ${row.reference}`,
+                link_rewrite: slugify(row.nom),
+            } as any);
 
             imported += 1;
         } catch (error) {

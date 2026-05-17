@@ -124,16 +124,16 @@ export function ImportGlobal ()
                 summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
             }
             if (file2) {
-                console.log("Fichier 2 parsé:", parsedAttributes);
-                setProduit_Attribut_Stock(parsedAttributes);
-                const result = await importProduitAttributStockCsv(parsedAttributes);
-                summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
+                // console.log("Fichier 2 parsé:", parsedAttributes);
+                // setProduit_Attribut_Stock(parsedAttributes);
+                // const result = await importProduitAttributStockCsv(parsedAttributes);
+                // summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
             }
             if (file3) {
-                console.log("Fichier 3 parsé:", parsedOrders);
-                setCommande_client_produit(parsedOrders);
-                const result = await importProduitCommandeCsv(parsedOrders);
-                summaryMessages.push(`Commandes: ${result.customersCreated} clients, ${result.cartsCreated} paniers, ${result.ordersCreated} commandes, ${result.failed} en échec`);
+                // console.log("Fichier 3 parsé:", parsedOrders);
+                // setCommande_client_produit(parsedOrders);
+                // const result = await importProduitCommandeCsv(parsedOrders);
+                // summaryMessages.push(`Commandes: ${result.customersCreated} clients, ${result.cartsCreated} paniers, ${result.ordersCreated} commandes, ${result.failed} en échec`);
             }
             setMes(summaryMessages.length > 0 ? summaryMessages.join(" | ") : "Fichiers importés avec succès !");
             setTimeout(() => setMes(""), 3000);
