@@ -141,20 +141,20 @@ export async function resolveProductPriceWorkflow(product: any, productId: numbe
   const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
   const targetCombinationId = Number(combinationId || defaultCombinationId || 0);
   const combinationPriceImpact = await resolveCombinationPriceImpact(productId, targetCombinationId);
-  const priceAfterCombination = roundMoney(basePrice + combinationPriceImpact);
+  const priceAfterCombination = basePrice + combinationPriceImpact;
   const reductionAmount = await resolveReductionAmount(product, productId, priceAfterCombination, targetCombinationId);
-  const priceHt = roundMoney(Math.max(0, priceAfterCombination - reductionAmount));
+  const priceHt = Math.max(0, priceAfterCombination - reductionAmount);
   const taxRate = await resolveTaxRate(product);
-  const taxAmount = roundMoney(priceHt * (taxRate / 100));
+  const taxAmount = priceHt * (taxRate / 100);
   const finalPrice = roundMoney(priceHt + taxAmount);
 
   return {
-    basePrice: roundMoney(basePrice),
-    combinationPriceImpact: roundMoney(combinationPriceImpact),
+    basePrice: Number(basePrice.toFixed(6)),
+    combinationPriceImpact: Number(combinationPriceImpact.toFixed(6)),
     reductionAmount: roundMoney(reductionAmount),
     taxRate: roundMoney(taxRate),
-    taxAmount,
-    priceHt,
+    taxAmount: roundMoney(taxAmount),
+    priceHt: Number(priceHt.toFixed(6)),
     finalPrice,
     defaultCombinationId: targetCombinationId || defaultCombinationId,
   };

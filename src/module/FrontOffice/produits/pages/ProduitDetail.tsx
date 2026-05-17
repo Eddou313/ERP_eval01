@@ -163,10 +163,12 @@ export function ProduitDetail() {
     const priceAfterCombination = Math.max(0, basePrice + comboImpact);
 
     const reductionAmount = Number(product?.reduction_amount ?? 0) || (product?.on_sale ? priceAfterCombination * 0.2 : 0);
-    const priceHt = Math.max(0, priceAfterCombination - reductionAmount);
+    let priceHt = Math.max(0, priceAfterCombination - reductionAmount);
+    
     const taxRate = Number(product?.tax_rate ?? 20) || 0;
-    const taxAmount = priceHt * (taxRate / 100);
-    const finalPrice = priceHt + taxAmount;
+    // Calculate TTC and round to 2 decimals for proper display
+    const finalPrice = Math.round(priceHt * (1 + taxRate / 100) * 100) / 100;
+    const taxAmount = Math.round((finalPrice - priceHt) * 100) / 100;
 
     console.log(
       "Formule prix produit:",
@@ -380,7 +382,7 @@ export function ProduitDetail() {
                   )}
                 </div>
               </div>
-              {/* <div className="priceBreakdown">
+              <div className="priceBreakdown">
                 <div className="priceBreakdownRow">
                   <span>Prix réel produit</span>
                   <strong>€{priceBreakdown.basePrice.toFixed(2)}</strong>
@@ -397,7 +399,7 @@ export function ProduitDetail() {
                   <span>Taxe appliquée ({priceBreakdown.taxRate.toFixed(2)}%)</span>
                   <strong>€{priceBreakdown.taxAmount.toFixed(2)}</strong>
                 </div>
-              </div> */}
+              </div>
             </div>
 
             {/* Attributes Selection */}

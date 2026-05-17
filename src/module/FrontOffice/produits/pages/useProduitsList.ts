@@ -72,7 +72,8 @@ export function useProduitsList(pageSize = 8) {
 
                 const baseHt = Number(p.price_ht ?? p.base_price ?? p.price ?? 0) || 0;
                 const impact = Number(comb.price || 0) || 0;
-                const combPriceHt = Math.max(0, baseHt + impact);
+                let combPriceHt = Math.max(0, baseHt + impact);
+                // Combination price is used as-is for calculation
 
                 // fetch real stock for this combination (fallback to comb.quantity)
                 let combQuantity = Number(comb.quantity) || 0;

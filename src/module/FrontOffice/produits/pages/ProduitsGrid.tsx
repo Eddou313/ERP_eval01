@@ -1,4 +1,4 @@
-import { getProductImageUrl, withTax, formatCurrency } from "../../../../utils/helper";
+import { getProductImageUrl, formatCurrency } from "../../../../utils/helper";
 import type { ProductListItem } from "../../../Backoffice/produit/api/object";
 
 type ProduitsGridProps = {
@@ -74,7 +74,8 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
                 // `price` from the API for simple products is already the final price (TTC),
                 // while combination entries set `price` to HT earlier. Prioritize `price_ht` to avoid double-taxing.
                 const priceHt = Number((product as any).price_ht ?? product.price ?? 0) || 0;
-                const priceTtc = withTax(priceHt, taxRate);
+                // Calculate TTC and round to 2 decimals for proper display
+                const priceTtc = Math.round(priceHt * (1 + taxRate / 100) * 100) / 100;
                 return (
                   <>
                     <span className="currentPrice">{formatCurrency(priceTtc)}</span>

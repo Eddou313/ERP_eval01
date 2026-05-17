@@ -12,7 +12,7 @@ import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/Livra
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { numFromUnknown } from "../../utils/helper";
 import { isValidDate, toPrestashopDate } from "./utils";
-import { getStockByProductId, upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
+import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 
 export type ProductImportRow = colonneCSV["produitImport"];
 export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockImport"];
@@ -167,7 +167,11 @@ function parseTtcToHt(priceTtc: number, taxRate: number): number {
         return roundMoney(priceTtc);
     }
 
-    return roundMoney(priceTtc / (1 + rate / 100));
+    // Keep higher precision when converting TTC -> HT to avoid
+    // double-rounding issues when UI or PrestaShop re-applies taxes.
+    // Use 6 decimals for the HT value and let display logic round to 2 decimals.
+    const ht = priceTtc / (1 + rate / 100);
+    return Number(ht.toFixed(6));
 }
 
 function normalizeLookupKey(value: string): string {
@@ -294,7 +298,7 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
             }
 
             const priceTtc = Number(row.prix_ttc) || 0;
-            const priceHt = taxRate > 0 ? roundMoney(priceTtc / (1 + taxRate / 100)) : roundMoney(priceTtc);
+            const priceHt = parseTtcToHt(priceTtc, taxRate);
 
             const product = await createProduct({
                 id_category_default: categoryId,
@@ -457,7 +461,9 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             const quantity = Number(row.stock_initial) || 0;
             const priceTtc = Number(row.prix_vente_ttc) || 0;
             const taxRate = Number(product.tax_rate ?? 20) || 0;
-            const priceHt = parseTtcToHt(priceTtc, taxRate);
+            const priceHtRaw = parseTtcToHt(priceTtc, taxRate);
+            // Utiliser Math.ceil pour la 3ème décimale afin que le TTC arrondi = TTC voulu
+            const priceHt = Math.ceil(priceHtRaw * 1000) / 1000;
 
             // Cas 1: Pas d'attribut → produit simple (mise à jour stock principal)
             if (!specName) {
@@ -495,7 +501,8 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             const valueId = await ensureAttributeValueExists(groupId, valueName, attributeValueCache, attributeValues);
 
             const reference = `${product.reference ?? row.reference}-${slugify(valueName)}`;
-            const priceImpactHt = roundMoney(priceHt);
+            // Utiliser directement priceHt avec 3 décimales (éviter roundMoney qui arrondit à 2)
+            const priceImpactHt = priceHt;
 
             // Créer ou mettre à jour la déclinaison (ps_product_attribute + association attribut)
             let combinationId = await findCombinationIdByValues(product.id, [valueId]);
@@ -701,19 +708,19 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
 
                 await createOrderDetail(orderId, product.id, attributeId, achatItem.quantity, unitPrice, 1, 1);
 
-                // decrement stock only when a real order is created
-                const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
-                const currentStock = Number(stockBefore ?? 0);
-                const nextStock = Math.max(0, currentStock - achatItem.quantity);
-                await upsertStockAvailable({
-                    id_product: product.id,
-                    id_product_attribute: attributeId,
-                    id_shop: 1,
-                    id_shop_group: 1,
-                    quantity: nextStock,
-                    depends_on_stock: false,
-                    out_of_stock: 2,
-                });
+                // // decrement stock only when a real order is created
+                // const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
+                // const currentStock = Number(stockBefore ?? 0);
+                // const nextStock = Math.max(0, currentStock - achatItem.quantity);
+                // await upsertStockAvailable({
+                //     id_product: product.id,
+                //     id_product_attribute: attributeId,
+                //     id_shop: 1,
+                //     id_shop_group: 1,
+                //     quantity: nextStock,
+                //     depends_on_stock: false,
+                //     out_of_stock: 2,
+                // });
             }
 
             if (orderStateId > 0) {

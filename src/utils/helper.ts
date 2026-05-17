@@ -242,7 +242,9 @@ export function formatDate(value?: string): string {
  * Ex: 1500.50 => "1 500,50 Ar"
  */
 export function formatCurrency(value: number, currency = "€"): string {
-  return `${value.toLocaleString("fr-FR", {
+  // Pre-round to exactly 2 decimals to avoid toLocaleString rounding issues
+  const rounded = Math.round(value * 100) / 100;
+  return `${rounded.toLocaleString("fr-FR", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })} ${currency}`;

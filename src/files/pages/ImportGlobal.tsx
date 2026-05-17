@@ -124,10 +124,10 @@ export function ImportGlobal ()
                 summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
             }
             if (file2) {
-                console.log("Fichier 2 parsé:", parsedAttributes);
-                setProduit_Attribut_Stock(parsedAttributes);
-                const result = await importProduitAttributStockCsv(parsedAttributes);
-                summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
+                // console.log("Fichier 2 parsé:", parsedAttributes);
+                // setProduit_Attribut_Stock(parsedAttributes);
+                // const result = await importProduitAttributStockCsv(parsedAttributes);
+                // summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
             }
             if (file3) {
                 // console.log("Fichier 3 parsé:", parsedOrders);
