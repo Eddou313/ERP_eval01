@@ -693,5 +693,3 @@ export async function upsertStockAvailable(form: StockCreateForm): Promise<numbe
 
   return existingId ?? (await getStockAvailableEntryId(form.id_product, productAttributeId)) ?? 0;
 }
-
-

@@ -6,6 +6,9 @@ import { InitOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { initPanier } from "../../module/Backoffice/panier/api/panierApi";
 import { InitProducts } from "../../module/Backoffice/produit/api/productsApi";
 import Papa from 'papaparse';
+import { listStockItems, listStockMovements } from "../../module/Backoffice/stock/api/stockApi";
+import { requestPrestashopXml } from "../../utils/prestashopClient";
+import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
 // import { ensureTaxExists, listTaxesLight } from "../../module/Backoffice/taxes/api/taxe";
 
 /**
@@ -201,6 +204,13 @@ export async function InitialisationGLobal(): Promise<void> {
 
         console.log("Suppression des catégories...");
         await InitCategory();
+
+        // (no bulk stock initialization here)
+        // supprimer seulement les stocks
+        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: false });
+
+        // supprimer tout (par défaut)
+        await SupprimerStocksEtMouvements();
 
         console.log("Initialisation globale réussie !");
   } catch (error: any) {

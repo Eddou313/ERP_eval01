@@ -122,6 +122,38 @@ export async function requestPrestashopXml<T>(
     // );
 
     if (!response.ok) {
+      // Fallback: certains endpoints n'acceptent pas DELETE directement (405).
+      // Pour les DELETE réessayons avec un POST + X-HTTP-Method-Override: DELETE
+      if (response.status === 405 && method === "DELETE") {
+        try {
+          const overrideHeaders: Record<string, string> = {
+            Accept: "application/xml",
+            "X-HTTP-Method-Override": "DELETE",
+          };
+          if (bodyXml) overrideHeaders["Content-Type"] = "application/xml";
+
+          const overrideResp = await fetch(fullUrl, {
+            method: "POST",
+            headers: overrideHeaders,
+            body: bodyXml,
+            signal: opts.signal,
+          });
+          const overrideText = await overrideResp.text();
+          if (!overrideResp.ok) {
+            throw new PrestashopWebserviceError(
+              `Erreur PrestaShop (override ${overrideResp.status})`,
+              overrideResp.status,
+              overrideText,
+            );
+          }
+          if (!overrideText.trim()) return {} as T;
+          return xmlToJson<T>(overrideText);
+        } catch (err) {
+          if (err instanceof PrestashopWebserviceError) throw err;
+          // tomberthrough vers l'erreur d'origine
+        }
+      }
+
       throw new PrestashopWebserviceError(
         `Erreur PrestaShop (${response.status})`,
         response.status,
