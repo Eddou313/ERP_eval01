@@ -10,7 +10,7 @@ import { createCart, addProductToCart } from "../../module/Backoffice/panier/api
 import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
-import { numFromUnknown } from "../../utils/helper";
+import { asArray, numFromUnknown } from "../../utils/helper";
 import { isValidDate, toPrestashopDate } from "./utils";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 
@@ -426,6 +426,52 @@ async function findCombinationIdByValues(productId: number, targetValueIds: numb
     }
 }
 
+async function findCustomerIdByEmail(email: string): Promise<number | null> {
+    const trimmedEmail = String(email ?? "").trim();
+    if (!trimmedEmail) {
+        return null;
+    }
+
+    try {
+        const search = await requestPrestashopXml<any>("/customers", {
+            query: {
+                display: "[id]",
+                "filter[email]": `[${trimmedEmail}]`,
+            },
+        });
+
+        const first = asArray(search?.prestashop?.customers?.customer ?? [])[0];
+        const existingId = Number(first?.["@_id"] ?? first?.id);
+        if (Number.isFinite(existingId) && existingId > 0) {
+            return existingId;
+        }
+    } catch {
+        // Ignore lookup failure and fallback to creation flow.
+    }
+
+    return null;
+}
+
+async function findCombinationIdByVariantName(productId: number, variant: string): Promise<number> {
+    const normalizedVariant = normalizeText(String(variant ?? ""));
+    if (!normalizedVariant) {
+        return 0;
+    }
+
+    try {
+        const attrGroups = await getProductAttributeGroups(productId);
+        const combinations = Array.from(
+            new Map(attrGroups.flatMap((group) => group.combinations ?? []).map((combination) => [combination.id, combination])).values(),
+        );
+        const match = combinations.find((combination: any) =>
+            (combination.attributes || []).some((attr: any) => normalizeText(attr.name ?? "") === normalizedVariant),
+        );
+        return Number(match?.id) || 0;
+    } catch {
+        return 0;
+    }
+}
+
 export async function importProduitAttributStockCsv(rows: ProductAttributeStockImportRow[]): Promise<{ imported: number; failed: number }> {
     const productsCache = new Map<string, ProductLight | null>();
     const attributeGroups = await listAttributeGroupsLight();
@@ -553,31 +599,37 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 throw new Error("Données client insuffisantes (nom, email, pwd requis)");
             }
 
+            // 2. Parse achat from CSV
+            const achatItems = parseAchatString(row.achat);
+
             const customerDateAdd = String(row.date ?? "").trim();
             const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
             if (customerDateAdd && !normalizedCustomerDate) {
                 throw new Error(`Date client invalide: ${customerDateAdd}`);
             }
 
-            // 2. Create customer
-            const customerId = await importClient({
-                firstname,
-                lastname: lastname || ".",
-                email: row.email,
-                passwd: row.pwd,
-                active: 1,
-                newsletter: 0,
-                optin: 0,
-                birthday: "",
-                website: "",
-                note: "",
-                is_guest: 0,
-                deleted: 0,
-                ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate } : {}),
-            });
-            customersCreated += 1;
+            // 3. Find customer by email, create only if missing
+            let customerId = await findCustomerIdByEmail(row.email);
+            if (!customerId) {
+                customerId = await importClient({
+                    firstname,
+                    lastname: lastname || ".",
+                    email: row.email,
+                    passwd: row.pwd,
+                    active: 1,
+                    newsletter: 0,
+                    optin: 0,
+                    birthday: "",
+                    website: "",
+                    note: "",
+                    is_guest: 0,
+                    deleted: 0,
+                    ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate } : {}),
+                });
+                customersCreated += 1;
+            }
 
-            // 3. Create address
+            // 4. Create address
             // Parse adresse: simple format "rue, codepostal, ville" or just use default
             const addressParts = (row.adresse || "").split(/,|\n/);
             const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
@@ -593,7 +645,50 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 id_country: countryIdFrance,
             });
 
-            // 4. Create cart
+            const resolvedLines: Array<{
+                productId: number;
+                attributeId: number;
+                quantity: number;
+                unitPriceTtc: number;
+                unitPriceHt: number;
+                lineTotalTtc: number;
+                lineTotalHt: number;
+            }> = [];
+
+            for (const achatItem of achatItems) {
+                const product = await findProductByReference(achatItem.reference, productsCache);
+                if (!product) {
+                    console.warn(`Produit introuvable: ${achatItem.reference}, ignoré`);
+                    continue;
+                }
+
+                const attributeId = achatItem.variant
+                    ? await findCombinationIdByVariantName(product.id, achatItem.variant)
+                    : 0;
+                const quantity = Math.max(0, Number(achatItem.quantity) || 0);
+                if (!quantity) {
+                    continue;
+                }
+
+                const unitPriceTtc = Number(product.price ?? 0) || 0;
+                const unitPriceHt = Number(product.price_ht ?? product.price ?? 0) || 0;
+
+                resolvedLines.push({
+                    productId: product.id,
+                    attributeId,
+                    quantity,
+                    unitPriceTtc,
+                    unitPriceHt,
+                    lineTotalTtc: roundMoney(unitPriceTtc * quantity),
+                    lineTotalHt: roundMoney(unitPriceHt * quantity),
+                });
+            }
+
+            // 5. Create cart after TTC total calculation
+            const totalTtc = roundMoney(resolvedLines.reduce((sum, line) => sum + line.lineTotalTtc, 0));
+            const totalHt = roundMoney(resolvedLines.reduce((sum, line) => sum + line.lineTotalHt, 0));
+
+            // 6. Create cart
             const cartId = await createCart({
                 id_customer: customerId,
                 id_lang: 1,
@@ -603,144 +698,97 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
             });
             cartsCreated += 1;
 
-            // 5. Parse etat field to determine if this is a cart-only or a full order
-            const etatLower = (row.etat || "").toLowerCase().trim();
-            const isCartOnly = !etatLower || etatLower === "dans le panier" || etatLower.includes("panier");
-            const orderStateId = resolveOrderStateId(etatLower);
-
-            // 6. Parse and add products to cart
-            const achatItems = parseAchatString(row.achat);
-            for (const achatItem of achatItems) {
-                const product = await findProductByReference(achatItem.reference, productsCache);
-                if (!product) {
-                    console.warn(`Produit introuvable: ${achatItem.reference}, ignoré`);
-                    continue;
-                }
-
-                // Find matching combination if variant specified
-                let attributeId = 0;
-                if (achatItem.variant && product.id) {
-                    try {
-                        const attrGroups = await getProductAttributeGroups(product.id);
-                        const combinations = Array.from(new Map(
-                            attrGroups.flatMap((g) => g.combinations ?? []).map((c) => [c.id, c])
-                        ).values());
-                        const match = combinations.find((c: any) =>
-                            (c.attributes || []).some((attr: any) => normalizeText(attr.name ?? "") === normalizeText(achatItem.variant))
-                        );
-                        if (match) {
-                            attributeId = Number(match.id) || 0;
-                        }
-                    } catch {
-                        attributeId = 0;
-                    }
-                }
-
-                // Add to cart
+            // 7. Add products to cart
+            for (const line of resolvedLines) {
                 await addProductToCart({
                     cartId,
                     customerId,
-                    id_product: product.id,
-                    id_product_attribute: attributeId,
-                    quantity: achatItem.quantity,
+                    id_product: line.productId,
+                    id_product_attribute: line.attributeId,
+                    quantity: line.quantity,
                     idLang: 1,
                     idCurrency: 1,
                 });
             }
 
-            // 7. If etat indicates cart-only, stop here
-            if (isCartOnly) {
-                console.log(`Import client #${customerId}: Panier créé (mode ajout panier uniquement)`);
-                continue;
-            }
+            // 8. Parse etat field to determine if this is a cart-only or a full order
+            const etatLower = (row.etat || "").toLowerCase().trim();
+            const isCartOnly = !etatLower || etatLower === "dans le panier" || etatLower.includes("panier");
+            const orderStateId = resolveOrderStateId(etatLower);
 
-            // 8. Create order
-            const orderForm = {
-                id_customer: customerId,
-                id_cart: cartId,
-                id_address_delivery: addressId,
-                id_address_invoice: addressId,
-                id_currency: 1,
-                id_lang: 1,
-                id_carrier: defaultCarrierId,
-                payment_code: "cash",
-                total_paid_tax_incl: 0,
-                total_paid_tax_excl: 0,
-                total_paid: 0,
-                total_paid_real: 0,
-                total_products: 0,
-                total_products_wt: 0,
-                total_shipping: 0,
-                conversion_rate: 1,
-                current_state: orderStateId || 2,
-                module: "cash",
-                payment: "Paiement par virment",
-            };
-
-            const orderId = await createOrder(orderForm as any);
-            ordersCreated += 1;
-
-            // 9. Create order details for each product
-            for (const achatItem of achatItems) {
-                const product = await findProductByReference(achatItem.reference, productsCache);
-                if (!product) continue;
-
-                let attributeId = 0;
-                if (achatItem.variant && product.id) {
-                    try {
-                        const attrGroups = await getProductAttributeGroups(product.id);
-                        const combinations = Array.from(new Map(
-                            attrGroups.flatMap((g) => g.combinations ?? []).map((c) => [c.id, c])
-                        ).values());
-                        const match = combinations.find((c: any) =>
-                            (c.attributes || []).some((attr: any) => normalizeText(attr.name ?? "") === normalizeText(achatItem.variant))
-                        );
-                        if (match) {
-                            attributeId = Number(match.id) || 0;
-                        }
-                    } catch {
-                        attributeId = 0;
-                    }
-                }
-
-                // Use product price as unit price (simplified; PrestaShop can recalculate)
-                const unitPrice = Number(product.price_ht ?? product.price ?? 0) || 0;
-
-                await createOrderDetail(orderId, product.id, attributeId, achatItem.quantity, unitPrice, 1, 1);
-
-                // // decrement stock only when a real order is created
-                // const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
-                // const currentStock = Number(stockBefore ?? 0);
-                // const nextStock = Math.max(0, currentStock - achatItem.quantity);
-                // await upsertStockAvailable({
-                //     id_product: product.id,
-                //     id_product_attribute: attributeId,
-                //     id_shop: 1,
-                //     id_shop_group: 1,
-                //     quantity: nextStock,
-                //     depends_on_stock: false,
-                //     out_of_stock: 2,
-                // });
-            }
-
-            if (orderStateId > 0) {
-                await updateOrderState(orderId, orderStateId);
-            }
-
-            // 10. Clear cart (set quantities to 0)
-            // if (achatItems.length > 0) {
-            //     await updateCartItems(
-            //         cartId,
-            //         customerId,
-            //         achatItems.map((_) => ({
-            //             id_product: 0,
-            //             id_product_attribute: 0,
-            //             quantity: 0,
-            //         }))
-            //     );
+            // // 9. If etat indicates cart-only, stop here
+            // if (isCartOnly) {
+            //     console.log(`Import client #${customerId}: Panier créé, total TTC calculé = ${totalTtc}`);
+            //     continue;
             // }
 
-            console.log(`Import client #${customerId}: Commande créée #${orderId}`);
+            // // 10. Create order
+            // const orderForm = {
+            //     id_customer: customerId,
+            //     id_cart: cartId,
+            //     id_address_delivery: addressId,
+            //     id_address_invoice: addressId,
+            //     id_currency: 1,
+            //     id_lang: 1,
+            //     id_carrier: defaultCarrierId,
+            //     payment_code: "cash",
+            //     total_paid_tax_incl: totalTtc,
+            //     total_paid_tax_excl: totalHt,
+            //     total_paid: totalTtc,
+            //     total_paid_real: totalTtc,
+            //     total_products: totalHt,
+            //     total_products_wt: totalTtc,
+            //     total_shipping: 0,
+            //     conversion_rate: 1,
+            //     current_state: orderStateId || 2,
+            //     module: "cash",
+            //     payment: "Paiement par virment",
+            // };
+
+            // const orderId = await createOrder(orderForm as any);
+            // ordersCreated += 1;
+
+            // // 11. Create order details
+            // for (const line of resolvedLines) {
+            //     await createOrderDetail(orderId, line.productId, line.attributeId, line.quantity, line.unitPriceHt, 1, 1);
+
+            //     // // decrement stock only when a real order is created
+            //     // const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
+            //     // const currentStock = Number(stockBefore ?? 0);
+            //     // const nextStock = Math.max(0, currentStock - achatItem.quantity);
+            //     // await upsertStockAvailable({
+            //     //     id_product: product.id,
+            //     //     id_product_attribute: attributeId,
+            //     //     id_shop: 1,
+            //     //     id_shop_group: 1,
+            //     //     quantity: nextStock,
+            //     //     depends_on_stock: false,
+            //     //     out_of_stock: 2,
+            //     // });
+            // }
+
+            // // 12. Calcul total (already computed from CSV/cart lines)
+            // const computedOrderTotalTtc = totalTtc;
+            // const computedOrderTotalHt = totalHt;
+
+            // if (orderStateId > 0) {
+            //     await updateOrderState(orderId, orderStateId);
+            // }
+
+            // // 10. Clear cart (set quantities to 0)
+            // // if (achatItems.length > 0) {
+            // //     await updateCartItems(
+            // //         cartId,
+            // //         customerId,
+            // //         achatItems.map((_) => ({
+            // //             id_product: 0,
+            // //             id_product_attribute: 0,
+            // //             quantity: 0,
+            // //         }))
+            // //     );
+            // // }
+
+            // console.log(`Import client #${customerId}: Commande créée #${orderId} (total HT=${computedOrderTotalHt}, TTC=${computedOrderTotalTtc})`);
         } catch (error) {
             failed += 1;
             console.error("Erreur lors de l'import du CSV commande:", row, error);
