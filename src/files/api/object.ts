@@ -39,6 +39,8 @@ export const PRODUIT_IMPORT_COLUMNS = [
     "prix_achat",
 ] as const;
 
+export const PRODUIT_IMPORT_DATE_COLUMNS = ["date_availability_produit"] as const;
+
 export const PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS = [
     "reference",
     "specificité",
@@ -56,6 +58,8 @@ export const COMMANDE_CLIENT_PRODUIT_COLUMNS = [
     "achat",
     "etat",
 ] as const;
+
+export const COMMANDE_CLIENT_PRODUIT_DATE_COLUMNS = ["date"] as const;
 
 export const DEFAULT_LANGUAGE_ID = 1;
 export const DEFAULT_SHOP_ID = 1;

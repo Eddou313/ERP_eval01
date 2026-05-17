@@ -20,6 +20,21 @@ function normalizeColumnName(name: string): string {
     .replace(/\s+/g, "_"); // Remplace espaces par underscore
 }
 
+function isValidCsvDate(value: string): boolean {
+  const trimmed = String(value ?? "").trim();
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    return false;
+  }
+
+  const [day, month, year] = trimmed.split("/").map(Number);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
 /**
  * Valide que les colonnes du CSV correspondent aux colonnes attendues
  * @throws Error si les colonnes ne correspondent pas
@@ -87,7 +102,8 @@ const convertFrenchNumbersInObject = (obj: any): any => {
 export const parseCSVFile = <T>(
     file: File, 
     separator: string, 
-    expectedColumns?: (keyof any)[]
+    expectedColumns?: (keyof any)[],
+    expectedDateColumns?: string[]
 ): Promise<T[]> => {
   return new Promise<T[]>((resolve, reject) => {
     Papa.parse(file, {
@@ -103,8 +119,23 @@ export const parseCSVFile = <T>(
             validateColumnNames(csvColumns, expectedColumns);
           }
 
-          const cleanedData = (results.data as any[])
-            .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined))
+          const rows = (results.data as any[])
+            .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined));
+
+          if (expectedDateColumns && expectedDateColumns.length > 0) {
+            for (const row of rows) {
+              for (const dateColumn of expectedDateColumns) {
+                const rawValue = String(row?.[dateColumn] ?? "").trim();
+                if (rawValue && !isValidCsvDate(rawValue)) {
+                  throw new Error(
+                    `Format de date différente de DD/MM/YYYY. Colonne "${dateColumn}", valeur "${rawValue}"`
+                  );
+                }
+              }
+            }
+          }
+
+          const cleanedData = rows
             .map(row => convertFrenchNumbersInObject(row)) as T[];
           console.log("Données nettoyées et converties:", cleanedData);
           resolve(cleanedData);
