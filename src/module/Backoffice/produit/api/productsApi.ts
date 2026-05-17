@@ -554,6 +554,47 @@ export async function uploadProductImage(productId: number, file: Blob, fileName
 }
 
 /**
+ * Supprime une image produit.
+ */
+export async function deleteProductImage(productId: number, imageId?: number): Promise<void> {
+  const path = imageId ? `/images/products/${productId}/${imageId}` : `/images/products/${productId}`;
+  await requestPrestashopXml(path, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * Supprime toutes les images d'un produit.
+ */
+export async function deleteAllProductImages(productId: number): Promise<void> {
+  const images = await getProductImages(productId);
+  if (images.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    images.map((image) => deleteProductImage(productId, image.id_image)),
+  );
+}
+
+/**
+ * Supprime toutes les images de tous les produits.
+ */
+export async function InitProductImages(): Promise<void> {
+  try {
+    const data = await listProductsLight();
+    for (const product of data) {
+      if (product.id > 0) {
+        await deleteAllProductImages(product.id);
+      }
+    }
+    console.log("Toutes les images produits ont été supprimées.");
+  } catch (caught: any) {
+    console.error("Erreur lors de l'initialisation des images produits :", caught);
+  }
+}
+
+/**
  * Delete a product
  */
 export async function deleteProduct(id: number): Promise<void> {

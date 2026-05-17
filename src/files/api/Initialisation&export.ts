@@ -4,7 +4,7 @@ import { InitAdresse } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { initClients } from "../../module/Backoffice/client/api/clientApi";
 import { InitOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { initPanier } from "../../module/Backoffice/panier/api/panierApi";
-import { InitProducts } from "../../module/Backoffice/produit/api/productsApi";
+import { InitProductImages, InitProducts } from "../../module/Backoffice/produit/api/productsApi";
 import { InitTaxes } from "../../module/Backoffice/taxes/taxes";
 import Papa from 'papaparse';
 import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
@@ -196,6 +196,9 @@ export async function InitialisationGLobal(): Promise<void> {
 
         console.log("Suppression des valeurs d'attributs...");
         await InitAttributesAndCharacteristics();
+
+        console.log("Suppression des images produits...");
+        await InitProductImages();
 
         console.log("Suppression des produits...");
         await InitProducts();

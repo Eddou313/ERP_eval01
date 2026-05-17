@@ -1,4 +1,4 @@
-import { getProductImageUrl } from "../../../../utils/helper";
+import { getProductImageUrl, withTax, formatCurrency } from "../../../../utils/helper";
 import type { ProductListItem } from "../../../Backoffice/produit/api/object";
 
 type ProduitsGridProps = {
@@ -68,7 +68,22 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
             <h3 className="productName">{product.name || "Produit sans nom"}</h3>
             <p className="productReference">{product.reference}</p>
             <div className="productPricing">
-              <span className="currentPrice">€{(product.price || 0).toFixed(2)}</span>
+              {(() => {
+                const taxRate = Number(product.tax_rate ?? 20) || 0;
+                // Use `price_ht` when available (HT), otherwise fall back to `price`.
+                // `price` from the API for simple products is already the final price (TTC),
+                // while combination entries set `price` to HT earlier. Prioritize `price_ht` to avoid double-taxing.
+                const priceHt = Number((product as any).price_ht ?? product.price ?? 0) || 0;
+                const priceTtc = withTax(priceHt, taxRate);
+                return (
+                  <>
+                    <span className="currentPrice">{formatCurrency(priceTtc)}</span>
+                    {(product as any).wholesale_price !== undefined && (product as any).wholesale_price !== null ? (
+                      <span className="wholesalePrice">Achat: {formatCurrency(Number((product as any).wholesale_price) || 0)}</span>
+                    ) : null}
+                  </>
+                );
+              })()}
               <span className="currentPrice">date de disponibilité: {product.available_date || product.date_add}</span>
             </div>
             {product.quantity && product.quantity > 0 ? (

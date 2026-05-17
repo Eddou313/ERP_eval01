@@ -24,7 +24,12 @@ export async function SupprimerStocksEtMouvements(opts?: { deleteStocks?: boolea
           await requestPrestashopXml(`/stock_availables/${sid}`, { method: "DELETE" });
           deletedStocks++;
           console.log(`✓ Suppressé stock id=${sid}`);
-        } catch (e) {
+        } catch (e: any) {
+          const status = Number(e?.status ?? 0);
+          if (status === 405) {
+            console.warn(`Suppression stock id=${sid} non supportée par le webservice, on continue.`);
+            continue;
+          }
           console.error(`Erreur suppression stock id=${sid}:`, e);
         }
       }
@@ -44,7 +49,12 @@ export async function SupprimerStocksEtMouvements(opts?: { deleteStocks?: boolea
           await requestPrestashopXml(`/stock_movements/${mid}`, { method: "DELETE" });
           deletedMovements++;
           console.log(`✓ Suppressé mouvement id=${mid}`);
-        } catch (e) {
+        } catch (e: any) {
+          const status = Number(e?.status ?? 0);
+          if (status === 405) {
+            console.warn(`Suppression mouvement id=${mid} non supportée par le webservice, on continue.`);
+            continue;
+          }
           console.error(`Erreur suppression mouvement id=${mid}:`, e);
         }
       }

@@ -1,18 +1,18 @@
 import { ensureCategoryExists, listCategoriesSimple } from "../../module/Backoffice/categorie/api/categoriesApi";
 import { createProduct, listProductsLight, updateProduct, uploadProductImage } from "../../module/Backoffice/produit/api/productsApi";
 import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExists, getProductAttributeGroups, listAttributeGroupsLight, listAttributeValuesLight, updateCombination } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
-import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTaxesLight, listTaxRuleGroupsLight } from "../../module/Backoffice/taxes/taxes";
 import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { createCart, addProductToCart } from "../../module/Backoffice/panier/api/panierApi";
-import { createOrder } from "../../module/Backoffice/commande/api/commandesApi";
+import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { numFromUnknown } from "../../utils/helper";
 import { isValidDate, toPrestashopDate } from "./utils";
+import { getStockByProductId, upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
 
 export type ProductImportRow = colonneCSV["produitImport"];
 export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockImport"];
@@ -20,6 +20,24 @@ export type OrderImportRow = colonneCSV["Commande_client_produit"];
 
 type AchatItem = { reference: string; quantity: number; variant: string };
 type ZipImageAsset = { blob: Blob; fileName: string };
+
+function resolveOrderStateId(etat: string): number {
+    const value = String(etat ?? "").trim().toLowerCase();
+    if (!value || value.includes("panier")) {
+        return 0;
+    }
+
+    if (value.includes("attente")) return 1;
+    if (value.includes("paiement") && value.includes("accept")) return 2;
+    if (value.includes("prepar") || value.includes("prépar")) return 3;
+    if (value.includes("expedi") || value.includes("expédi")) return 4;
+    if (value.includes("livr")) return 5;
+    if (value.includes("annul")) return 6;
+    if (value.includes("rembours")) return 7;
+    if (value.includes("retour")) return 8;
+
+    return 2;
+}
 
 function normalizeImageReference(value: string): string {
     return normalizeText(String(value ?? "").replace(/\.[^.]+$/, ""));
@@ -528,6 +546,12 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 throw new Error("Données client insuffisantes (nom, email, pwd requis)");
             }
 
+            const customerDateAdd = String(row.date ?? "").trim();
+            const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
+            if (customerDateAdd && !normalizedCustomerDate) {
+                throw new Error(`Date client invalide: ${customerDateAdd}`);
+            }
+
             // 2. Create customer
             const customerId = await importClient({
                 firstname,
@@ -542,6 +566,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 note: "",
                 is_guest: 0,
                 deleted: 0,
+                ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate } : {}),
             });
             customersCreated += 1;
 
@@ -574,6 +599,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
             // 5. Parse etat field to determine if this is a cart-only or a full order
             const etatLower = (row.etat || "").toLowerCase().trim();
             const isCartOnly = !etatLower || etatLower === "dans le panier" || etatLower.includes("panier");
+            const orderStateId = resolveOrderStateId(etatLower);
 
             // 6. Parse and add products to cart
             const achatItems = parseAchatString(row.achat);
@@ -639,7 +665,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 total_products_wt: 0,
                 total_shipping: 0,
                 conversion_rate: 1,
-                current_state: 1,
+                current_state: orderStateId || 2,
                 module: "cash",
                 payment: "Paiement par virment",
             };
@@ -674,6 +700,24 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 const unitPrice = Number(product.price_ht ?? product.price ?? 0) || 0;
 
                 await createOrderDetail(orderId, product.id, attributeId, achatItem.quantity, unitPrice, 1, 1);
+
+                // decrement stock only when a real order is created
+                const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
+                const currentStock = Number(stockBefore ?? 0);
+                const nextStock = Math.max(0, currentStock - achatItem.quantity);
+                await upsertStockAvailable({
+                    id_product: product.id,
+                    id_product_attribute: attributeId,
+                    id_shop: 1,
+                    id_shop_group: 1,
+                    quantity: nextStock,
+                    depends_on_stock: false,
+                    out_of_stock: 2,
+                });
+            }
+
+            if (orderStateId > 0) {
+                await updateOrderState(orderId, orderStateId);
             }
 
             // 10. Clear cart (set quantities to 0)

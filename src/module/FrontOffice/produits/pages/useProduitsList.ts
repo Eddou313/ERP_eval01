@@ -83,14 +83,25 @@ export function useProduitsList(pageSize = 8) {
                   // ignore stock fetch errors, keep fallback
                 }
 
-                const comboEntry: ProductListItem & { combination_id?: number } = {
+                const comboEntry: ProductListItem & { combination_id?: number; id_product_attribute?: number } = {
                   ...p,
                   name: `${p.name} — ${labels}`,
-                  price: combPriceHt,
-                  price_ht: combPriceHt,
+                  // prefer combination's own price when available (comb.price expected to be HT stored on the combination),
+                  // otherwise fall back to computed baseHt + impact
+                  price: Number.isFinite(Number(comb.price)) && Number(comb.price) !== 0 ? Number(comb.price) : combPriceHt,
+                  price_ht: Number.isFinite(Number(comb.price)) && Number(comb.price) !== 0 ? Number(comb.price) : combPriceHt,
                   combination_price_impact: impact,
                   quantity: combQuantity,
                   combination_id: Number(comb.id) || undefined,
+                  id_product_attribute: Number(comb.id) || undefined,
+                  id_product: Number((comb as any).id_product) || p.id,
+                  reference: (comb as any).reference || p.reference,
+                  supplier_reference: (comb as any).supplier_reference || (p as any).supplier_reference,
+                  ean13: (comb as any).ean13 || (p as any).ean13,
+                  isbn: (comb as any).isbn || (p as any).isbn,
+                  upc: (comb as any).upc || (p as any).upc,
+                  mpn: (comb as any).mpn || (p as any).mpn,
+                  wholesale_price: Number.isFinite(Number((comb as any).wholesale_price)) ? Number((comb as any).wholesale_price) : (p as any).wholesale_price,
                 } as any;
 
                 const key = `${p.id}-${comboEntry.combination_id ?? 0}`;
