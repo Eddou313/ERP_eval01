@@ -25,7 +25,8 @@ export function ProduitsList() {
   } = useProduitsList(8);
 
   const handleProductClick = (product: ProductListItem) => {
-    navigate(`/produit/${product.id}`, { state: { product } });
+    const comboId = (product as any).combination_id ?? undefined;
+    navigate(`/produit/${product.id}`, { state: { product, combination_id: comboId } });
   };
 
   const handleFilterSubmit = (event: React.FormEvent<HTMLFormElement>) => {
