@@ -18,7 +18,7 @@ class StockApi extends Module
         parent::__construct();
 
         $this->displayName = 'Stock API';
-        $this->description = 'Endpoint XML pour mise à jour du stock.';
+        $this->description = 'API simple pour modifier le stock.';
     }
 
     public function install()

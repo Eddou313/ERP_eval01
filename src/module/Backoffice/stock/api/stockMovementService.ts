@@ -66,6 +66,7 @@ export async function recordStockMovement(
         },
       },
     });
+    console.log(xmlPayload);
 
     // ✓ Envoyer à l'API Prestashop
     const response = await requestPrestashopXml<any>(
@@ -75,6 +76,7 @@ export async function recordStockMovement(
         bodyXml: xmlPayload,
       }
     );
+    console.log("reponse : ",response);
 
     const createdMovement = response?.prestashop?.stock_movement;
     const movementId = numFromUnknown(createdMovement?.id);
@@ -101,6 +103,7 @@ export async function recordStockMovement(
     };
   }
 }
+
 
 /**
  * Met à jour le stock via l'API custom stockapi

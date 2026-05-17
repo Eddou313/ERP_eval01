@@ -232,7 +232,7 @@ export default function WorkFlowCommande() {
 				};
 
 				const orderId = await createCommande(form);
-				await updateOrderState(orderId, 1);
+				// await updateOrderState(orderId, 1);
 
 				if (clearCartAfterOrder) {
 				setCart(null);
