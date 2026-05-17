@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
 import {type OrderListItem} from "../../commande/api/ObjetOrder";
 import "./DashboardPage.css";
@@ -34,6 +35,7 @@ function buildMetrics(orders: OrderListItem[]): DayMetric[] {
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,10 +72,30 @@ export function DashboardPage() {
         <div>
           <h1 className="db-title">Tableau de bord</h1>
         </div>
-        <p className="db-subtitle">
-          Dernière journée enregistrée :{" "}
-          <strong>{latestDay ? formatDayLabel(latestDay.date) : "—"}</strong>
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <p className="db-subtitle">
+            Dernière journée enregistrée :{" "}
+            <strong>{latestDay ? formatDayLabel(latestDay.date) : "—"}</strong>
+          </p>
+          <button
+            onClick={() => navigate("/stock/evolution")}
+            style={{
+              padding: "0.75rem 1.5rem",
+              backgroundColor: "#2196f3",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "0.95rem",
+              fontWeight: "500",
+              transition: "background 0.2s",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1976d2")}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2196f3")}
+          >
+            evolution du stock
+          </button>
+        </div>
       </header>
 
       {/* ── KPIs ────────────────────────────────────────────── */}

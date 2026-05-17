@@ -1,0 +1,408 @@
+/* ========== ÉVOLUTION STOCK PAGE ========== */
+
+.ev-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
+  background: #f9f9f9;
+  min-height: 100vh;
+}
+
+/* ── En-tête ─────────────────────────────────────────── */
+.ev-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 1.5rem;
+}
+
+.ev-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.ev-subtitle {
+  font-size: 0.95rem;
+  color: #666;
+  margin: 0;
+}
+
+/* ── États ───────────────────────────────────────────── */
+.ev-state {
+  padding: 1.5rem;
+  text-align: center;
+  background: white;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+  font-size: 1rem;
+  color: #555;
+}
+
+.ev-state--error {
+  border-left-color: #f44336;
+  background: #ffebee;
+  color: #c62828;
+}
+
+.ev-empty {
+  padding: 2rem;
+  text-align: center;
+  background: white;
+  border-radius: 8px;
+  border: 1px dashed #ccc;
+  color: #999;
+  font-size: 0.95rem;
+}
+
+/* ── Sélecteur ───────────────────────────────────────── */
+.ev-selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ev-selector-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ev-label {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.ev-select {
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ev-select:hover {
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.ev-select:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+}
+
+/* ── Info produit ────────────────────────────────────── */
+.ev-product-info {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 6px;
+  border-left: 4px solid #2196f3;
+}
+
+.ev-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.ev-info-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ev-info-value {
+  font-size: 1rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.ev-stock-current {
+  color: #2196f3;
+  font-weight: 700;
+}
+
+/* ── Badge ───────────────────────────────────────────── */
+.ev-badge {
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.ev-badge--in_stock {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.ev-badge--low_stock {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.ev-badge--out_of_stock {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* ── Section tableau ────────────────────────────────── */
+.ev-table-section {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.ev-section-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 1.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ev-count {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #999;
+}
+
+/* ── Tableau ─────────────────────────────────────────– */
+.ev-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.ev-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.ev-table thead {
+  background: #f5f5f5;
+  border-bottom: 2px solid #ddd;
+}
+
+.ev-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+
+.ev-table tbody tr {
+  border-bottom: 1px solid #eee;
+  transition: background 0.2s ease;
+}
+
+.ev-table tbody tr:hover {
+  background: #fafafa;
+}
+
+.ev-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.ev-table td {
+  padding: 1rem;
+  color: #555;
+}
+
+.ev-date {
+  font-weight: 500;
+  color: #333;
+  min-width: 150px;
+}
+
+.ev-num {
+  text-align: center;
+  font-weight: 500;
+}
+
+.ev-movements {
+  color: #1976d2;
+}
+
+.ev-quantity {
+  font-weight: 700;
+  min-width: 80px;
+}
+
+.ev-quantity--positive {
+  color: #2e7d32;
+}
+
+.ev-quantity--negative {
+  color: #c62828;
+}
+
+/* ── Pagination ──────────────────────────────────────– */
+.ev-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f5f5f5;
+  border-radius: 6px;
+  flex-wrap: wrap;
+}
+
+.ev-pagination-btn {
+  padding: 0.5rem 1.25rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #2196f3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ev-pagination-btn:hover:not(:disabled) {
+  background: #2196f3;
+  color: white;
+  border-color: #2196f3;
+}
+
+.ev-pagination-btn:disabled {
+  color: #ccc;
+  border-color: #eee;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+
+.ev-pagination-info {
+  font-size: 0.9rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.ev-page-current,
+.ev-page-total {
+  font-weight: 700;
+  color: #2196f3;
+}
+
+/* ── Responsive ──────────────────────────────────────– */
+@media (max-width: 768px) {
+  .ev-page {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+
+  .ev-header {
+    gap: 0.25rem;
+    padding-bottom: 1rem;
+  }
+
+  .ev-title {
+    font-size: 1.5rem;
+  }
+
+  .ev-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .ev-selector-section {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .ev-product-info {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .ev-table-section {
+    padding: 1rem;
+  }
+
+  .ev-section-title {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+
+  .ev-table {
+    font-size: 0.85rem;
+  }
+
+  .ev-table th,
+  .ev-table td {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .ev-pagination {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .ev-pagination-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .ev-page {
+    padding: 0.75rem;
+    gap: 1rem;
+  }
+
+  .ev-title {
+    font-size: 1.25rem;
+  }
+
+  .ev-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .ev-table {
+    font-size: 0.8rem;
+  }
+
+  .ev-table th,
+  .ev-table td {
+    padding: 0.5rem 0.25rem;
+  }
+
+  .ev-date {
+    min-width: 100px;
+  }
+
+  .ev-pagination-info {
+    font-size: 0.8rem;
+  }
+}
