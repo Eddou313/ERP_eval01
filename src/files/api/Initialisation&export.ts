@@ -35,6 +35,11 @@ function isValidCsvDate(value: string): boolean {
   );
 }
 
+function isPositiveCsvNumber(value: unknown): boolean {
+  const numericValue = typeof value === "number" ? value : Number(String(value ?? "").trim().replace(",", "."));
+  return Number.isFinite(numericValue) && numericValue > 0;
+}
+
 /**
  * Valide que les colonnes du CSV correspondent aux colonnes attendues
  * @throws Error si les colonnes ne correspondent pas
@@ -103,7 +108,8 @@ export const parseCSVFile = <T>(
     file: File, 
     separator: string, 
     expectedColumns?: (keyof any)[],
-    expectedDateColumns?: string[]
+  expectedDateColumns?: string[],
+  expectedPositiveNumberColumns?: string[]
 ): Promise<T[]> => {
   return new Promise<T[]>((resolve, reject) => {
     Papa.parse(file, {
@@ -129,6 +135,25 @@ export const parseCSVFile = <T>(
                 if (rawValue && !isValidCsvDate(rawValue)) {
                   throw new Error(
                     `Format de date différente de DD/MM/YYYY. Colonne "${dateColumn}", valeur "${rawValue}"`
+                  );
+                }
+              }
+            }
+          }
+
+          if (expectedPositiveNumberColumns && expectedPositiveNumberColumns.length > 0) {
+            for (const row of rows) {
+              for (const numberColumn of expectedPositiveNumberColumns) {
+                const rawValue = row?.[numberColumn];
+                if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "") {
+                  throw new Error(
+                    `Montant manquant ou invalide. Colonne "${numberColumn}"`
+                  );
+                }
+
+                if (!isPositiveCsvNumber(rawValue)) {
+                  throw new Error(
+                    `Montant positif obligatoire. Colonne "${numberColumn}", valeur "${rawValue}"`
                   );
                 }
               }

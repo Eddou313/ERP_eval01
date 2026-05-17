@@ -40,6 +40,7 @@ export const PRODUIT_IMPORT_COLUMNS = [
 ] as const;
 
 export const PRODUIT_IMPORT_DATE_COLUMNS = ["date_availability_produit"] as const;
+export const PRODUIT_IMPORT_POSITIVE_NUMBER_COLUMNS = ["prix_ttc", "prix_achat"] as const;
 
 export const PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS = [
     "reference",
@@ -48,6 +49,7 @@ export const PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS = [
     "stock_initial",
     "prix_vente_ttc",
 ] as const;
+export const PRODUIT_ATTRIBUT_STOCK_POSITIVE_NUMBER_COLUMNS = ["stock_initial", "prix_vente_ttc"] as const;
 
 export const COMMANDE_CLIENT_PRODUIT_COLUMNS = [
     "date",
