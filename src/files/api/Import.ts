@@ -625,17 +625,17 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
             }
 
             // 10. Clear cart (set quantities to 0)
-            if (achatItems.length > 0) {
-                await updateCartItems(
-                    cartId,
-                    customerId,
-                    achatItems.map((_) => ({
-                        id_product: 0,
-                        id_product_attribute: 0,
-                        quantity: 0,
-                    }))
-                );
-            }
+            // if (achatItems.length > 0) {
+            //     await updateCartItems(
+            //         cartId,
+            //         customerId,
+            //         achatItems.map((_) => ({
+            //             id_product: 0,
+            //             id_product_attribute: 0,
+            //             quantity: 0,
+            //         }))
+            //     );
+            // }
 
             console.log(`Import client #${customerId}: Commande créée #${orderId}`);
         } catch (error) {
