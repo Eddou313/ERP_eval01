@@ -4,7 +4,27 @@ class StockApiUpdateModuleFrontController extends ModuleFrontController
 {
     public $display_header = false;
     public $display_footer = false;
-    public $content_only = true; 
+    public $content_only = true;
+    public $maintenance = false;
+
+    /**
+     * Autorise cet endpoint API meme si la boutique est en maintenance,
+     * mais uniquement avec un token valide dans la query string.
+     */
+    private function isAuthorizedMaintenanceBypass()
+    {
+        $token = Tools::getValue('token');
+        return is_string($token) && hash_equals('MON_SECRET_TOKEN', $token);
+    }
+
+    public function displayMaintenancePage()
+    {
+        if ($this->isAuthorizedMaintenanceBypass()) {
+            return;
+        }
+
+        parent::displayMaintenancePage();
+    }
 
     public function initContent()
     {

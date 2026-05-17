@@ -121,24 +121,53 @@ export async function updateStockViaApi(
     const token = import.meta.env.VITE_STOCKAPI_TOKEN;
     if (!token) {
       console.error("Token stockapi manquant dans .env (VITE_STOCKAPI_TOKEN)");
+      return false;
     }
 
-
-    // Production: appel direct au PrestaShop
-    const baseUrl = import.meta.env.VITE_BASE_URL_FULL || window.location.origin;
-    let url = `${baseUrl}/module/stockapi/update?token=${encodeURIComponent(token)}&id_product=${idProduct}&delta=${quantityDelta}`;
+    const query = `token=${encodeURIComponent(token)}&id_product=${idProduct}&delta=${quantityDelta}&_ts=${Date.now()}`;
+    let path = `/module/stockapi/update?${query}`;
     if (idProductAttribute && idProductAttribute > 0) {
-      url += `&id_product_attribute=${idProductAttribute}`;
+      path += `&id_product_attribute=${idProductAttribute}`;
     }
-    console.log(`Appel API stockapi: ${url}`);
+    const tryCall = async (url: string): Promise<boolean> => {
+      const response = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+          Accept: "application/xml, text/xml, */*",
+        },
+      });
+      const responseText = await response.text().catch(() => "");
 
-    const response = await fetch(url, { method: 'GET' });
-    if (response.ok) {
-      console.log(`✓ Stock mis à jour: produit ${idProduct} → ${quantityDelta} unités`);
+      if (!response.ok) {
+        console.error(`Erreur API stockapi: ${response.status} ${response.statusText}${responseText ? ` - ${responseText}` : ""}`);
+        return false;
+      }
+
+      // Le module stockapi retourne du XML: <response><success>true|false</success>...</response>
+      const successMatch = responseText.match(/<success>\s*(true|false)\s*<\/success>/i);
+      const successFromBody = (successMatch?.[1] || "").toLowerCase() === "true";
+      const messageMatch = responseText.match(/<message>([\s\S]*?)<\/message>/i);
+      const newQtyMatch = responseText.match(/<new_quantity>\s*(-?\d+)\s*<\/new_quantity>/i);
+
+      if (!successFromBody) {
+        const backendMessage = messageMatch?.[1]?.trim();
+        console.error(`Stockapi a répondu success=false${backendMessage ? ` - ${backendMessage}` : ""}`);
+        return false;
+      }
+
+      if (newQtyMatch?.[1]) {
+        console.log(`✓ Stock mis à jour: produit ${idProduct}, nouvelle quantité ${newQtyMatch[1]}`);
+      } else {
+        console.log(`✓ Stock mis à jour: produit ${idProduct} (réponse sans new_quantity)`);
+      }
       return true;
-    }
-    console.error(`Erreur API stockapi: ${response.status}`);
-    return false;
+    };
+
+    // Appel via proxy Vite pour eviter les erreurs CORS dans le navigateur.
+    const proxyUrl = `/api${path}`;
+    console.log(`Appel API stockapi (proxy): ${proxyUrl}`);
+    return await tryCall(proxyUrl);
   } catch (error) {
     console.error("Erreur lors de la mise à jour du stock via API:", error);
     return false;
