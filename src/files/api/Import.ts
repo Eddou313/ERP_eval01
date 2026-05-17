@@ -143,10 +143,6 @@ export function roundMoney(value: number): number {
     return Number((Number(value) || 0).toFixed(2));
 }
 
-function getProductPriceHt(product: { price_ht?: number; base_price?: number; price?: number }): number {
-    return Number(product.price_ht ?? product.base_price ?? product.price ?? 0) || 0;
-}
-
 function parseTtcToHt(priceTtc: number, taxRate: number): number {
     const rate = Number(taxRate) || 0;
     if (rate <= 0) {
@@ -310,16 +306,6 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
                 }
             }
 
-            await upsertStockAvailable({
-                id_product: product.id,
-                id_product_attribute: 0,
-                id_shop: 1,
-                id_shop_group: 1,
-                quantity: 0,
-                depends_on_stock: false,
-                out_of_stock: 2,
-            });
-
             await updateProduct(product.id, {
                 id_category_default: categoryId,
                 id_tax_rules_group: taxContext.taxRuleGroupId,
@@ -447,34 +433,33 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 continue;
             }
 
-            // Chaque ligne = UNE SEULE déclinaison (variante simple) avec UN SEUL attribut
+            // Chaque ligne CSV = une seule déclinaison simple avec un seul attribut
             const specName = String(row.specificité ?? "").trim();
             const valueName = String(row.karazany ?? "").trim();
+            const quantity = Number(row.stock_initial) || 0;
+            const priceTtc = Number(row.prix_vente_ttc) || 0;
+            const taxRate = Number(product.tax_rate ?? 20) || 0;
+            const priceHt = parseTtcToHt(priceTtc, taxRate);
 
             // Cas 1: Pas d'attribut → produit simple (mise à jour stock principal)
             if (!specName) {
-                const taxRate = Number(product.tax_rate ?? 20) || 0;
-                const targetPriceHt = parseTtcToHt(Number(row.prix_vente_ttc) || 0, taxRate);
+                if (Number.isFinite(priceTtc) && priceTtc > 0) {
+                    try {
+                        await updateProduct(product.id, { price: priceHt } as any);
+                    } catch (err) {
+                        console.warn(`Impossible de mettre à jour le prix du produit ${product.id}:`, err);
+                    }
+                }
 
-                // Mise à jour du stock du produit principal
                 await upsertStockAvailable({
                     id_product: product.id,
                     id_product_attribute: 0,
                     id_shop: 1,
                     id_shop_group: 1,
-                    quantity: Number(row.stock_initial) || 0,
+                    quantity,
                     depends_on_stock: false,
                     out_of_stock: 2,
                 });
-
-                // Mise à jour du prix si fourni
-                if (Number(row.prix_vente_ttc)) {
-                    try {
-                        await updateProduct(product.id, { price: targetPriceHt } as any);
-                    } catch (err) {
-                        console.warn(`Impossible de mettre à jour le prix du produit ${product.id}:`, err);
-                    }
-                }
 
                 imported += 1;
                 continue;
@@ -487,49 +472,29 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 continue;
             }
 
-            // Cas 3: Ligne est UNE SEULE variante simple → créer/mettre à jour une combinaison avec UN SEUL attribut
+            // Cas 3: créer/mettre à jour une déclinaison avec UN SEUL attribut
             const groupId = await ensureAttributeGroupExists(specName, attributeGroupCache, attributeGroups);
             const valueId = await ensureAttributeValueExists(groupId, valueName, attributeValueCache, attributeValues);
 
-            const taxRate = Number(product.tax_rate ?? 20) || 0;
-            const basePriceHt = getProductPriceHt(product);
-            const targetPriceHt = parseTtcToHt(Number(row.prix_vente_ttc) || 0, taxRate);
-            const priceImpactHt = roundMoney(targetPriceHt - basePriceHt);
-            
-            // Cette ligne crée/met à jour une combinaison avec UN SEUL attribut (pas multi-combinaisons)
             const reference = `${product.reference ?? row.reference}-${slugify(valueName)}`;
-            
-            // Chercher s'il existe une combinaison pour ce produit + cet attributValue unique
+            const priceImpactHt = roundMoney(priceHt);
+
+            // Créer ou mettre à jour la déclinaison (ps_product_attribute + association attribut)
             let combinationId = await findCombinationIdByValues(product.id, [valueId]);
-            
+
             if (!combinationId) {
-                // Créer nouvelle combinaison simple (un seul attribut)
-                combinationId = await createCombination(
-                    product.id,
-                    [valueId],  // Un SEUL attribut
-                    priceImpactHt,
-                    Number(row.stock_initial) || 0,
-                    reference,
-                );
+                combinationId = await createCombination(product.id, [valueId], priceImpactHt, quantity, reference);
             } else {
-                // Mettre à jour la combinaison existante
-                await updateCombination(
-                    combinationId,
-                    product.id,
-                    [valueId],  // Un SEUL attribut
-                    priceImpactHt,
-                    Number(row.stock_initial) || 0,
-                    reference,
-                );
+                await updateCombination(combinationId, product.id, [valueId], priceImpactHt, quantity, reference);
             }
 
-            // Mettre à jour le stock de la variante
+            // Stock de la déclinaison
             await upsertStockAvailable({
                 id_product: product.id,
                 id_product_attribute: combinationId,
                 id_shop: 1,
                 id_shop_group: 1,
-                quantity: Number(row.stock_initial) || 0,
+                quantity,
                 depends_on_stock: false,
                 out_of_stock: 2,
             });
