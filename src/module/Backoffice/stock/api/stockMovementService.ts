@@ -114,20 +114,19 @@ export async function recordStockMovement(
  */
 export async function updateStockViaApi(
   idProduct: number,
-  newQuantity: number,
+  quantityDelta: number,
   idProductAttribute?: number
 ): Promise<boolean> {
   try {
     const token = import.meta.env.VITE_STOCKAPI_TOKEN;
     if (!token) {
       console.error("Token stockapi manquant dans .env (VITE_STOCKAPI_TOKEN)");
-      return false;
     }
 
 
     // Production: appel direct au PrestaShop
     const baseUrl = import.meta.env.VITE_BASE_URL_FULL || window.location.origin;
-    let url = `${baseUrl}/module/stockapi/update?token=${encodeURIComponent(token)}&id_product=${idProduct}&quantity=${newQuantity}`;
+    let url = `${baseUrl}/module/stockapi/update?token=${encodeURIComponent(token)}&id_product=${idProduct}&delta=${quantityDelta}`;
     if (idProductAttribute && idProductAttribute > 0) {
       url += `&id_product_attribute=${idProductAttribute}`;
     }
@@ -135,7 +134,7 @@ export async function updateStockViaApi(
 
     const response = await fetch(url, { method: 'GET' });
     if (response.ok) {
-      console.log(`✓ Stock mis à jour: produit ${idProduct} → ${newQuantity} unités`);
+      console.log(`✓ Stock mis à jour: produit ${idProduct} → ${quantityDelta} unités`);
       return true;
     }
     console.error(`Erreur API stockapi: ${response.status}`);
@@ -194,7 +193,7 @@ export async function applyStockModification(
 
   try {
     // 1. Mettre à jour le stock
-    const stockUpdated = await updateStockViaApi(idProduct, newQuantity, idProductAttribute);
+    const stockUpdated = await updateStockViaApi(idProduct, quantityDelta, idProductAttribute);
     if (!stockUpdated) {
       return {
         success: false,
@@ -202,25 +201,11 @@ export async function applyStockModification(
       };
     }
 
-    // 2. Enregistrer le mouvement
-    const movementResult = await recordStockMovement(
-      idProduct,
-      quantityDelta,
-      idProductAttribute,
-      reason,
-      idEmployee
-    );
-
-    if (!movementResult.success) {
-      console.warn(`Stock mis à jour mais mouvement non enregistré: ${movementResult.message}`);
-      // On ne retourne pas d'erreur car le stock a été modifié
-    }
-
     const direction = quantityDelta > 0 ? "augmenté" : "diminué";
     const sign = quantityDelta > 0 ? "+" : "";
     return {
       success: true,
-      message: `Stock ${direction} de ${sign}${quantityDelta} (${currentQuantity} → ${newQuantity})${movementResult.success ? ` - ${movementResult.message}` : ""}`,
+      message: `Stock ${direction} de ${sign}${quantityDelta} (${currentQuantity} → ${newQuantity})`,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

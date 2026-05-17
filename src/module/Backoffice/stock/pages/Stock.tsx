@@ -5,7 +5,6 @@ import { applyStockModification } from "../api/stockMovementService";
 import { IconSettings } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { getProductImageUrlWithFallback } from "../../../../utils/helper";
-import {Test} from "./Test"
 
 export function Stock() {
     const [products, setProducts] = useState<any[]>([]);
@@ -94,7 +93,6 @@ export function Stock() {
 
     return (
         <div className="stock-page">
-            <Test />
             {message && (
                 <div className={`message message-${message.type}`}>
                     {message.text}
