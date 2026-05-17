@@ -360,16 +360,16 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 continue;
             }
 
-            // Attribute names from CSV
+            // Chaque ligne = UNE SEULE déclinaison (variante simple) avec UN SEUL attribut
             const specName = String(row.specificité ?? "").trim();
             const valueName = String(row.karazany ?? "").trim();
 
-            // If specificité is empty -> standard product (no attribute)
+            // Cas 1: Pas d'attribut → produit simple (mise à jour stock principal)
             if (!specName) {
                 const taxRate = Number(product.tax_rate ?? 20) || 0;
                 const targetPriceHt = parseTtcToHt(Number(row.prix_vente_ttc) || 0, taxRate);
 
-                // Update stock for main product
+                // Mise à jour du stock du produit principal
                 await upsertStockAvailable({
                     id_product: product.id,
                     id_product_attribute: 0,
@@ -380,7 +380,7 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                     out_of_stock: 2,
                 });
 
-                // If a price is provided, update product price (HT)
+                // Mise à jour du prix si fourni
                 if (Number(row.prix_vente_ttc)) {
                     try {
                         await updateProduct(product.id, { price: targetPriceHt } as any);
@@ -393,12 +393,14 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 continue;
             }
 
+            // Cas 2: Attribut fourni mais pas de valeur → erreur
             if (!valueName) {
                 failed += 1;
                 console.warn(`Ligne ignorée: valeur d'attribut vide pour la référence ${row.reference} (specificité=${specName})`);
                 continue;
             }
 
+            // Cas 3: Ligne est UNE SEULE variante simple → créer/mettre à jour une combinaison avec UN SEUL attribut
             const groupId = await ensureAttributeGroupExists(specName, attributeGroupCache, attributeGroups);
             const valueId = await ensureAttributeValueExists(groupId, valueName, attributeValueCache, attributeValues);
 
@@ -406,28 +408,35 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             const basePriceHt = getProductPriceHt(product);
             const targetPriceHt = parseTtcToHt(Number(row.prix_vente_ttc) || 0, taxRate);
             const priceImpactHt = roundMoney(targetPriceHt - basePriceHt);
-            const attributeValueIds = [valueId];
-
-            let combinationId = await findCombinationIdByValues(product.id, attributeValueIds);
+            
+            // Cette ligne crée/met à jour une combinaison avec UN SEUL attribut (pas multi-combinaisons)
+            const reference = `${product.reference ?? row.reference}-${slugify(valueName)}`;
+            
+            // Chercher s'il existe une combinaison pour ce produit + cet attributValue unique
+            let combinationId = await findCombinationIdByValues(product.id, [valueId]);
+            
             if (!combinationId) {
+                // Créer nouvelle combinaison simple (un seul attribut)
                 combinationId = await createCombination(
                     product.id,
-                    attributeValueIds,
+                    [valueId],  // Un SEUL attribut
                     priceImpactHt,
                     Number(row.stock_initial) || 0,
-                    `${product.reference ?? row.reference}-${slugify(row.karazany)}`,
+                    reference,
                 );
             } else {
+                // Mettre à jour la combinaison existante
                 await updateCombination(
                     combinationId,
                     product.id,
-                    attributeValueIds,
+                    [valueId],  // Un SEUL attribut
                     priceImpactHt,
                     Number(row.stock_initial) || 0,
-                    `${product.reference ?? row.reference}-${slugify(row.karazany)}`,
+                    reference,
                 );
             }
 
+            // Mettre à jour le stock de la variante
             await upsertStockAvailable({
                 id_product: product.id,
                 id_product_attribute: combinationId,

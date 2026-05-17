@@ -15,7 +15,7 @@ export type colonneCSV = {
         specificité: string;
         karazany: string;
         stock_initial: number;
-        prix_vente_ttc: number;
+        prix_vente_ttc?: number;
     };
 
     Commande_client_produit: {
@@ -49,7 +49,7 @@ export const PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS = [
     "stock_initial",
     "prix_vente_ttc",
 ] as const;
-export const PRODUIT_ATTRIBUT_STOCK_POSITIVE_NUMBER_COLUMNS = ["stock_initial", "prix_vente_ttc"] as const;
+export const PRODUIT_ATTRIBUT_STOCK_POSITIVE_NUMBER_COLUMNS = ["stock_initial"] as const;
 
 export const COMMANDE_CLIENT_PRODUIT_COLUMNS = [
     "date",
