@@ -7,6 +7,50 @@ import { initPanier } from "../../module/Backoffice/panier/api/panierApi";
 import { InitProducts } from "../../module/Backoffice/produit/api/productsApi";
 import Papa from 'papaparse';
 // import { ensureTaxExists, listTaxesLight } from "../../module/Backoffice/taxes/api/taxe";
+
+/**
+ * Normalise un nom de colonne: enlève les accents et espaces superflus
+ */
+function normalizeColumnName(name: string): string {
+  return (name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Enlève les accents
+    .replace(/\s+/g, "_"); // Remplace espaces par underscore
+}
+
+/**
+ * Valide que les colonnes du CSV correspondent aux colonnes attendues
+ * @throws Error si les colonnes ne correspondent pas
+ */
+export function validateColumnNames(
+  csvColumns: string[],
+  expectedColumns: (keyof any)[]
+): void {
+  const normalizedCsvColumns = csvColumns.map(normalizeColumnName);
+  const normalizedExpectedColumns = expectedColumns.map(col => normalizeColumnName(String(col)));
+  const csvSet = new Set(normalizedCsvColumns);
+  const expectedSet = new Set(normalizedExpectedColumns);
+
+  // Vérifier que toutes les colonnes attendues sont présentes
+  for (const expected of expectedSet) {
+    if (!csvSet.has(expected)) {
+      throw new Error(
+        `Nom de colonne non conforme. Colonne manquante ou incorrecte: "${expected}"`
+      );
+    }
+  }
+
+  // Vérifier qu'il n'y a pas de colonnes supplémentaires non attendues
+  for (const csv of csvSet) {
+    if (!expectedSet.has(csv)) {
+      throw new Error(
+        `Nom de colonne non conforme. Colonne non reconnue: "${csv}"`
+      );
+    }
+  }
+}
 /**
  * @param file Le fichier récupéré depuis l'input
  * @param separator Le caractère délimiteur (ex: , ou ;)
@@ -43,25 +87,38 @@ const convertFrenchNumbersInObject = (obj: any): any => {
 export const parseCSVFile = <T>(
     file: File, 
     separator: string, 
-    onComplete: (data: T[]) => void
-) => {
+    expectedColumns?: (keyof any)[]
+): Promise<T[]> => {
+  return new Promise<T[]>((resolve, reject) => {
     Papa.parse(file, {
-        delimiter: separator,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-            console.log("Données CSV brutes:", results.data);
-            // Convertir les nombres français et filtrer les lignes vides
-            const cleanedData = (results.data as any[])
-                .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined))
-                .map(row => convertFrenchNumbersInObject(row)) as T[];
-            console.log("Données nettoyées et converties:", cleanedData);
-            onComplete(cleanedData);
-        },
-        error: (error) => {
-            console.error("Erreur lors du parsing CSV:", error.message);
+      delimiter: separator,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          console.log("Données CSV brutes:", results.data);
+
+          const csvColumns = (results.meta?.fields || []).filter(Boolean) as string[];
+          if (expectedColumns && expectedColumns.length > 0) {
+            validateColumnNames(csvColumns, expectedColumns);
+          }
+
+          const cleanedData = (results.data as any[])
+            .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined))
+            .map(row => convertFrenchNumbersInObject(row)) as T[];
+          console.log("Données nettoyées et converties:", cleanedData);
+          resolve(cleanedData);
+        } catch (error: any) {
+          console.error("Erreur de validation:", error.message);
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
+      },
+      error: (error) => {
+        console.error("Erreur lors du parsing CSV:", error.message);
+        reject(new Error(`Erreur lors du parsing CSV: ${error.message}`));
+      }
     });
+  });
 };
 
 // Initialiser toutes les données globales

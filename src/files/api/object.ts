@@ -29,6 +29,34 @@ export type colonneCSV = {
     }
 }
 export type ImportDataType = keyof colonneCSV;
+export const PRODUIT_IMPORT_COLUMNS = [
+    "date_availability_produit",
+    "nom",
+    "reference",
+    "prix_ttc",
+    "Taxe",
+    "categorie",
+    "prix_achat",
+] as const;
+
+export const PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS = [
+    "reference",
+    "specificité",
+    "karazany",
+    "stock_initial",
+    "prix_vente_ttc",
+] as const;
+
+export const COMMANDE_CLIENT_PRODUIT_COLUMNS = [
+    "date",
+    "nom",
+    "email",
+    "pwd",
+    "adresse",
+    "achat",
+    "etat",
+] as const;
+
 export const DEFAULT_LANGUAGE_ID = 1;
 export const DEFAULT_SHOP_ID = 1;
 export const DEFAULT_SHOP_GROUP_ID = 1;

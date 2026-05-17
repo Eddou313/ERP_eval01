@@ -4,7 +4,7 @@ import './import.css';
 // import { parseCSVFile, importDataToPrestashop, InitialisationGLobal } from "../api/importAPI"
 import {  parseCSVFile,  InitialisationGLobal } from "../api/Initialisation&export"
 import { importProduitAttributStockCsv, importProduitCsv, importProduitCommandeCsv } from "../api/Import";
-import type { colonneCSV } from "../api/object"
+import { COMMANDE_CLIENT_PRODUIT_COLUMNS, PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS, PRODUIT_IMPORT_COLUMNS, type colonneCSV } from "../api/object"
 import {formatDate,transformToObjects, normalizeText} from "../../utils/helper"
 
 import  {ZipFile} from "./ZipFile"
@@ -58,10 +58,12 @@ export function ImportGlobal ()
         }));
     };
 
-    const parseFile = <T,>(fileToParse: File, separator: string) => {
-        return new Promise<T[]>((resolve) => {
-            parseCSVFile<T>(fileToParse, separator, resolve);
-        });
+    const parseFile = <T,>(
+        fileToParse: File, 
+        separator: string,
+        expectedColumns?: (keyof any)[]
+    ): Promise<T[]> => {
+        return parseCSVFile<T>(fileToParse, separator, expectedColumns);
     };
 
     const normalizeImageKey = (fileName: string) => {
@@ -101,13 +103,17 @@ export function ImportGlobal ()
           return;  
         }
         try{
-            setMes("Parsing en cours...");
-            const summaryMessages: string[] = [];
             const imageMap = zipFile ? await buildImageMapFromZip(zipFile) : new Map<string, { blob: Blob; fileName: string }>();
 
-            const parsedProducts = file ? await parseFile<colonneCSV["produitImport"]>(file, config.separator) : [];
-            const parsedAttributes = file2 ? await parseFile<colonneCSV["produit_Attribut_StockImport"]>(file2, config.separator) : [];
-            const parsedOrders = file3 ? await parseFile<colonneCSV["Commande_client_produit"]>(file3, config.separator) : [];
+                        setMes("Validation des colonnes CSV en cours...");
+
+                        const [parsedProducts, parsedAttributes, parsedOrders] = await Promise.all([
+                                file ? parseFile<colonneCSV["produitImport"]>(file, config.separator, PRODUIT_IMPORT_COLUMNS as unknown as (keyof any)[]) : Promise.resolve([]),
+                                file2 ? parseFile<colonneCSV["produit_Attribut_StockImport"]>(file2, config.separator, PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS as unknown as (keyof any)[]) : Promise.resolve([]),
+                                file3 ? parseFile<colonneCSV["Commande_client_produit"]>(file3, config.separator, COMMANDE_CLIENT_PRODUIT_COLUMNS as unknown as (keyof any)[]) : Promise.resolve([]),
+                        ]);
+
+                        const summaryMessages: string[] = [];
 
             if (file) {
                 console.log("Fichier 1 parsé:", parsedProducts);
@@ -132,7 +138,9 @@ export function ImportGlobal ()
         }
         catch (error) {
             console.error(error);
-            setMes("Erreur lors de l'import des données !");
+            const errorMsg = error instanceof Error ? error.message : "Erreur lors de l'import des données !";
+            setMes(errorMsg);
+            window.alert(errorMsg);
         }
     };
 
