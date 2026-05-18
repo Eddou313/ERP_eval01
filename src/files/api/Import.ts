@@ -748,7 +748,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 id_country: countryIdFrance,
             });
 
-            const cartId = await createCart({
+            const cart = await createCart({
                 id_customer: customerId,
                 id_lang: 1,
                 id_currency: 1,
@@ -763,6 +763,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                     quantity: line.quantity,
                 })),
             });
+            console.log("panier :", cart);
             cartsCreated += 1;
 
             const etatLower = (row.etat || "").toLowerCase().trim();
@@ -770,13 +771,13 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
             const orderStateId = resolveOrderStateId(etatLower);
 
             if (isCartOnly) {
-                console.log(`Import client #${customerId}: panier créé #${cartId}`);
+                console.log(`Import client #${customerId}: panier créé #${cart.id} avec donner dans panier`);
                 continue;
             }
 
             const orderId = await createOrder({
                 id_customer: customerId,
-                id_cart: cartId,
+                id_cart: cart.id,
                 id_address_delivery: addressId,
                 id_address_invoice: addressId,
                 id_currency: 1,

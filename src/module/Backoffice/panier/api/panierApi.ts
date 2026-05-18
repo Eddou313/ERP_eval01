@@ -526,7 +526,7 @@ export function buildCartXml(form: CartCreate | CartImport) {
   return buildPrestashopXml({ prestashop: payload });
 }
 
-export async function createCart(form: CartCreate | CartImport): Promise<number> {
+export async function createCart(form: CartCreate | CartImport): Promise<CartDetail> {
   const xml = buildCartXml(form);
   const res = await requestPrestashopXml<{ prestashop: { cart: { id: unknown } } }>(`/carts`, {
     method: "POST",
@@ -534,10 +534,12 @@ export async function createCart(form: CartCreate | CartImport): Promise<number>
   });
   const id = Number(res?.prestashop?.cart?.id);
   if (!Number.isFinite(id) || id <= 0) throw new Error("Erreur création panier");
-  return id;
+  
+  // Récupérer le panier complet avec détails et prix calculés correctement
+  return getCart(id);
 }
 
-export async function importCart(form: CartImport): Promise<number> {
+export async function importCart(form: CartImport): Promise<CartDetail> {
   return createCart(form);
 }
 
@@ -584,15 +586,13 @@ export async function getLatestCartForCustomerId(customerId: number): Promise<Ca
 
 export async function getOrCreateGuestCart(defaultLang = 1, defaultCurrency = 1): Promise<CartDetail | null> {
   // Cookies invités désactivés — créer et retourner un nouveau panier invité propre
-  const newCartId = await createCart({
+  return createCart({
     id_customer: 0,
     id_lang: defaultLang,
     id_currency: defaultCurrency,
     id_shop: 1,
     id_shop_group: 1,
-  });
-
-  return getCart(newCartId).catch(() => null);
+  }).catch(() => null);
 }
 
 async function resolveDefaultCustomerAddressId(customerId: number): Promise<number | undefined> {
@@ -620,7 +620,7 @@ async function resolveDefaultCustomerAddressId(customerId: number): Promise<numb
   return undefined;
 }
 
-export async function createCartForConnectedCustomer(customerId: number): Promise<number> {
+export async function createCartForConnectedCustomer(customerId: number): Promise<CartDetail> {
   if (!Number.isFinite(customerId) || customerId <= 0) {
     throw new Error("Customer ID invalide pour création panier connecté");
   }
@@ -632,7 +632,8 @@ export async function createCartForConnectedCustomer(customerId: number): Promis
   const lang = client.id_lang || 1;
   const currency = 1;
 
-  const newCartId = await createCart({
+  // Créer le panier avec détails complets et prix calculés
+  return createCart({
     id_customer: customerId,
     id_lang: lang,
     id_currency: currency,
@@ -642,10 +643,6 @@ export async function createCartForConnectedCustomer(customerId: number): Promis
     id_shop: 1,
     id_shop_group: 1,
   });
-
-  // Guest cart merge removed: PrestaShop guest identity is used instead of local cookies.
-
-  return newCartId;
 }
 
 function buildCartUpdateXml(cartId: number, customerId: number, items: Array<{ id_product: number; id_product_attribute?: number; quantity: number }>, idLang = 1, idCurrency = 1) {
