@@ -384,7 +384,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
         id_category_default: data.id_category_default,
         id_tax_rules_group: data.id_tax_rules_group || 0,
         id_default_image: data.id_default_image || 0,
-        type: data.type || "simple",
+        type: data.type || "standard",
         reference: data.reference || "",
         supplier_reference: data.supplier_reference || "",
         price: data.price,
@@ -598,9 +598,19 @@ export async function InitProductImages(): Promise<void> {
  * Delete a product
  */
 export async function deleteProduct(id: number): Promise<void> {
-  await requestPrestashopXml(`/products/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/products/${id}`, {
+      method: "DELETE",
+    });
+  } catch (error: any) {
+    const status = Number(error?.status ?? 0);
+    if (status === 404 || status === 405) {
+      console.warn(`Suppression produit id=${id} non supportée ou produit introuvable, on continue.`);
+      return;
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -655,12 +665,12 @@ export async function InitProducts(): Promise<void> {
   // const confirmed = window.confirm("Vous etes sur de supprimer tous les produits ?");
   // if (!confirmed) return;
   try{
-    const data = await listProductsLight();
-    const sortedData = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
+    const ids = await listProductIds();
+    const sortedIds = [...ids].sort((a, b) => b - a);
 
-    for (const product of sortedData) {
-      if (product.id > 0) {
-          await deleteProduct(product.id);
+    for (const productId of sortedIds) {
+      if (productId > 0) {
+          await deleteProduct(productId);
       }
     }
   }

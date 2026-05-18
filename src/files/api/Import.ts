@@ -333,18 +333,14 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
             const priceTtc = Number(row.prix_ttc) || 0;
             const priceHt = parseTtcToHt(priceTtc, taxRate);
 
+
             const product = await createProduct({
                 id_category_default: categoryId,
                 id_tax_rules_group: taxContext.taxRuleGroupId,
                 name: row.nom,
                 reference: row.reference,
                 price: priceHt,
-                state: 1,
                 wholesale_price: Number(row.prix_achat) || 0,
-                active: false,
-                available_for_order: false,
-                show_price: false,
-                visibility: "none",
                 link_rewrite: slugify(row.nom),
                 ...(availableDate ? { available_date: availableDate } : {}),
                 description: `Produit importé depuis CSV: ${row.nom}`,
@@ -547,10 +543,12 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             const valueName = String(row.karazany ?? "").trim();
             const quantity = Number(row.stock_initial) || 0;
             const priceTtc = Number(row.prix_vente_ttc) || 0;
+            const basePriceHt = Number(product.price_ht ?? product.base_price ?? product.price ?? 0) || 0;
             const taxRate = Number(product.tax_rate ?? 20) || 0;
-            const priceHtRaw = parseTtcToHt(priceTtc, taxRate);
+            const priceHtRaw = priceTtc > 0 ? parseTtcToHt(priceTtc, taxRate) : basePriceHt;
             // Utiliser Math.ceil pour la 3ème décimale afin que le TTC arrondi = TTC voulu
             const priceHt = Math.ceil(priceHtRaw * 1000) / 1000;
+            const priceImpactHt = priceTtc > 0 ? Number((priceHt - basePriceHt).toFixed(6)) : 0;
 
             // Cas 1: Pas d'attribut → produit simple (mise à jour stock principal)
             if (!specName) {
@@ -589,8 +587,6 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
 
             const reference = `${product.reference ?? row.reference}-${slugify(valueName)}`;
             // Utiliser directement priceHt avec 3 décimales (éviter roundMoney qui arrondit à 2)
-            const priceImpactHt = priceHt;
-
             // Créer ou mettre à jour la déclinaison (ps_product_attribute + association attribut)
             let combinationId = await findCombinationIdByValues(product.id, [valueId]);
 
