@@ -4,6 +4,7 @@ import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi
 import { type OrderListItem } from "../../commande/api/ObjetOrder";
 import { StockDashboard } from "./StockDashboard";
 import StatsPage from "./StatsPage";
+import EvolutionStockPage from "./Evolution_stock";
 
 type DayMetric = {
   date: string;
@@ -11,7 +12,7 @@ type DayMetric = {
   totalAmount: number;
 };
 
-type TabId = "orders" | "stats" | "stock";
+type TabId = "orders" | "stats" | "stock" | "evolution";
 
 function formatDayLabel(dateString: string): string {
   const parsed = new Date(`${dateString}T00:00:00`);
@@ -112,6 +113,12 @@ export function DashboardPage(): JSX.Element {
         >
           État des Stocks
         </button>
+        <button 
+          style={{ ...styles.tabButton, ...(activeTab === "evolution" ? styles.activeTabButton : {}) }}
+          onClick={() => setActiveTab("evolution")}
+        >
+          Évolution des Stocks
+        </button>
       </nav>
 
       {/* ── Contenu dynamique selon l'onglet actif ──────────── */}
@@ -192,6 +199,8 @@ export function DashboardPage(): JSX.Element {
       {activeTab === "stats" && <StatsPage />}
 
       {activeTab === "stock" && <StockDashboard />}
+
+      {activeTab === "evolution" && <EvolutionStockPage />}
     </main>
   );
 }

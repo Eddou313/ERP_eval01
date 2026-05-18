@@ -28,7 +28,17 @@ function buildStockMetrics(movements: StockMovement[]): StockDayMetric[] {
   for (const movement of movements) {
     const date = String(movement.date || "").split(" ")[0] || "Inconnue";
     const quantity = Number(movement.quantity) || 0;
-    const sign = movement.sign ?? (movement.quantity >= 0 ? 1 : -1);
+
+    // Determine sign: prefer explicit sign, otherwise infer from movementType, fallback to +1
+    let sign = 1;
+    if (typeof movement.sign === "number" && movement.sign !== 0) {
+      sign = movement.sign > 0 ? 1 : -1;
+    } else if (movement.movementType === "sale") {
+      sign = -1;
+    } else {
+      sign = 1;
+    }
+
     const signedQuantity = quantity * sign;
     
     const current = grouped.get(date) || { date, movementCount: 0, totalQuantity: 0, movements: [] };
@@ -37,7 +47,11 @@ function buildStockMetrics(movements: StockMovement[]): StockDayMetric[] {
     current.movements.push(movement);
     grouped.set(date, current);
   }
-  return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date));
+  return Array.from(grouped.values()).sort((a, b) => {
+    const ta = new Date(a.date).getTime() || 0;
+    const tb = new Date(b.date).getTime() || 0;
+    return tb - ta;
+  });
 }
 
 export function EvolutionStockPage() {
@@ -111,12 +125,12 @@ export function EvolutionStockPage() {
   return (
     <main className="ev-page">
       {/* ── En-tête ─────────────────────────────────────────── */}
-      <header className="ev-header">
+      {/* <header className="ev-header">
         <h1 className="ev-title">Évolution du stock journalier</h1>
         <p className="ev-subtitle">
           Consultez les mouvements de stock par produit et par jour
         </p>
-      </header>
+      </header> */}
 
       {/* ── États de chargement et erreur ────────────────────── */}
       {loading && <p className="ev-state">Chargement des données…</p>}
