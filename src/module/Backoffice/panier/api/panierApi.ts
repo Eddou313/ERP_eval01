@@ -585,14 +585,35 @@ export async function getLatestCartForCustomerId(customerId: number): Promise<Ca
 }
 
 export async function getOrCreateGuestCart(defaultLang = 1, defaultCurrency = 1): Promise<CartDetail | null> {
-  // Cookies invités désactivés — créer et retourner un nouveau panier invité propre
-  return createCart({
+  const guestPayload = getGuestCartCookiePayload();
+
+  if (guestPayload?.id_cart) {
+    try {
+      return await getCart(guestPayload.id_cart);
+    } catch {
+      clearGuestCartCookie();
+    }
+  }
+
+  const createdCart = await createCart({
     id_customer: 0,
     id_lang: defaultLang,
     id_currency: defaultCurrency,
     id_shop: 1,
     id_shop_group: 1,
   }).catch(() => null);
+
+  if (!createdCart) return null;
+
+  saveGuestCartCookiePayload({
+    id_cart: createdCart.id,
+    id_guest: 0,
+    langue: defaultLang,
+    devise: defaultCurrency,
+    session: guestPayload?.session || "",
+  });
+
+  return createdCart;
 }
 
 async function resolveDefaultCustomerAddressId(customerId: number): Promise<number | undefined> {
@@ -673,6 +694,7 @@ function buildCartUpdateXml(cartId: number, customerId: number, items: Array<{ i
   return buildPrestashopXml(payload);
 }
 
+
 export async function updateCartItems(
   cartId: number,
   customerId: number,
@@ -683,6 +705,19 @@ export async function updateCartItems(
   const xml = buildCartUpdateXml(cartId, customerId, items, idLang, idCurrency);
   await requestPrestashopXml(`/carts/${cartId}`, { method: "PUT", bodyXml: xml });
 }
+
+// export async function epdateGuest(cartId:number,clientId:number)
+// {
+//   try
+//   {
+//     const items = await getCart(cartId);
+//     const xml = buildCart
+//   }
+//   catch(e:any)
+//   {
+//     console.log("Erreur lors de la mise à jour du panier invité:", e?.message || e);
+//   }
+// }
 
 export async function addProductToCart(params: {cartId: number;customerId: number;id_product: number;id_product_attribute?: number;quantity: number;idLang?: number;idCurrency?: number;}): Promise<CartDetail> {
   const currentCart = await getCart(params.cartId);
@@ -732,3 +767,5 @@ export async function initPanier(): Promise<void> {
     alert(e?.message ?? "Erreur lors de l'initialisation des paniers");
   }
 }
+
+

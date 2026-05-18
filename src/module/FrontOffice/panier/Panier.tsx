@@ -221,15 +221,21 @@ export function Panier()
                         <strong style={{fontSize:30}}>{formatEuro(total)}</strong>
                     </div>
 
-                    <button type="button" onClick={() => {
-                        const currentSession = getStoredClientSession();
-                        if (!currentSession?.id) {
-                            alert("Veuillez vous connecter pour continuer");
-                            return;
-                        }
-                        if(currentSession.email === "anonymous@psgdpr.com")
-                        navigate('/Commande');
-                    }} className="panier_checkout_btn" disabled={lines.length === 0}>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const currentSession = getStoredClientSession();
+                            if (!currentSession?.id) {
+                                // demander d'abord de choisir un utilisateur (ou se connecter)
+                                navigate('/', { state: { message: 'Veuillez choisir un utilisateur ou vous connecter pour passer la commande', redirectTo: '/Commande' } });
+                                return;
+                            }
+
+                            navigate('/Commande');
+                        }}
+                        className="panier_checkout_btn"
+                        disabled={lines.length === 0}
+                    >
                         COMMANDER
                     </button>
                 </aside>
