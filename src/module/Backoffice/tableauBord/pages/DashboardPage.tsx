@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
 import {type OrderListItem} from "../../commande/api/ObjetOrder";
 import "./DashboardPage.css";
+import { StatistiquesCategorie } from "./StatistiquesCategorie";
 
 type DayMetric = {
   date: string;
@@ -157,6 +158,7 @@ export function DashboardPage() {
           )}
         </section>
       )}
+      <StatistiquesCategorie />
     </main>
   );
 }

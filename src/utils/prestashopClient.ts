@@ -14,7 +14,7 @@ export class PrestashopWebserviceError extends Error {
   }
 }
 
-function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
+export function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
   const value = import.meta.env[name] as string | undefined;
 
   if (!value) {
@@ -24,7 +24,7 @@ function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
   return value;
 }
 
-function getEnvOptional(name: "VITE_BASE_URL_FULL" | "VITE_API_KEY"): string {
+export function getEnvOptional(name: "VITE_BASE_URL_FULL" | "VITE_API_KEY"): string {
   const value = import.meta.env[name] as string | undefined;
 
   return value?.trim() || "";

@@ -26,8 +26,8 @@ const DEFAULT_FILTERS: OrderFilters = {
 };
 
 // États autorisés pour modification
-const ALLOWED_STATES = [
-  { id: 2, name: "Paiement accepter" },
+export const ALLOWED_STATES = [
+  { id: 5, name: "Livrer" },
   { id: 6, name: "Annulé" },
 ];
 
