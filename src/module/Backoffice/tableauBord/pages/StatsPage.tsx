@@ -46,21 +46,21 @@ export default function StatsPage(): JSX.Element {
         <div style={styles.card}>
           <span style={styles.cardLabel}>Montant total des ventes (HT)</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
-            {totalSales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            {totalSales.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
           </span>
         </div>
         
         <div style={styles.card}>
           <span style={styles.cardLabel}>Montant total des achats (HT)</span>
           <span style={{ ...styles.cardValue, color: "#ef4444" }}>
-            {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
           </span>
         </div>
 
         <div style={styles.card}>
           <span style={styles.cardLabel}>Bénéfice global estimé</span>
           <span style={{ ...styles.cardValue, color: "#3b82f6" }}>
-            {(totalSales - totalPurchases).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+            {(totalSales - totalPurchases).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
           </span>
         </div>
       </div>
@@ -86,14 +86,14 @@ export default function StatsPage(): JSX.Element {
                   style={index % 2 === 0 ? styles.trEven : styles.trOdd}
                 >
                   <td style={{ ...styles.td, textAlign: "left", fontWeight: 500 }}>{c.categoryName}</td>
-                  <td style={styles.td}>{c.sales.toFixed(2)} €</td>
-                  <td style={styles.td}>{c.purchases.toFixed(2)} €</td>
+                  <td style={styles.td}>{c.sales.toFixed(3)} €</td>
+                  <td style={styles.td}>{c.purchases.toFixed(3)} €</td>
                   <td style={{ 
                     ...styles.td, 
                     fontWeight: "bold", 
                     color: isPositive ? "#10b981" : "#ef4444" 
                   }}>
-                    {c.profit.toFixed(2)} €
+                    {c.profit.toFixed(3)} €
                   </td>
                 </tr>
               );

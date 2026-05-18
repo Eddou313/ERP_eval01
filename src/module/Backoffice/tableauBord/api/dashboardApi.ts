@@ -59,23 +59,27 @@ export async function getDashboardStats(): Promise<{
   const response = await requestPrestashopXml<any>("/orders", { query: { display: "full", limit: "0,10000" } });
   const orders = asArray(response?.prestashop?.orders?.order ?? []);
 
+  // Iterate orders and aggregate using row-level prices (prefer `unit_price_tax_excl` when present)
   for (const order of orders) {
-    const orderTotalHt = Number(order?.total_products) || Number(order?.total_paid_tax_excl) || 0;
-    totalSalesHT += orderTotalHt;
-
     const rows = asArray(order?.associations?.order_rows?.order_row ?? []);
     for (const row of rows) {
-      const productId = numFromUnknown(row?.product_id ?? row?.product_id ?? row?.id_product);
+      const productId = numFromUnknown(row?.product_id ?? row?.id_product ?? row?.id_product ?? 0) || 0;
       const qty = Number(row?.product_quantity ?? row?.product_qty ?? 0) || 0;
-      let unitPrice = Number(row?.product_price ?? row?.unit_price_tax_excl ?? 0) || 0;
+
+      // Prefer explicit tax-excluded unit price from the order row when available
+      let unitPrice = Number(row?.unit_price_tax_excl ?? row?.product_price ?? row?.unit_price ?? 0) || 0;
 
       const prodInfo = await fetchProductInfo(productId);
+      // If row doesn't contain a usable price, fallback to product base price (HT if available via pricing workflow)
       if (!unitPrice || unitPrice === 0) unitPrice = prodInfo.price || 0;
+
       const wholesale = prodInfo.wholesale || 0;
 
       const saleAmount = unitPrice * qty;
       const purchaseAmount = wholesale * qty;
 
+      // Sum totals from row-level amounts to keep consistency
+      totalSalesHT += saleAmount;
       totalPurchasesHT += purchaseAmount;
 
       const catId = prodInfo.categories?.[0] ?? 0;
