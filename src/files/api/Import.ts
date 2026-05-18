@@ -6,7 +6,7 @@ import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
-import { createCart, addProductToCart } from "../../module/Backoffice/panier/api/panierApi";
+import { createCart } from "../../module/Backoffice/panier/api/panierApi";
 import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
@@ -20,6 +20,14 @@ export type OrderImportRow = colonneCSV["Commande_client_produit"];
 
 type AchatItem = { reference: string; quantity: number; variant: string };
 type ZipImageAsset = { blob: Blob; fileName: string };
+type PreparedOrderRow = {
+    productId: number;
+    productAttributeId: number;
+    quantity: number;
+    reference: string;
+    variant: string;
+    supplierReference: string;
+};
 
 function resolveOrderStateId(etat: string): number {
     const value = String(etat ?? "").trim().toLowerCase();
@@ -49,6 +57,31 @@ function normalizeProductReference(value: string): string {
 
 function compactReference(value: string): string {
     return normalizeProductReference(value).replace(/[^a-z0-9]/g, "");
+}
+
+function normalizeSupplierReference(value: string): string {
+    return normalizeText(String(value ?? "").trim()).replace(/[^a-z0-9]/g, "");
+}
+
+function buildCombinationReferenceCandidates(reference: string, variant: string): string[] {
+    const baseReference = String(reference ?? "").trim();
+    const variantText = String(variant ?? "").trim();
+    if (!baseReference || !variantText) {
+        return [];
+    }
+
+    return Array.from(
+        new Set(
+            [
+                `${baseReference}${variantText}`,
+                `${baseReference} ${variantText}`,
+                `${baseReference}-${variantText}`,
+                `${baseReference}_${variantText}`,
+            ]
+                .map((candidate) => normalizeSupplierReference(candidate))
+                .filter(Boolean),
+        ),
+    );
 }
 
 /**
@@ -452,9 +485,9 @@ async function findCustomerIdByEmail(email: string): Promise<number | null> {
     return null;
 }
 
-async function findCombinationIdByVariantName(productId: number, variant: string): Promise<number> {
-    const normalizedVariant = normalizeText(String(variant ?? ""));
-    if (!normalizedVariant) {
+async function findCombinationIdBySupplierReference(productId: number, reference: string, variant: string): Promise<number> {
+    const targetCandidates = buildCombinationReferenceCandidates(reference, variant);
+    if (targetCandidates.length === 0) {
         return 0;
     }
 
@@ -463,9 +496,17 @@ async function findCombinationIdByVariantName(productId: number, variant: string
         const combinations = Array.from(
             new Map(attrGroups.flatMap((group) => group.combinations ?? []).map((combination) => [combination.id, combination])).values(),
         );
-        const match = combinations.find((combination: any) =>
-            (combination.attributes || []).some((attr: any) => normalizeText(attr.name ?? "") === normalizedVariant),
-        );
+
+        const match = combinations.find((combination: any) => {
+            const combinationReference = normalizeSupplierReference(combination?.reference ?? "");
+            const supplierReference = normalizeSupplierReference(combination?.supplier_reference ?? "");
+            if (!combinationReference && !supplierReference) {
+                return false;
+            }
+
+            return targetCandidates.some((candidate) => candidate === combinationReference || candidate === supplierReference);
+        });
+
         return Number(match?.id) || 0;
     } catch {
         return 0;
@@ -593,14 +634,79 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
 
     for (const row of rows) {
         try {
-            // 1. Parse customer name
             const { firstname, lastname } = parseCustomerName(row.nom);
             if (!firstname || !row.email || !row.pwd) {
                 throw new Error("Données client insuffisantes (nom, email, pwd requis)");
             }
 
-            // 2. Parse achat from CSV
             const achatItems = parseAchatString(row.achat);
+            if (achatItems.length === 0) {
+                throw new Error("Achat vide ou invalide dans le CSV commande");
+            }
+
+            const resolvedRows: PreparedOrderRow[] = [];
+            for (const achatItem of achatItems) {
+                const product = await findProductByReference(achatItem.reference, productsCache);
+                if (!product) {
+                    console.warn(`Produit introuvable: ${achatItem.reference}, ignoré`);
+                    continue;
+                }
+
+                const quantity = Math.max(0, Number(achatItem.quantity) || 0);
+                if (!quantity) {
+                    continue;
+                }
+
+                const productAttributeId = achatItem.variant
+                    ? await findCombinationIdBySupplierReference(product.id, achatItem.reference, achatItem.variant)
+                    : 0;
+
+                if (achatItem.variant && !productAttributeId) {
+                    console.warn(
+                        `Combinaison introuvable via supplier_reference pour ${achatItem.reference} + ${achatItem.variant} (produit #${product.id})`,
+                    );
+                }
+
+                resolvedRows.push({
+                    productId: product.id,
+                    productAttributeId,
+                    quantity,
+                    reference: achatItem.reference,
+                    variant: achatItem.variant,
+                    supplierReference: `${achatItem.reference}${achatItem.variant ? achatItem.variant : ""}`,
+                });
+            }
+
+            if (resolvedRows.length === 0) {
+                throw new Error("Aucune ligne valide à importer pour la commande");
+            }
+
+            console.log(
+                "PrestaShop payload à insérer",
+                JSON.stringify(
+                    {
+                        customer: {
+                            firstname,
+                            lastname: lastname || ".",
+                            email: row.email,
+                            hasPassword: Boolean(row.pwd),
+                        },
+                        achat: achatItems,
+                        cart_rows: resolvedRows.map((line) => ({
+                            id_product: line.productId,
+                            id_product_attribute: line.productAttributeId,
+                            quantity: line.quantity,
+                        })),
+                        order_rows: resolvedRows.map((line) => ({
+                            id_product: line.productId,
+                            id_product_attribute: line.productAttributeId,
+                            quantity: line.quantity,
+                        })),
+                    },
+                    null,
+                    2,
+                ),
+            );
 
             const customerDateAdd = String(row.date ?? "").trim();
             const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
@@ -608,7 +714,6 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 throw new Error(`Date client invalide: ${customerDateAdd}`);
             }
 
-            // 3. Find customer by email, create only if missing
             let customerId = await findCustomerIdByEmail(row.email);
             if (!customerId) {
                 customerId = await importClient({
@@ -629,8 +734,6 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 customersCreated += 1;
             }
 
-            // 4. Create address
-            // Parse adresse: simple format "rue, codepostal, ville" or just use default
             const addressParts = (row.adresse || "").split(/,|\n/);
             const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
             const addressPostal = addressParts[1]?.trim() || "00000";
@@ -645,150 +748,68 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 id_country: countryIdFrance,
             });
 
-            const resolvedLines: Array<{
-                productId: number;
-                attributeId: number;
-                quantity: number;
-                unitPriceTtc: number;
-                unitPriceHt: number;
-                lineTotalTtc: number;
-                lineTotalHt: number;
-            }> = [];
-
-            for (const achatItem of achatItems) {
-                const product = await findProductByReference(achatItem.reference, productsCache);
-                if (!product) {
-                    console.warn(`Produit introuvable: ${achatItem.reference}, ignoré`);
-                    continue;
-                }
-
-                const attributeId = achatItem.variant
-                    ? await findCombinationIdByVariantName(product.id, achatItem.variant)
-                    : 0;
-                const quantity = Math.max(0, Number(achatItem.quantity) || 0);
-                if (!quantity) {
-                    continue;
-                }
-
-                const unitPriceTtc = Number(product.price ?? 0) || 0;
-                const unitPriceHt = Number(product.price_ht ?? product.price ?? 0) || 0;
-
-                resolvedLines.push({
-                    productId: product.id,
-                    attributeId,
-                    quantity,
-                    unitPriceTtc,
-                    unitPriceHt,
-                    lineTotalTtc: roundMoney(unitPriceTtc * quantity),
-                    lineTotalHt: roundMoney(unitPriceHt * quantity),
-                });
-            }
-
-            // 5. Create cart after TTC total calculation
-            const totalTtc = roundMoney(resolvedLines.reduce((sum, line) => sum + line.lineTotalTtc, 0));
-            const totalHt = roundMoney(resolvedLines.reduce((sum, line) => sum + line.lineTotalHt, 0));
-
-            // 6. Create cart
             const cartId = await createCart({
                 id_customer: customerId,
                 id_lang: 1,
                 id_currency: 1,
                 id_shop: 1,
                 id_shop_group: 1,
+                id_address_delivery: addressId,
+                id_address_invoice: addressId,
+                id_carrier: defaultCarrierId,
+                items: resolvedRows.map((line) => ({
+                    id_product: line.productId,
+                    id_product_attribute: line.productAttributeId,
+                    quantity: line.quantity,
+                })),
             });
             cartsCreated += 1;
 
-            // 7. Add products to cart
-            for (const line of resolvedLines) {
-                await addProductToCart({
-                    cartId,
-                    customerId,
-                    id_product: line.productId,
-                    id_product_attribute: line.attributeId,
-                    quantity: line.quantity,
-                    idLang: 1,
-                    idCurrency: 1,
-                });
-            }
-
-            // 8. Parse etat field to determine if this is a cart-only or a full order
             const etatLower = (row.etat || "").toLowerCase().trim();
             const isCartOnly = !etatLower || etatLower === "dans le panier" || etatLower.includes("panier");
             const orderStateId = resolveOrderStateId(etatLower);
 
-            // // 9. If etat indicates cart-only, stop here
-            // if (isCartOnly) {
-            //     console.log(`Import client #${customerId}: Panier créé, total TTC calculé = ${totalTtc}`);
-            //     continue;
-            // }
+            if (isCartOnly) {
+                console.log(`Import client #${customerId}: panier créé #${cartId}`);
+                continue;
+            }
 
-            // // 10. Create order
-            // const orderForm = {
-            //     id_customer: customerId,
-            //     id_cart: cartId,
-            //     id_address_delivery: addressId,
-            //     id_address_invoice: addressId,
-            //     id_currency: 1,
-            //     id_lang: 1,
-            //     id_carrier: defaultCarrierId,
-            //     payment_code: "cash",
-            //     total_paid_tax_incl: totalTtc,
-            //     total_paid_tax_excl: totalHt,
-            //     total_paid: totalTtc,
-            //     total_paid_real: totalTtc,
-            //     total_products: totalHt,
-            //     total_products_wt: totalTtc,
-            //     total_shipping: 0,
-            //     conversion_rate: 1,
-            //     current_state: orderStateId || 2,
-            //     module: "cash",
-            //     payment: "Paiement par virment",
-            // };
+            const orderId = await createOrder({
+                id_customer: customerId,
+                id_cart: cartId,
+                id_address_delivery: addressId,
+                id_address_invoice: addressId,
+                id_currency: 1,
+                id_lang: 1,
+                id_carrier: defaultCarrierId,
+                payment_code: "cash",
+                module: "cash",
+                payment: "Paiement par virement",
+                current_state: orderStateId || 2,
+                conversion_rate: 1,
+                total_paid_tax_incl: 0,
+                total_paid_tax_excl: 0,
+                total_paid: 0,
+                total_paid_real: 0,
+                total_products: 0,
+                total_products_wt: 0,
+                total_shipping: 0,
+                order_rows: resolvedRows.map((line) => ({
+                    product_id: line.productId,
+                    product_quantity: line.quantity,
+                })),
+            } as any);
+            ordersCreated += 1;
 
-            // const orderId = await createOrder(orderForm as any);
-            // ordersCreated += 1;
+            for (const line of resolvedRows) {
+                await createOrderDetail(orderId, line.productId, line.productAttributeId, line.quantity, 0, 1, 1);
+            }
 
-            // // 11. Create order details
-            // for (const line of resolvedLines) {
-            //     await createOrderDetail(orderId, line.productId, line.attributeId, line.quantity, line.unitPriceHt, 1, 1);
+            if (orderStateId > 0) {
+                await updateOrderState(orderId, orderStateId);
+            }
 
-            //     // // decrement stock only when a real order is created
-            //     // const stockBefore = await getStockByProductId(product.id, attributeId > 0 ? attributeId : undefined);
-            //     // const currentStock = Number(stockBefore ?? 0);
-            //     // const nextStock = Math.max(0, currentStock - achatItem.quantity);
-            //     // await upsertStockAvailable({
-            //     //     id_product: product.id,
-            //     //     id_product_attribute: attributeId,
-            //     //     id_shop: 1,
-            //     //     id_shop_group: 1,
-            //     //     quantity: nextStock,
-            //     //     depends_on_stock: false,
-            //     //     out_of_stock: 2,
-            //     // });
-            // }
-
-            // // 12. Calcul total (already computed from CSV/cart lines)
-            // const computedOrderTotalTtc = totalTtc;
-            // const computedOrderTotalHt = totalHt;
-
-            // if (orderStateId > 0) {
-            //     await updateOrderState(orderId, orderStateId);
-            // }
-
-            // // 10. Clear cart (set quantities to 0)
-            // // if (achatItems.length > 0) {
-            // //     await updateCartItems(
-            // //         cartId,
-            // //         customerId,
-            // //         achatItems.map((_) => ({
-            // //             id_product: 0,
-            // //             id_product_attribute: 0,
-            // //             quantity: 0,
-            // //         }))
-            // //     );
-            // // }
-
-            // console.log(`Import client #${customerId}: Commande créée #${orderId} (total HT=${computedOrderTotalHt}, TTC=${computedOrderTotalTtc})`);
+            console.log(`Import client #${customerId}: commande créée #${orderId}`);
         } catch (error) {
             failed += 1;
             console.error("Erreur lors de l'import du CSV commande:", row, error);
