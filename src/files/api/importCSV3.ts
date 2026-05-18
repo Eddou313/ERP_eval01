@@ -7,7 +7,7 @@ import { createClientAddress } from "../../module/Backoffice/client/api/clientAd
 import { createCart } from "../../module/Backoffice/panier/api/panierApi";
 import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
-import { requestPrestashopXml } from "../../utils/prestashopClient";
+import { requestPrestashopXml, buildPrestashopXml } from "../../utils/prestashopClient";
 import { asArray } from "../../utils/helper";
 import { toPrestashopDate } from "./utils";
 import { getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
@@ -294,6 +294,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
             }
 
             const customerDateAdd = String(row.date ?? "").trim();
+            
             const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
             if (customerDateAdd && !normalizedCustomerDate) {
                 throw new Error(`Date client invalide: ${customerDateAdd}`);
@@ -349,6 +350,16 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                     quantity: line.quantity,
                 })),
             });
+            // Forcer la date du panier selon la colonne CSV (date_add/date_upd)
+            if (normalizedCustomerDate) {
+                const dateTime = `${normalizedCustomerDate} 00:00:00`;
+                try {
+                    const cartXml = buildPrestashopXml({ prestashop: { cart: { id: cart.id, date_add: dateTime, date_upd: dateTime } } });
+                    await requestPrestashopXml(`/carts/${cart.id}`, { method: "PUT", bodyXml: cartXml });
+                } catch (e) {
+                    console.warn(`Impossible de forcer la date du panier ${cart.id}:`, e);
+                }
+            }
             cartsCreated += 1;
 
             const etatLower = (row.etat || "").toLowerCase().trim();
@@ -385,6 +396,16 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                     product_quantity: line.quantity,
                 })),
             } as any);
+            // Forcer la date de la commande selon la colonne CSV (date_add/date_upd)
+            if (normalizedCustomerDate) {
+                const dateTime = `${normalizedCustomerDate} 00:00:00`;
+                try {
+                    const orderXml = buildPrestashopXml({ prestashop: { order: { id: orderId, date_add: dateTime, date_upd: dateTime } } });
+                    await requestPrestashopXml(`/orders/${orderId}`, { method: "PUT", bodyXml: orderXml });
+                } catch (e) {
+                    console.warn(`Impossible de forcer la date de la commande ${orderId}:`, e);
+                }
+            }
             ordersCreated += 1;
 
             const finalStateId = getStateId(etatLower) || orderStateId;

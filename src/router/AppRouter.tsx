@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import DashboardPage from "../module/Backoffice/tableauBord/pages/DashboardPage"
 import EvolutionStockPage from "../module/Backoffice/tableauBord/pages/Evolution_stock"
+import StatsPage from "../module/Backoffice/tableauBord/pages/StatsPage"
 
 // import CategoriesListPage from "../module/Backoffice/categorie/pages/CategoriesListPage"
 // import ProductsListPage from "../module/Backoffice/produit/pages/ProductsListPage"
@@ -44,6 +45,7 @@ function AppRouter() {
             
             <Route path="/Dashboard" element={<DashboardPage />} />
             <Route path="/stock/evolution" element={<EvolutionStockPage />} />
+            <Route path="/Dashboard/stats" element={<StatsPage />} />
 
             {/* <Route path="catalogue/categories" element={<CategoriesListPage />} /> */}
             {/* <Route path="catalogue/produits" element={<ProductsListPage />} /> */}

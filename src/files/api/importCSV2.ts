@@ -3,6 +3,10 @@ import { createCombination, ensureAttributeGroupExists, ensureAttributeValueExis
 import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
+import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
+import { applyStockModification } from "../../module/Backoffice/stock/api/stockMovementService";
+import { requestPrestashopXml } from "../../utils/prestashopClient";
+import { numFromUnknown } from "../../utils/helper";
 
 export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockImport"];
 
@@ -182,15 +186,47 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                     }
                 }
 
-                await upsertStockAvailable({
-                    id_product: product.id,
-                    id_product_attribute: 0,
-                    id_shop: 1,
-                    id_shop_group: 1,
-                    quantity,
-                    depends_on_stock: false,
-                    out_of_stock: 2,
+                // Gérer la mise à jour du stock en enregistrant un mouvement
+                // Rechercher l'entrée stock_available existante
+                const stockResponse = await requestPrestashopXml<any>("/stock_availables", {
+                    query: {
+                        display: "full",
+                        "filter[id_product]": `[${product.id}]`,
+                        "filter[id_product_attribute]": `[0]`,
+                    },
                 });
+
+                const rawEntries = stockResponse?.prestashop?.stock_availables?.stock_available;
+                const entries = Array.isArray(rawEntries) ? rawEntries : rawEntries ? [rawEntries] : [];
+                const stockEntry = entries[0];
+
+                if (!stockEntry) {
+                    // Pas d'entrée existante: créer une entrée vide puis appliquer la modification
+                    await upsertStockAvailable({
+                        id_product: product.id,
+                        id_product_attribute: 0,
+                        id_shop: 1,
+                        id_shop_group: 1,
+                        quantity: 0,
+                        depends_on_stock: false,
+                        out_of_stock: 2,
+                    });
+
+                    // Appliquer la modification pour créer le mouvement (0 -> quantity)
+                    const res = await applyStockModification(product.id, 0, quantity, 0, "import", 1);
+                    if (!res.success) {
+                        console.warn(`applyStockModification failed for product ${product.id}: ${res.message}`);
+                    }
+                } else {
+                    const currentQuantity = numFromUnknown(stockEntry?.quantity);
+                    const delta = quantity - currentQuantity;
+                    if (delta !== 0) {
+                        const res = await applyStockModification(product.id, currentQuantity, delta, 0, "import", 1);
+                        if (!res.success) {
+                            console.warn(`applyStockModification failed for product ${product.id}: ${res.message}`);
+                        }
+                    }
+                }
 
                 imported += 1;
                 continue;
@@ -207,6 +243,7 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
             const reference = `${product.reference ?? row.reference}-${slugify(valueName)}`;
             let combinationId = await findCombinationIdByValues(product.id, [valueId]);
 
+
             if (!combinationId) {
                 combinationId = await findCombinationIdBySupplierReference(product.id, row.reference, valueName);
             }
@@ -217,15 +254,44 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                 await updateCombination(combinationId, product.id, [valueId], priceImpactHt, quantity, reference);
             }
 
-            await upsertStockAvailable({
-                id_product: product.id,
-                id_product_attribute: combinationId,
-                id_shop: 1,
-                id_shop_group: 1,
-                quantity,
-                depends_on_stock: false,
-                out_of_stock: 2,
+            // Pour les combinaisons, appliquer aussi la modification de stock via applyStockModification
+            const stockResponseCombo = await requestPrestashopXml<any>("/stock_availables", {
+                query: {
+                    display: "full",
+                    "filter[id_product]": `[${product.id}]`,
+                    "filter[id_product_attribute]": `[${combinationId}]`,
+                },
             });
+
+            const rawEntriesCombo = stockResponseCombo?.prestashop?.stock_availables?.stock_available;
+            const entriesCombo = Array.isArray(rawEntriesCombo) ? rawEntriesCombo : rawEntriesCombo ? [rawEntriesCombo] : [];
+            const stockEntryCombo = entriesCombo[0];
+
+            if (!stockEntryCombo) {
+                await upsertStockAvailable({
+                    id_product: product.id,
+                    id_product_attribute: combinationId,
+                    id_shop: 1,
+                    id_shop_group: 1,
+                    quantity: 0,
+                    depends_on_stock: false,
+                    out_of_stock: 2,
+                });
+
+                const res = await applyStockModification(product.id, 0, quantity, combinationId, "import", 1);
+                if (!res.success) {
+                    console.warn(`applyStockModification failed for product ${product.id} combo ${combinationId}: ${res.message}`);
+                }
+            } else {
+                const currentQuantityCombo = numFromUnknown(stockEntryCombo?.quantity);
+                const deltaCombo = quantity - currentQuantityCombo;
+                if (deltaCombo !== 0) {
+                    const res = await applyStockModification(product.id, currentQuantityCombo, deltaCombo, combinationId, "import", 1);
+                    if (!res.success) {
+                        console.warn(`applyStockModification failed for product ${product.id} combo ${combinationId}: ${res.message}`);
+                    }
+                }
+            }
 
             imported += 1;
         } catch (error) {

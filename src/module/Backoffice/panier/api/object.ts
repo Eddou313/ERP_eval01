@@ -72,6 +72,7 @@ export type CartCreate = {
   id_shop_group?: number;
   secure_key?: string;
   date_add?: string;
+  date_upd?: string;
 };
 
 export type CartImport = CartCreate & {

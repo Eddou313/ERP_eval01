@@ -5,6 +5,7 @@ import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashop
 import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { isValidDate, toPrestashopDate } from "./utils";
+import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
 
 export type ProductImportRow = colonneCSV["produitImport"];
 
@@ -303,7 +304,6 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 			reportProgress(row.reference || row.nom || "Ligne produit");
 		}
 	}
-
 	reportProgress("Terminé");
 
 	return { imported, failed };
