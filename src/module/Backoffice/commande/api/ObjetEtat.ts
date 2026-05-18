@@ -1,4 +1,21 @@
 
+export const ALLOWED_STATES = [
+  { id: 5, name: "Livrer" },
+  { id: 6, name: "Annulé" },
+];
+
+export function getStateId(etatLower?: string): number | null {
+  if (!etatLower) return null;
+
+  const normalized = etatLower.toLowerCase();
+
+  const found = ALLOWED_STATES.find((state) =>
+    normalized.includes(state.name.toLowerCase())
+  );
+
+  return found ? found.id : null;
+}
+
 export type OrderStateListItem = {
   id: number;
   name: string;

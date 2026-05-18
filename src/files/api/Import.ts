@@ -13,6 +13,7 @@ import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashop
 import { asArray, numFromUnknown } from "../../utils/helper";
 import { isValidDate, toPrestashopDate } from "./utils";
 import { upsertStockAvailable } from "../../module/Backoffice/stock/api/stockApi";
+import { ALLOWED_STATES, getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
 
 export type ProductImportRow = colonneCSV["produitImport"];
 export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockImport"];
@@ -764,6 +765,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
 
             const etatLower = (row.etat || "").toLowerCase().trim();
             const isCartOnly = !etatLower || etatLower === "dans le panier" || etatLower.includes("panier");
+            const payement = etatLower.includes("paiement") || etatLower.includes("payement");
             const orderStateId = resolveOrderStateId(etatLower);
 
             if (isCartOnly) {
@@ -797,6 +799,17 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[]): Promise<
                 })),
             } as any);
             ordersCreated += 1;
+            const etatReel = getStateId(etatLower);
+            if (etatReel) {
+                try{
+                    await updateOrderState(orderId, etatReel);
+                }
+                catch(error : any)
+                {
+                    console.log("Erreur lors de la mise a jour du commande: ",error.message);
+                }
+
+            }
 
             for (const line of resolvedRows) {
                 await createOrderDetail(orderId, line.productId, line.productAttributeId, line.quantity, 0, 1, 1);

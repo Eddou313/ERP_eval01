@@ -5,7 +5,7 @@ import "./Commandes.css";
 import {listOrderStates} from "../api/EtatCommande";
 import { IconSettings } from "@tabler/icons-react";
 import { CART_PENDING_STATE_LABEL, type OrderListItem } from "../api/ObjetOrder";
-import type { OrderStateListItem } from "../api/ObjetEtat";
+import { ALLOWED_STATES, type OrderStateListItem } from "../api/ObjetEtat";
 
 type OrderFilters = {
   reference: string;
@@ -26,10 +26,7 @@ const DEFAULT_FILTERS: OrderFilters = {
 };
 
 // États autorisés pour modification
-export const ALLOWED_STATES = [
-  { id: 5, name: "Livrer" },
-  { id: 6, name: "Annulé" },
-];
+
 
 
 
