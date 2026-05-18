@@ -1,4 +1,4 @@
-import { buildPrestashopXml, getEnv, getEnvOptional, requestPrestashopXml } from "../../../../utils/prestashopClient";
+import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { textFromUnknown, numFromUnknown, boolFromUnknown, asArray, getFirstLanguageText, toPrestashopBool, languageField, validateUnsignedId, validatePrice, validateFloat, } from "../../../../utils/helper";
 import { getClient } from "../../client/api/clientApi";
 import { getCart } from "../../panier/api/panierApi";
@@ -341,19 +341,38 @@ export async function updateOrderState(id: number, newState: number): Promise<vo
   }
 
   try {
+    const xml = buildPrestashopXml({
+      prestashop: {
+        order_state_update: {
+          id_order: id,
+          id_order_state: newState,
+        },
+      },
+    });
+
     // Appel via requestPrestashopXml qui passe par le proxy Vite /api
     const response = await requestPrestashopXml<any>(
-      "/module/mon_module/shiporder",
+      "/order_state_update",
       {
-        query: {
-          id_order: id,
-          state: newState,
-        },
+        method: "POST",
+        bodyXml: xml,
       }
     );
 
-    const responseData = response?.prestashop?.response;
-    const success = responseData?.success === "true" || responseData?.success === true;
+    const responseData =
+      response?.prestashop?.response ||
+      response?.prestashop?.order_state_update ||
+      response?.prestashop?.order_state_updates?.order_state_update ||
+      null;
+
+    const successValue = responseData?.success;
+    const success =
+      successValue === undefined ||
+      successValue === null ||
+      successValue === "true" ||
+      successValue === true ||
+      responseData?.id_order === id ||
+      responseData?.id_order_state === newState;
     const message = textFromUnknown(responseData?.message);
 
     if (!success) {
