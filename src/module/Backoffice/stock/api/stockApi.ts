@@ -69,24 +69,6 @@ async function resolveMovementProductIds(item: any): Promise<{
   }
 
   try {
-    const stockResponse = await requestPrestashopXml<any>(
-      `/stocks/${id_stock}`,
-      { query: { display: "full" } }
-    );
-    const stock = stockResponse?.prestashop?.stock;
-    const productIdFromStock = numFromUnknown(stock?.id_product);
-    const attributeIdFromStock = numFromUnknown(stock?.id_product_attribute);
-    if (productIdFromStock > 0) {
-      return {
-        id_product: productIdFromStock,
-        id_product_attribute: attributeIdFromStock,
-      };
-    }
-  } catch {
-    // Ignorer et tester l'autre source
-  }
-
-  try {
     const stockAvailableResponse = await requestPrestashopXml<any>(
       `/stock_availables/${id_stock}`,
       { query: { display: "full" } }
@@ -100,7 +82,7 @@ async function resolveMovementProductIds(item: any): Promise<{
         id_product_attribute: attributeIdFromStockAvailable,
       };
     }
-  } catch {
+  } catch (err) {
     // Ignorer et fallback final
   }
 

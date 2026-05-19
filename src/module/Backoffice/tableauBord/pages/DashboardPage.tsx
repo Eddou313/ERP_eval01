@@ -1,16 +1,21 @@
-import React, { useEffect, useMemo, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
 import { type OrderListItem } from "../../commande/api/ObjetOrder";
 import { StockDashboard } from "./StockDashboard";
 import StatsPage from "./StatsPage";
 import EvolutionStockPage from "./Evolution_stock";
+// import { count } from "console";
 
 type DayMetric = {
   date: string;
   orderCount: number;
   totalAmount: number;
 };
+export const ALLOWED_STATES = [
+  { id: 5, name: "Livrer" },
+  { id: 6, name: "Annulé" },
+];
 
 type TabId = "orders" | "stats" | "stock" | "evolution";
 
@@ -52,8 +57,10 @@ export function DashboardPage(): JSX.Element {
       setLoading(true);
       setError(null);
       try {
-        const data = await listOrdersLight({ declencher: 1 });
-        setOrders(data);
+        const data = await listOrdersLight();
+        // const data = await listOrdersLight({ declencher: 1 });
+        const filteredData = data.filter((order) => Number(order.current_state) !== 6);
+        setOrders(filteredData);
       } catch (e: any) {
         setError(e?.message || "Erreur lors du chargement du tableau de bord");
       } finally {
@@ -68,7 +75,8 @@ export function DashboardPage(): JSX.Element {
   const totalAmount = orders.reduce((sum, o) => sum + (Number(o.total_paid_tax_incl) || 0), 0);
   const latestDay = metrics[0];
   const topDays = metrics.slice(0, 8);
-  const avgOrder = totalOrders > 0 ? totalAmount / totalOrders : 0;
+  const avgOrder = orders.filter((order) => order.current_state === 0).length;
+  // const avgOrder = totalOrders > 0 ? totalAmount / totalOrders : 0;
 
   return (
     <main style={styles.container}>
@@ -136,8 +144,8 @@ export function DashboardPage(): JSX.Element {
               <span style={{ ...styles.cardValue, color: "#10b981" }}>{formatCurrency(totalAmount)}</span>
             </div>
             <div style={styles.card}>
-              <span style={styles.cardLabel}>Panier moyen</span>
-              <span style={{ ...styles.cardValue, color: "#6366f1" }}>{formatCurrency(avgOrder)}</span>
+              <span style={styles.cardLabel}>Panier</span>
+              <span style={{ ...styles.cardValue, color: "#6366f1" }}>{avgOrder}</span>
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>Jours actifs</span>

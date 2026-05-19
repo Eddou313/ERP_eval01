@@ -1,5 +1,6 @@
-import React, { useEffect, useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { getDashboardStats, type CategoryStat } from "../api/dashboardApi";
+import { getCategory } from "../api/../../categorie/api/categoriesApi";
 
 export default function StatsPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
@@ -15,7 +16,29 @@ export default function StatsPage(): JSX.Element {
         if (!mounted) return;
         setTotalSales(res.totalSalesHT || 0);
         setTotalPurchases(res.totalPurchasesHT || 0);
-        setByCategory(res.profitByCategory || []);
+
+        // Ensure categories have names: if a categoryName is missing,
+        // fetch the category by id as a fallback.
+        const enriched: CategoryStat[] = [];
+        for (const c of (res.profitByCategory || [])) {
+          if (c.categoryName && c.categoryName.trim()) {
+            enriched.push(c);
+            continue;
+          }
+
+          let name = c.categoryName || "(Inconnu)";
+          try {
+            if (typeof c.categoryId === "number" && c.categoryId > 0) {
+              const cat = await getCategory(c.categoryId);
+              name = cat?.name || name;
+            }
+          } catch (err) {
+            console.debug("StatsPage: fallback category lookup failed", err);
+          }
+          enriched.push({ ...c, categoryName: name });
+        }
+
+        setByCategory(enriched);
       } catch (err) {
         console.error("Erreur chargement stats:", err);
       } finally {

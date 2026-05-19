@@ -21,7 +21,16 @@ async function fetchProductInfo(productId: number) {
     const price = Number(prod?.price) || 0;
     const wholesale = Number(prod?.wholesale_price) || 0;
     const catsRaw = prod?.associations?.categories?.category;
-    const cats = Array.isArray(catsRaw) ? catsRaw.map((c: any) => Number(c.id ?? c["@_id"])) : catsRaw ? [Number(catsRaw.id ?? catsRaw["@_id"])].filter(Boolean) : [];
+    let cats = Array.isArray(catsRaw) ? catsRaw.map((c: any) => Number(c.id ?? c["@_id"])) : catsRaw ? [Number(catsRaw.id ?? catsRaw["@_id"])].filter(Boolean) : [];
+    
+    // Fallback to id_category_default if no categories in associations
+    if ((!cats || cats.length === 0) && prod?.id_category_default) {
+      const defaultCatId = numFromUnknown(prod.id_category_default);
+      if (defaultCatId > 0) {
+        cats = [defaultCatId];
+        console.debug(`fetchProductInfo: product ${productId} using fallback id_category_default=${defaultCatId}`);
+      }
+    }
     const info = { price, wholesale, categories: cats };
     productCache.set(productId, info);
     return info;

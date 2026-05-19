@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { listStockMovements, listStockItems } from "../../stock/api/stockApi";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { listStockItems } from "../../stock/api/stockApi";
+import { listStockMovementsSafe } from "../../stock/api/stockApiSafe";
 import { type StockMovement, type StockItem } from "../../stock/api/object";
 import "./Evolution_stock.css";
 
@@ -8,6 +9,15 @@ type StockDayMetric = {
   movementCount: number;
   totalQuantity: number;
   movements: StockMovement[];
+};
+
+type StockDayMetricWithValidated = StockDayMetric & {
+  validatedQuantity: number;
+};
+
+type SelectorOption = StockItem & {
+  key: string;
+  label: string;
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -54,13 +64,75 @@ function buildStockMetrics(movements: StockMovement[]): StockDayMetric[] {
   });
 }
 
+function buildSelectorOptions(items: StockItem[]): SelectorOption[] {
+  const byProduct = new Map<number, StockItem[]>();
+
+  for (const item of items) {
+    const productId = Number(item.id_product) || 0;
+    if (productId <= 0) continue;
+    if (!byProduct.has(productId)) {
+      byProduct.set(productId, []);
+    }
+    byProduct.get(productId)?.push(item);
+  }
+
+  const options: SelectorOption[] = [];
+
+  for (const productItems of byProduct.values()) {
+    const variantItems = productItems.filter((item) => Number(item.id_product_attribute) > 0);
+    const sourceItems = variantItems.length > 0 ? variantItems : productItems.filter((item) => Number(item.id_product_attribute) === 0);
+
+    const uniqueByAttribute = new Map<number, StockItem>();
+    for (const item of sourceItems) {
+      const attributeId = Number(item.id_product_attribute) || 0;
+      if (!uniqueByAttribute.has(attributeId)) {
+        uniqueByAttribute.set(attributeId, item);
+      }
+    }
+
+    for (const item of uniqueByAttribute.values()) {
+      const productId = Number(item.id_product) || 0;
+      const attributeId = Number(item.id_product_attribute) || 0;
+      const variantLabel = item.combinationLabel?.trim() || `Declinaison #${attributeId}`;
+      const label = attributeId > 0
+        ? `${item.productName} - ${variantLabel}`
+        : `${item.productName}${item.reference ? ` (${item.reference})` : ""}`;
+
+      options.push({
+        ...item,
+        key: `${productId}:${attributeId}`,
+        label,
+      });
+    }
+  }
+
+  return options.sort((a, b) => a.label.localeCompare(b.label, "fr"));
+}
+
 export function EvolutionStockPage() {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [selectedProductKey, setSelectedProductKey] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectorOptions = useMemo(() => buildSelectorOptions(stockItems), [stockItems]);
+
+  useEffect(() => {
+    if (selectorOptions.length === 0) {
+      if (selectedProductKey) {
+        setSelectedProductKey("");
+      }
+      return;
+    }
+
+    const exists = selectorOptions.some((option) => option.key === selectedProductKey);
+    if (!exists) {
+      setSelectedProductKey(selectorOptions[0].key);
+      setCurrentPage(1);
+    }
+  }, [selectorOptions, selectedProductKey]);
 
   useEffect(() => {
     const load = async () => {
@@ -69,14 +141,10 @@ export function EvolutionStockPage() {
       try {
         const [itemsData, movementsData] = await Promise.all([
           listStockItems(),
-          listStockMovements(),
+          listStockMovementsSafe(),
         ]);
         setStockItems(itemsData);
         setStockMovements(movementsData);
-        
-        if (itemsData.length > 0) {
-          setSelectedProductId(itemsData[0].id_product);
-        }
         setCurrentPage(1);
       } catch (e: any) {
         setError(e?.message || "Erreur lors du chargement des données de stock");
@@ -87,30 +155,64 @@ export function EvolutionStockPage() {
     load();
   }, []);
 
+  const selectedOption = useMemo(
+    () => selectorOptions.find((option) => option.key === selectedProductKey) || null,
+    [selectorOptions, selectedProductKey]
+  );
+
   const selectedProductMovements = useMemo(() => {
-    if (!selectedProductId) return [];
-    return stockMovements.filter(m => m.id_product === selectedProductId);
-  }, [stockMovements, selectedProductId]);
+    if (!selectedOption) return [];
+
+    const selectedProductId = Number(selectedOption.id_product) || 0;
+    const selectedAttributeId = Number(selectedOption.id_product_attribute) || 0;
+
+    return stockMovements.filter((movement) => {
+      const movementProductId = Number(movement.id_product) || 0;
+      const movementAttributeId = Number(movement.id_product_attribute) || 0;
+
+      if (movementProductId !== selectedProductId) {
+        return false;
+      }
+
+      if (selectedAttributeId > 0) {
+        return movementAttributeId === selectedAttributeId;
+      }
+
+      return movementAttributeId === 0;
+    });
+  }, [stockMovements, selectedOption]);
 
   const stockMetrics = useMemo(
     () => buildStockMetrics(selectedProductMovements),
     [selectedProductMovements]
   );
 
-  const selectedProduct = useMemo(
-    () => stockItems.find(item => item.id_product === selectedProductId),
-    [stockItems, selectedProductId]
-  );
+  const selectedProduct = selectedOption;
+
+  const stockMetricsWithValidated = useMemo<StockDayMetricWithValidated[]>(() => {
+    if (!selectedProduct) return [];
+
+    let runningQuantity = Number(selectedProduct.availableQuantity) || 0;
+    return stockMetrics.map((day) => {
+      const row: StockDayMetricWithValidated = {
+        ...day,
+        validatedQuantity: runningQuantity,
+      };
+
+      runningQuantity -= day.totalQuantity;
+      return row;
+    });
+  }, [stockMetrics, selectedProduct]);
 
   // Pagination
-  const totalPages = Math.ceil(stockMetrics.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(stockMetricsWithValidated.length / ITEMS_PER_PAGE);
   const paginatedMetrics = useMemo(() => {
     const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
-    return stockMetrics.slice(startIdx, startIdx + ITEMS_PER_PAGE);
-  }, [stockMetrics, currentPage]);
+    return stockMetricsWithValidated.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [stockMetricsWithValidated, currentPage]);
 
-  const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedProductId(Number(e.target.value));
+  const handleProductChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedProductKey(e.target.value);
     setCurrentPage(1);
   };
 
@@ -151,13 +253,13 @@ export function EvolutionStockPage() {
                   </label>
                   <select
                     id="product-select"
-                    value={selectedProductId || ""}
+                    value={selectedProductKey}
                     onChange={handleProductChange}
                     className="ev-select"
                   >
-                    {stockItems.map((item) => (
-                      <option key={item.id_product} value={item.id_product}>
-                        {item.productName} {item.reference ? `(${item.reference})` : ""}
+                    {selectorOptions.map((item) => (
+                      <option key={item.key} value={item.key}>
+                        {item.label}
                       </option>
                     ))}
                   </select>
@@ -216,6 +318,7 @@ export function EvolutionStockPage() {
                             <th>Date</th>
                             <th>Mouvements</th>
                             <th>Quantité nette</th>
+                            <th>Quantité réelle validée</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -233,6 +336,7 @@ export function EvolutionStockPage() {
                                 {day.totalQuantity >= 0 ? "+" : ""}
                                 {day.totalQuantity}
                               </td>
+                              <td className="ev-num">{day.validatedQuantity}</td>
                             </tr>
                           ))}
                         </tbody>

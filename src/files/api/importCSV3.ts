@@ -108,6 +108,22 @@ export function parseAchatString(achatStr: string): AchatItem[] {
     return items;
 }
 
+export function stringifyAchatItems(items: AchatItem[]): string {
+    if (!items || items.length === 0) return "[]";
+
+    // On transforme chaque objet en sa représentation textuelle '("REF";QTE;"VAR")'
+    const itemsFormatted = items.map(item => {
+        const reference = item.reference || "";
+        const quantity = item.quantity || 0;
+        const variant = item.variant || "";
+        
+        return `("${reference}";${quantity};"${variant}")`;
+    });
+
+    // On joint tous les éléments avec une virgule et on entoure de crochets
+    return `[${itemsFormatted.join(",")}]`;
+}
+
 /**
  * Parse le nom complet en firstname/lastname
  */

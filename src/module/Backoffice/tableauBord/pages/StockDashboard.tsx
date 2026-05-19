@@ -1,7 +1,9 @@
-import React, { useEffect, useState, type JSX } from "react";
+import { useEffect, useState, type JSX } from "react";
 import { listStockItems } from "../../stock/api/stockApi";
+import { listStockMovementsSafe } from "../../stock/api/stockApiSafe";
 import { getProduct } from "../../produit/api/productsApi";
-import { numFromUnknown, textFromUnknown } from "../../../../utils/helper";
+import { getOrder } from "../../commande/api/commandesApi";
+import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/helper";
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 
 type CategoryRow = {
@@ -10,6 +12,7 @@ type CategoryRow = {
   qtePhysique: number;
   qteReservee: number;
   qteDisponible: number;
+  qteReelleValide: number;
 };
 
 export function StockDashboard(): JSX.Element {
@@ -17,13 +20,88 @@ export function StockDashboard(): JSX.Element {
   const [loading, setLoading] = useState(true);
 
   // États calculés pour les cartes KPI globales
-  const [totals, setTotals] = useState({ physique: 0, reservee: 0, disponible: 0 });
+  const [totals, setTotals] = useState({ physique: 0, reservee: 0, disponible: 0, reelleValide: 0 });
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const items = await listStockItems();
+        const [items, movements, ordersResponse] = await Promise.all([
+          listStockItems(),
+          listStockMovementsSafe(),
+          requestPrestashopXml<any>("/orders", {
+            query: {
+              display: "full",
+              limit: "0,500",
+            },
+          }).catch(() => null),
+        ]);
+
+        const keyOf = (productId: number, attributeId: number) => `${productId}:${attributeId}`;
+        const reservedByKey = new Map<string, number>();
+        // Exclure les commandes livrées (5) et annulées (6)
+        const excludedStates = new Set([5, 6]);
+
+        const orders = asArray(ordersResponse?.prestashop?.orders?.order);
+        let processedOrdersCount = 0;
+        let missingRowsCount = 0;
+        for (const order of orders) {
+          const currentState = numFromUnknown((order as any)?.current_state);
+          // Inclure toutes les commandes sauf celles livrées/annulées
+          if (excludedStates.has(currentState)) {
+            continue;
+          }
+          
+          processedOrdersCount++;
+
+          let orderRows = asArray((order as any)?.associations?.order_rows?.order_row);
+          if (!orderRows || orderRows.length === 0) {
+            // Fallback: fetch full order details to get associations
+            const orderId = numFromUnknown((order as any)?.id ?? (order as any)?.["@_id"]);
+            if (orderId > 0) {
+              try {
+                const full = await getOrder(orderId);
+                orderRows = asArray((full as any)?.associations?.order_rows?.order_row);
+                if (!orderRows || orderRows.length === 0) missingRowsCount++;
+              } catch (err) {
+                missingRowsCount++;
+                orderRows = [];
+              }
+            }
+          }
+
+          for (const row of orderRows) {
+            const productId = numFromUnknown((row as any)?.product_id ?? (row as any)?.id_product);
+            const attributeId = numFromUnknown((row as any)?.product_attribute_id ?? (row as any)?.id_product_attribute);
+            const quantity = numFromUnknown((row as any)?.product_quantity ?? (row as any)?.quantity);
+
+            if (productId <= 0 || quantity <= 0) continue;
+
+            const key = keyOf(productId, attributeId);
+            reservedByKey.set(key, (reservedByKey.get(key) || 0) + quantity);
+          }
+        }
+        if (missingRowsCount > 0) {
+          console.debug(`StockDashboard: ${missingRowsCount} orders had missing rows and were fetched individually.`);
+        }
+        console.log(`StockDashboard: Processed ${processedOrdersCount} orders for stock reservation`);
+        if (reservedByKey.size > 0) {
+          console.log(`StockDashboard: Reserved items (productId:attributeId) = quantity:`, Array.from(reservedByKey.entries()).slice(0, 5));
+        }
+
+        // Validation croisée via stock_movement (utile pour vérifier le périmètre produit/declinaison)
+        const movementNetByKey = new Map<string, number>();
+        for (const movement of movements) {
+          const productId = numFromUnknown(movement.id_product);
+          const attributeId = numFromUnknown(movement.id_product_attribute);
+          const quantity = numFromUnknown(movement.quantity);
+          const sign = numFromUnknown(movement.sign);
+          if (productId <= 0 || quantity <= 0 || sign === 0) continue;
+
+          const key = keyOf(productId, attributeId);
+          const signedQty = sign > 0 ? quantity : -quantity;
+          movementNetByKey.set(key, (movementNetByKey.get(key) || 0) + signedQty);
+        }
 
         const productCategoryCache = new Map<number, number>();
         const categoryNameCache = new Map<number, string>();
@@ -43,10 +121,24 @@ export function StockDashboard(): JSX.Element {
             productCategoryCache.set(productId, categoryId);
           }
 
-          const existing = agg.get(categoryId) ?? { categoryId, categoryName: "", qtePhysique: 0, qteReservee: 0, qteDisponible: 0 };
-          existing.qtePhysique += Number(item.physicalQuantity || 0);
-          existing.qteReservee += Number(item.reservedQuantity || 0);
-          existing.qteDisponible += Number(item.availableQuantity || 0);
+          const attributeId = numFromUnknown(item.id_product_attribute);
+          const entryKey = keyOf(productId, attributeId);
+
+          const qteDisponible = Number(item.availableQuantity || 0);
+          const qteReserveeCalculee = reservedByKey.get(entryKey) || 0;
+          let qtePhysiqueCalculee = qteDisponible + qteReserveeCalculee;
+
+          // En cas de stock négatif/aberrant, fallback de validation avec le net des mouvements
+          if (!Number.isFinite(qtePhysiqueCalculee) || qtePhysiqueCalculee < 0) {
+            const movementNet = movementNetByKey.get(entryKey) || 0;
+            qtePhysiqueCalculee = Math.max(0, movementNet + qteReserveeCalculee);
+          }
+
+          const existing = agg.get(categoryId) ?? { categoryId, categoryName: "", qtePhysique: 0, qteReservee: 0, qteDisponible: 0, qteReelleValide: 0 };
+          existing.qtePhysique += qtePhysiqueCalculee;
+          existing.qteReservee += qteReserveeCalculee;
+          existing.qteDisponible += qteDisponible;
+          existing.qteReelleValide += qteDisponible;
           agg.set(categoryId, existing);
         }
 
@@ -80,9 +172,10 @@ export function StockDashboard(): JSX.Element {
               acc.physique += curr.qtePhysique;
               acc.reservee += curr.qteReservee;
               acc.disponible += curr.qteDisponible;
+              acc.reelleValide += curr.qteReelleValide;
               return acc;
             },
-            { physique: 0, reservee: 0, disponible: 0 }
+            { physique: 0, reservee: 0, disponible: 0, reelleValide: 0 }
           );
           setTotals(globalTotals);
         }
@@ -139,6 +232,13 @@ export function StockDashboard(): JSX.Element {
             {totals.disponible.toLocaleString("fr-FR")}
           </span>
         </div>
+
+        <div style={styles.card}>
+          <span style={styles.cardLabel}>Quantité Réelle Validée</span>
+          <span style={{ ...styles.cardValue, color: "#0ea5e9" }}>
+            {totals.reelleValide.toLocaleString("fr-FR")}
+          </span>
+        </div>
       </div>
 
       <h3 style={styles.sectionTitle}>Détail par catégorie</h3>
@@ -152,6 +252,7 @@ export function StockDashboard(): JSX.Element {
               <th style={styles.th}>Qté physique</th>
               <th style={styles.th}>Qté réservée</th>
               <th style={styles.th}>Qté disponible</th>
+              <th style={styles.th}>Qté réelle validée</th>
             </tr>
           </thead>
 
@@ -174,6 +275,13 @@ export function StockDashboard(): JSX.Element {
                   color: item.qteDisponible > 5 ? "#10b981" : item.qteDisponible > 0 ? "#f59e0b" : "#ef4444"
                 }}>
                   {item.qteDisponible.toLocaleString("fr-FR")}
+                </td>
+                <td style={{
+                  ...styles.td,
+                  fontWeight: "bold",
+                  color: item.qteReelleValide >= 0 ? "#0ea5e9" : "#ef4444"
+                }}>
+                  {item.qteReelleValide.toLocaleString("fr-FR")}
                 </td>
               </tr>
             ))}
