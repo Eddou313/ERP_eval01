@@ -23,8 +23,18 @@ export function Stock() {
     async function fetchProducts(p = page) {
         setLoading(true);
         try {
-            const items = await listStockItemsPaged(p, pageSize);
-            setProducts(items || []);
+            const items = (await listStockItemsPaged(p, pageSize)) || [];
+            // Ne pas afficher le produit parent s'il existe des déclinaisons (attributs)
+            const filtered = items.filter((item) => {
+                const hasAttribute = (item.id_product_attribute ?? 0) > 0;
+                if (hasAttribute) return true; // garder les déclinaisons
+                // si produit parent sans attribut, vérifier s'il existe une déclinaison pour le même id_product
+                const hasVariant = items.some(
+                    (i) => i.id_product === item.id_product && (i.id_product_attribute ?? 0) > 0
+                );
+                return !hasVariant;
+            });
+            setProducts(filtered);
         } finally {
             setLoading(false);
         }

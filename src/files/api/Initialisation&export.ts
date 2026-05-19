@@ -210,7 +210,7 @@ export async function InitialisationGLobal(): Promise<void> {
         await InitTaxes();
 
         console.log("Suppression des stocks et mouvements de stock...");
-        // await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
+        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
 
         console.log("Initialisation globale réussie !");
   } catch (error: any) {
