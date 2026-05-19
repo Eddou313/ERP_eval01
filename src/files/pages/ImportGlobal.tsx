@@ -10,6 +10,7 @@ import { COMMANDE_CLIENT_PRODUIT_COLUMNS, COMMANDE_CLIENT_PRODUIT_DATE_COLUMNS, 
 import { formatDate, transformToObjects, normalizeText } from "../../utils/helper"
 
 import { ZipFile } from "./ZipFile"
+import { SupprimerStocksEtMouvements } from '../../module/Backoffice/stock/api/Suppression';
 
 type ImportProgress = {
     label: string;
@@ -159,25 +160,27 @@ export function ImportGlobal() {
             const summaryMessages: string[] = [];
 
             if (file) {
-                console.log("Fichier 1 parsé:", parsedProducts);
-                setProduit(parsedProducts);
-                updateProgress("products", { label: "Produits", total: parsedProducts.length, processed: 0, imported: 0, failed: 0, status: "running", current: "Démarrage" });
-                const result = await importProduitCsv(parsedProducts, {
-                    imageMap,
-                    onProgress: (progress) => updateProgress("products", { ...progress, label: "Produits", status: progress.processed >= progress.total ? "done" : "running" }),
-                });
-                updateProgress("products", { label: "Produits", total: parsedProducts.length, processed: parsedProducts.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
-                summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
+                // console.log("Fichier 1 parsé:", parsedProducts);
+                // setProduit(parsedProducts);
+                // updateProgress("products", { label: "Produits", total: parsedProducts.length, processed: 0, imported: 0, failed: 0, status: "running", current: "Démarrage" });
+                // const result = await importProduitCsv(parsedProducts, {
+                    // imageMap,
+                    // onProgress: (progress) => updateProgress("products", { ...progress, label: "Produits", status: progress.processed >= progress.total ? "done" : "running" }),
+                // });
+                // updateProgress("products", { label: "Produits", total: parsedProducts.length, processed: parsedProducts.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
+                // summaryMessages.push(`Produits: ${result.imported} importés, ${result.failed} en échec`);
             }
             if (file2) {
-                console.log("Fichier 2 parsé:", parsedAttributes);
-                setProduit_Attribut_Stock(parsedAttributes);
-                updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: 0, imported: 0, failed: 0, status: "running", current: "Démarrage" });
-                const result = await importProduitAttributStockCsv(parsedAttributes, {
-                    onProgress: (progress) => updateProgress("attributes", { ...progress, label: "Déclinaisons", status: progress.processed >= progress.total ? "done" : "running" }),
-                });
-                updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: parsedAttributes.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
-                summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
+                // console.log("Fichier 2 parsé:", parsedAttributes);
+                // setProduit_Attribut_Stock(parsedAttributes);
+                // updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: 0, imported: 0, failed: 0, status: "running", current: "Démarrage" });
+                // const result = await importProduitAttributStockCsv(parsedAttributes, {
+                    // onProgress: (progress) => updateProgress("attributes", { ...progress, label: "Déclinaisons", status: progress.processed >= progress.total ? "done" : "running" }),
+                // });
+                // updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: parsedAttributes.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
+                // summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
+        // await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: false });
+                
             }
             if (file3) {
                 console.log("Fichier 3 parsé:", parsedOrders);

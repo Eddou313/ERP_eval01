@@ -117,10 +117,6 @@ export async function requestPrestashopXml<T>(
 
     const text = await response.text();
 
-    // console.log(
-    //   `\n===== XML IN ${method} ${resourcePath} =====\n${text}\n===== END XML IN =====\n`,
-    // );
-
     if (!response.ok) {
       // Fallback: certains endpoints n'acceptent pas DELETE directement (405).
       // Pour les DELETE réessayons avec un POST + X-HTTP-Method-Override: DELETE

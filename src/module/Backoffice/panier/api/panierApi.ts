@@ -706,6 +706,7 @@ export async function updateCartItems(
   await requestPrestashopXml(`/carts/${cartId}`, { method: "PUT", bodyXml: xml });
 }
 
+
 // export async function epdateGuest(cartId:number,clientId:number)
 // {
 //   try

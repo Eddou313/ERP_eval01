@@ -294,8 +294,9 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
             }
 
             const customerDateAdd = String(row.date ?? "").trim();
-            
+
             const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
+            console.log(`Date client: "${customerDateAdd}" → "${normalizedCustomerDate}"`);
             if (customerDateAdd && !normalizedCustomerDate) {
                 throw new Error(`Date client invalide: ${customerDateAdd}`);
             }
@@ -354,7 +355,20 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
             if (normalizedCustomerDate) {
                 const dateTime = `${normalizedCustomerDate} 00:00:00`;
                 try {
-                    const cartXml = buildPrestashopXml({ prestashop: { cart: { id: cart.id, date_add: dateTime, date_upd: dateTime } } });
+                    const cartXml = buildPrestashopXml({
+                        prestashop: {
+                            cart: {
+                                id_currency: 1,
+                                id_lang: 1,
+                                id_address_delivery: addressId,
+                                id_address_invoice: addressId,
+                                id_carrier: defaultCarrierId,
+                                id: cart.id,
+                                date_add: dateTime,
+                                date_upd: dateTime
+                            }
+                        }
+                    });
                     await requestPrestashopXml(`/carts/${cart.id}`, { method: "PUT", bodyXml: cartXml });
                 } catch (e) {
                     console.warn(`Impossible de forcer la date du panier ${cart.id}:`, e);
@@ -390,7 +404,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                 total_products: 0,
                 total_products_wt: 0,
                 total_shipping: 0,
-                ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate, date_upd: normalizedCustomerDate } : {}),
+                // ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate, date_upd: normalizedCustomerDate } : {}),
                 order_rows: resolvedRows.map((line) => ({
                     product_id: line.productId,
                     product_quantity: line.quantity,
@@ -400,7 +414,34 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
             if (normalizedCustomerDate) {
                 const dateTime = `${normalizedCustomerDate} 00:00:00`;
                 try {
-                    const orderXml = buildPrestashopXml({ prestashop: { order: { id: orderId, date_add: dateTime, date_upd: dateTime } } });
+                    const orderXml = buildPrestashopXml({
+                        prestashop: {
+                            order: {
+                                id_customer: customerId,
+                                id_cart: cart.id,
+                                id_address_delivery: addressId,
+                                id_address_invoice: addressId,
+                                id_currency: 1,
+                                id_lang: 1,
+                                id_carrier: defaultCarrierId,
+                                payment_code: "cash",
+                                module: "cash",
+                                payment: "Paiement par virement",
+                                current_state: orderStateId || 2,
+                                conversion_rate: 1,
+                                total_paid_tax_incl: 0,
+                                total_paid_tax_excl: 0,
+                                total_paid: 0,
+                                total_paid_real: 0,
+                                total_products: 0,
+                                total_products_wt: 0,
+                                total_shipping: 0,
+                                id: orderId,
+                                date_add: dateTime,
+                                date_upd: dateTime
+                            }
+                        }
+                    });
                     await requestPrestashopXml(`/orders/${orderId}`, { method: "PUT", bodyXml: orderXml });
                 } catch (e) {
                     console.warn(`Impossible de forcer la date de la commande ${orderId}:`, e);
