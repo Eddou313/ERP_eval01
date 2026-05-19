@@ -81,7 +81,7 @@ export default function StatsPage(): JSX.Element {
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Bénéfice global estimé</span>
+          <span style={styles.cardLabel}>Bénéfice global estimé(HT)</span>
           <span style={{ ...styles.cardValue, color: "#3b82f6" }}>
             {(totalSales - totalPurchases).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
           </span>
@@ -97,7 +97,7 @@ export default function StatsPage(): JSX.Element {
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
               <th style={styles.th}>Ventes (HT)</th>
               <th style={styles.th}>Achats (HT)</th>
-              <th style={styles.th}>Bénéfice</th>
+              <th style={styles.th}>Bénéfice (HT)</th>
             </tr>
           </thead>
           <tbody>

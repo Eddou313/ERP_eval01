@@ -318,7 +318,7 @@ export function EvolutionStockPage() {
                             <th>Date</th>
                             <th>Mouvements</th>
                             <th>Quantité nette</th>
-                            <th>Quantité réelle validée</th>
+                            {/* <th>Quantité réelle validée</th> */}
                           </tr>
                         </thead>
                         <tbody>
@@ -336,7 +336,7 @@ export function EvolutionStockPage() {
                                 {day.totalQuantity >= 0 ? "+" : ""}
                                 {day.totalQuantity}
                               </td>
-                              <td className="ev-num">{day.validatedQuantity}</td>
+                              {/* <td className="ev-num">{day.validatedQuantity}</td> */}
                             </tr>
                           ))}
                         </tbody>

@@ -68,27 +68,46 @@ export async function getDashboardStats(): Promise<{
   const response = await requestPrestashopXml<any>("/orders", { query: { display: "full", limit: "0,10000" } });
   const orders = asArray(response?.prestashop?.orders?.order ?? []);
 
-  // Iterate orders and aggregate using row-level prices (prefer `unit_price_tax_excl` when present)
+  // Agréger les commandes non annulées en s'appuyant sur le total HT Prestashop.
   for (const order of orders) {
+    const currentState = numFromUnknown(order?.current_state);
+    if (currentState === 6) {
+      continue;
+    }
+
+    const orderSalesHT = Number(order?.total_paid_tax_excl ?? order?.total_paid ?? 0) || 0;
+
     const rows = asArray(order?.associations?.order_rows?.order_row ?? []);
-    for (const row of rows) {
+    const rowBaseAmounts = rows.map((row: any) => {
       const productId = numFromUnknown(row?.product_id ?? row?.id_product ?? row?.id_product ?? 0) || 0;
       const qty = Number(row?.product_quantity ?? row?.product_qty ?? 0) || 0;
 
-      // Prefer explicit tax-excluded unit price from the order row when available
       let unitPrice = Number(row?.unit_price_tax_excl ?? row?.product_price ?? row?.unit_price ?? 0) || 0;
+      if (productId > 0 && (!unitPrice || unitPrice === 0)) {
+        const cachedProduct = productCache.get(productId);
+        unitPrice = cachedProduct?.price || 0;
+      }
 
-      const prodInfo = await fetchProductInfo(productId);
-      // If row doesn't contain a usable price, fallback to product base price (HT if available via pricing workflow)
-      if (!unitPrice || unitPrice === 0) unitPrice = prodInfo.price || 0;
+      return {
+        row,
+        productId,
+        qty,
+        baseAmount: unitPrice * qty,
+      };
+    });
 
+    const totalBaseAmount = rowBaseAmounts.reduce((sum, item) => sum + item.baseAmount, 0);
+    totalSalesHT += orderSalesHT;
+
+    for (const item of rowBaseAmounts) {
+      const prodInfo = item.productId > 0 ? await fetchProductInfo(item.productId) : { price: 0, wholesale: 0, categories: [] };
       const wholesale = prodInfo.wholesale || 0;
+      const purchaseAmount = wholesale * item.qty;
 
-      const saleAmount = unitPrice * qty;
-      const purchaseAmount = wholesale * qty;
+      const saleAmount = totalBaseAmount > 0
+        ? orderSalesHT * (item.baseAmount / totalBaseAmount)
+        : 0;
 
-      // Sum totals from row-level amounts to keep consistency
-      totalSalesHT += saleAmount;
       totalPurchasesHT += purchaseAmount;
 
       const catId = prodInfo.categories?.[0] ?? 0;
