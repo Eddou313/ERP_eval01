@@ -153,10 +153,10 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
     let failed = 0;
     let processed = 0;
     const reportProgress = (current?: string) => {
-		options?.onProgress?.({ processed, total: rows.length, imported, failed, current });
-	};
+        options?.onProgress?.({ processed, total: rows.length, imported, failed, current });
+    };
 
-	reportProgress("Préparation");
+    reportProgress("Préparation");
 
     for (const row of rows) {
         try {
@@ -193,6 +193,7 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                         display: "full",
                         "filter[id_product]": `[${product.id}]`,
                         "filter[id_product_attribute]": `[0]`,
+                        "filter[id_shop_group]": `[0]`,
                     },
                 });
 
@@ -260,6 +261,7 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
                     display: "full",
                     "filter[id_product]": `[${product.id}]`,
                     "filter[id_product_attribute]": `[${combinationId}]`,
+                    "filter[id_shop_group]": `[0]`,
                 },
             });
 
@@ -303,7 +305,7 @@ export async function importProduitAttributStockCsv(rows: ProductAttributeStockI
         }
     }
 
-	reportProgress("Terminé");
+    reportProgress("Terminé");
 
     return { imported, failed };
 }

@@ -12,6 +12,31 @@ export async function SupprimerStocksEtMouvements(opts?: { deleteStocks?: boolea
   const deleteMovements = opts?.deleteMovements ?? true;
   let deletedStocks = 0;
   let deletedMovements = 0;
+  if (deleteMovements) {
+    try {
+      console.log("Récupération des mouvements de stock...");
+      const movements = await listStockMovements();
+      for (const m of movements) {
+        const mid = (m as any)?.id;
+        if (!mid) continue;
+        try {
+          await requestPrestashopXml(`/stock_movements/${mid}`, { method: "DELETE" });
+          deletedMovements++;
+          console.log(`✓ Suppressé mouvement id=${mid}`);
+        } catch (e: any) {
+          const status = Number(e?.status ?? 0);
+          if (status === 405) {
+            console.warn(`Suppression mouvement id=${mid} non supportée par le webservice, on continue.`);
+            continue;
+          }
+          console.error(`Erreur suppression mouvement id=${mid}:`, e);
+        }
+      }
+    } catch (e) {
+      console.error("Erreur récupération des mouvements:", e);
+    }
+  }
+
 
   if (deleteStocks) {
     try {
@@ -35,31 +60,6 @@ export async function SupprimerStocksEtMouvements(opts?: { deleteStocks?: boolea
       }
     } catch (e) {
       console.error("Erreur récupération des stocks:", e);
-    }
-  }
-
-  if (deleteMovements) {
-    try {
-      console.log("Récupération des mouvements de stock...");
-      const movements = await listStockMovements();
-      for (const m of movements) {
-        const mid = (m as any)?.id;
-        if (!mid) continue;
-        try {
-          await requestPrestashopXml(`/stock_movements/${mid}`, { method: "DELETE" });
-          deletedMovements++;
-          console.log(`✓ Suppressé mouvement id=${mid}`);
-        } catch (e: any) {
-          const status = Number(e?.status ?? 0);
-          if (status === 405) {
-            console.warn(`Suppression mouvement id=${mid} non supportée par le webservice, on continue.`);
-            continue;
-          }
-          console.error(`Erreur suppression mouvement id=${mid}:`, e);
-        }
-      }
-    } catch (e) {
-      console.error("Erreur récupération des mouvements:", e);
     }
   }
 
