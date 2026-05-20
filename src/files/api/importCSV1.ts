@@ -1,7 +1,7 @@
 import { ensureCategoryExists, listCategoriesSimple } from "../../module/Backoffice/categorie/api/categoriesApi";
 import { uploadProductImage } from "../../module/Backoffice/produit/api/productsApi";
 import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTaxesLight, listTaxRuleGroupsLight } from "../../module/Backoffice/taxes/taxes";
-import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
+import { buildPrestashopXml, PrestashopWebserviceError, requestPrestashopXml } from "../../utils/prestashopClient";
 import { normalizeText, slugify } from "../../utils/helper";
 import type { colonneCSV } from "./object";
 import { isValidDate, toPrestashopDate } from "./utils";
@@ -137,24 +137,15 @@ async function createProductSimple(data: {
 		bodyXml: buildPrestashopXml({
 			prestashop: {
 				product: {
-					id_manufacturer: 0,
-					id_supplier: 0,
 					id_category_default: data.id_category_default,
 					id_tax_rules_group: data.id_tax_rules_group,
-					id_default_image: 0,
 					type: "standard",
 					reference: data.reference,
-					supplier_reference: "",
 					price: data.price,
 					wholesale_price: data.wholesale_price,
-					on_sale: 0,
 					active: 1,
 					visibility: "both",
-					weight: 0,
-					width: 0,
 					state: 1,
-					height: 0,
-					depth: 0,
 					available_for_order: 1,
 					show_price: 1,
 					available_date: data.available_date || "",
@@ -186,18 +177,6 @@ async function createProductSimple(data: {
 						language: {
 							"@_id": 1,
 							"#text": data.name,
-						},
-					},
-					meta_description: {
-						language: {
-							"@_id": 1,
-							"#text": "",
-						},
-					},
-					meta_keywords: {
-						language: {
-							"@_id": 1,
-							"#text": "",
 						},
 					},
 					associations: {
@@ -261,6 +240,7 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 					);
 					if (!confirmed) {
 						throw new Error(`Import arrêté par l'utilisateur pour la date ${rawAvailableDate}`);
+						return { imported, failed }
 					}
 				}
 
@@ -273,6 +253,7 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 
 			const priceTtc = Number(row.prix_ttc) || 0;
 			const priceHt = parseTtcToHt(priceTtc, taxRate);
+
 			const product = await createProductSimple({
 				id_category_default: categoryId,
 				id_tax_rules_group: taxRuleGroupId,
@@ -280,7 +261,8 @@ export async function importProduitCsv(rows: ProductImportRow[], options?: { ima
 				reference: row.reference,
 				price: priceHt,
 				wholesale_price: Number(row.prix_achat) || 0,
-				...(availableDate ? { available_date: availableDate } : {}),
+				available_date : availableDate,
+				// ...(availableDate ? { available_date: availableDate } : {}),
 				description: `Produit importé depuis CSV: ${row.nom}`,
 				description_short: `Import CSV - ${row.reference}`,
 				link_rewrite: slugify(row.nom),
