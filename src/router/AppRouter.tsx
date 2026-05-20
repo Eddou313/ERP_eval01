@@ -25,6 +25,7 @@ import Commande from "../module/FrontOffice/commande/pages/Commande"
 import WorkFlowCommande from "../module/FrontOffice/commande/pages/WorkFlowCommande"
 import { Stock } from "../module/Backoffice/stock/pages/Stock"
 import StockMovements from "../module/Backoffice/stock/pages/StockMovements"
+import Traitement from "../module/FrontOffice/commande/pages/Traitement"
 
 function AppRouter() {
   return (
@@ -39,6 +40,7 @@ function AppRouter() {
           <Route path="/Mescommande" element={<Commande />} />
           <Route path="/Commande" element={<WorkFlowCommande />} />
           <Route path="/admin/login" element={<Login />} />
+          <Route path="/traitement" element={<Traitement />}></Route>
 
           <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}

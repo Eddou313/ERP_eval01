@@ -147,7 +147,11 @@ export function ImportGlobal() {
         }
         try {
             resetProgress();
-            const imageMap = zipFile ? await buildImageMapFromZip(zipFile) : new Map<string, { blob: Blob; fileName: string }>();
+            let imageMap ;
+            if(ImporterImg)
+            {
+                imageMap = zipFile ? await buildImageMapFromZip(zipFile) : new Map<string, { blob: Blob; fileName: string }>();
+            }
 
             setMes("Validation des colonnes CSV en cours...");
 
@@ -179,7 +183,7 @@ export function ImportGlobal() {
                 });
                 updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: parsedAttributes.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
                 summaryMessages.push(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
-        // await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: false });
+        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: false });
                 
             }
             if (file3) {
@@ -239,7 +243,8 @@ export function ImportGlobal() {
             }
         }
     }
-
+    const [ImporterImg,setImporterImg] = useState<boolean>(false);
+    
     return (
         <div className="import-page-wrapper">
             <h1>Import Global</h1>
@@ -292,6 +297,10 @@ export function ImportGlobal() {
                         {file3 && <span style={{ fontSize: '0.9em', color: 'green' }}>✓ {file3.name}</span>}
                         <label className="form-label" >Fichier 4 (Image)</label>
                         <ZipFile onZipSelected={setZipFile} />
+                        <div>
+                            <label htmlFor="chec">Importer images</label>
+                            <input type="checkbox" name="chec" id="chec" onChange={(e)=>{setImporterImg(e.target.checked)}}/>
+                        </div>
                     </div>
                 </section>
 
