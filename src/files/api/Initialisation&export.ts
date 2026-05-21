@@ -194,23 +194,24 @@ export async function InitialisationGLobal(): Promise<void> {
         console.log("Suppression des clients...");
         await initClients();
 
-        console.log("Suppression des valeurs d'attributs...");
-        await InitAttributesAndCharacteristics();
+        console.log("Suppression des stocks et mouvements de stock...");
+        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
 
         console.log("Suppression des images produits...");
         await InitProductImages();
 
         console.log("Suppression des produits...");
         await InitProducts();
+        
+        console.log("Suppression des valeurs d'attributs...");
+        await InitAttributesAndCharacteristics();
+
 
         console.log("Suppression des catégories...");
         await InitCategory();
 
         console.log("Suppression des taxes...");
         await InitTaxes();
-
-        console.log("Suppression des stocks et mouvements de stock...");
-        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
 
         console.log("Initialisation globale réussie !");
   } catch (error: any) {
