@@ -1,8 +1,8 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../utils/prestashopClient";
 import { asArray, languageField, textFromUnknown, normalizeText } from "../../../utils/helper";
 
-type CreatedTax = { id: number; name: string; rate: number };
-type CreatedTaxRuleGroup = { id: number; name: string; active: boolean };
+export type CreatedTax = { id: number; name: string; rate: number };
+export type CreatedTaxRuleGroup = { id: number; name: string; active: boolean };
 
 
 const DEFAULT_LANGUAGE_ID = 1;

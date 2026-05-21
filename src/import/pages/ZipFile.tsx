@@ -1,6 +1,6 @@
 import { type ChangeEvent, useState, useRef } from 'react';
 import JSZip from 'jszip'; // Importation de JSZip
-import './zip.css';
+// import './zip.css';
 
 type ZipFileProps = {
   onZipSelected?: (file: File | null) => void;
