@@ -1,4 +1,4 @@
-import { getAddress } from "../../../Backoffice/client/api/clientAdresAPI";
+import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { createCart } from "../../../Backoffice/panier/api/panierApi";
 import { getOrder, createCommande, updateOrderState } from "../../../Backoffice/commande/api/commandesApi";
 import { getStoredClientSession } from "../../client/api/clientAPI";
@@ -20,14 +20,26 @@ function resolvePaymentCode(order: OrderResource): string {
     return PAYMENT_METHODS[0]?.code || "cash";
 }
 
-export async function validerCommande(idClient: number, sourceOrderId?: number): Promise<boolean> {
+export async function validerCommande(idClient: number, sourceOrderId?: number, multiply = 1): Promise<boolean> {
     try {
         const session = getStoredClientSession();
         if (!session || Number(session.id) !== Number(idClient)) {
             throw new Error("Session client invalide ou expirée");
         }
 
-        const clientAddress = await getAddress(idClient);
+        // Récupère la première adresse du client (si elle existe)
+        let clientAddressId = 0;
+        try {
+            const addressesResp = await requestPrestashopXml<any>("/addresses", {
+                query: { display: "full", ["filter[id_customer]"]: `[${idClient}]` },
+            });
+
+            const raw = addressesResp?.prestashop?.addresses?.address;
+            const first = Array.isArray(raw) ? raw[0] : raw;
+            clientAddressId = Number(first?.["@_id"] ?? first?.id) || 0;
+        } catch (e) {
+            console.warn("Impossible de récupérer l'adresse du client:", e);
+        }
         if (!sourceOrderId || sourceOrderId <= 0) {
             throw new Error("Aucune commande source fournie pour duplication");
         }
@@ -35,8 +47,8 @@ export async function validerCommande(idClient: number, sourceOrderId?: number):
         const sourceOrder = await getOrder(sourceOrderId);
         const sourceCart = await getCart(sourceOrder.id_cart);
 
-        const deliveryAddressId = sourceOrder.id_address_delivery || clientAddress.id;
-        const invoiceAddressId = sourceOrder.id_address_invoice || clientAddress.id;
+        const deliveryAddressId = sourceOrder.id_address_delivery || clientAddressId;
+        const invoiceAddressId = sourceOrder.id_address_invoice || clientAddressId;
         if (!deliveryAddressId || !invoiceAddressId) {
             throw new Error("Impossible de déterminer les adresses de livraison et de facturation");
         }
@@ -54,13 +66,18 @@ export async function validerCommande(idClient: number, sourceOrderId?: number):
             items: sourceCart.items.map((item) => ({
                 id_product: item.product_id,
                 id_product_attribute: item.id_product_attribute,
-                quantity: item.quantity,
+                quantity: Number(item.quantity || 0) * Number(multiply || 1),
             })),
         });
 
         const totalProducts = duplicatedCart.total_products || duplicatedCart.total || 0;
         const shippingTotal = Number(sourceOrder.total_shipping || sourceOrder.total_shipping_tax_incl || 0);
         const grandTotal = Number(duplicatedCart.total || totalProducts || 0) + shippingTotal;
+
+        const orderRows = (duplicatedCart.items || []).map((it: any) => ({
+            product_id: it.product_id,
+            product_quantity: Number(it.quantity) || 0,
+        }));
 
         const orderId = await createCommande({
             id_customer: idClient,
@@ -99,7 +116,8 @@ export async function validerCommande(idClient: number, sourceOrderId?: number):
             id_shop_group: sourceOrder.id_shop_group || 1,
             id_shop: sourceOrder.id_shop || 1,
             payment_code: resolvePaymentCode(sourceOrder),
-        });
+            order_rows: orderRows,
+        } as any);
 
         await updateOrderState(orderId, 5, new Date().toISOString());
 

@@ -164,10 +164,10 @@ export function Traitement()
     const handleValidate = () => {
         if (!canValidate || !order?.id || !order.id_customer) return;
 
-        const runValidation = async () => {
+                const runValidation = async () => {
             try {
                 setSubmitting(true);
-                const success = await validerCommande(order.id_customer, order.id);
+                const success = await validerCommande(order.id_customer, order.id, duplicationCount);
                 if (success) {
                     navigate("/Mescommande");
                     return;

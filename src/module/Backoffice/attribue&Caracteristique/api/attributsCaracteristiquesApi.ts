@@ -230,7 +230,7 @@ export async function createCombination(productId: number, attributeValueIds: nu
           reference: reference || "",
           price: priceImpactHt,
           quantity,
-          default_on: 0,
+          default_on: 1,
           minimal_quantity: 1,
           associations: {
             product_option_values: {
