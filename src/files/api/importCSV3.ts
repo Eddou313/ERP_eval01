@@ -5,7 +5,7 @@ import type { colonneCSV } from "./object";
 import { getClient, importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { createCart } from "../../module/Backoffice/panier/api/panierApi";
-import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
+import { createOrder, getOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { asArray } from "../../utils/helper";
@@ -248,7 +248,7 @@ async function findCustomerIdByEmail(email: string): Promise<number | null> {
 
 export async function importProduitCommandeCsv(rows: OrderImportRow[], options?: { onProgress?: (progress: ImportProgress) => void }): Promise<{ customersCreated: number; cartsCreated: number; ordersCreated: number; failed: number }> {
     rows = regrouperCommandes(rows);
-    console.log("commande final : ",rows);
+    console.log("commande final : ", rows);
 
     const productsCache = new Map<string, ProductLight | null>();
     const carriers = await getAllModeLivraison().catch(() => []);
@@ -420,17 +420,17 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                 id_address_invoice: addressId,
                 id_currency: 1,
                 id_lang: 1,
+                id_shop: 1,
                 id_carrier: defaultCarrierId,
                 secure_key: cartSecureKey,
-                payment_code: "bankwire",
-                module: "ps_wirepayment",
-                payment: "Virement bancaire",
+                payment_code: "cash",
+                module: "ps_cashondelivery",
+                payment: "Paiement à la livraison",
                 current_state: orderStateId || 2,
                 conversion_rate: 1,
             } as any);
-            ordersCreated += 1;
             const dateTime = `${normalizedCustomerDate} 00:00:00`;
-
+            const order = await getOrder(orderId);
             if (normalizedCustomerDate) {
                 const dateTime = `${normalizedCustomerDate} 00:00:00`;
                 try {
@@ -446,17 +446,19 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                                 id_lang: 1,
                                 id_carrier: defaultCarrierId,
                                 secure_key: cartSecureKey,
-                                payment_code: "bankwire",
-                                module: "ps_wirepayment",
-                                payment: "Virement bancaire",
+                                payment_code: "cash",
+                                module: "ps_cashondelivery",
+                                payment: "Paiement à la livraison",
                                 current_state: orderStateId || 2,
                                 date_add: dateTime,
+                                id_shop: 1,
                                 date_upd: dateTime,
-                                total_paid : 0,
-                                total_paid_real : 0,
-                                total_products : 0,
-                                total_products_wt : 0,
-                                conversion_rate : 1,
+                                total_paid: order.total_paid,
+                                total_paid_real: order.total_paid_real,
+                                total_products: order.total_products,
+                                total_products_wt: order.total_products_wt,
+                                conversion_rate: 1,
+                                total_paid_tax_incl : order.total_paid_tax_incl,
                             },
                         },
                     });
@@ -465,6 +467,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                     console.warn(`Impossible de forcer la date de la commande ${orderId}:`, error);
                 }
             }
+            ordersCreated += 1;
 
             const finalStateId = getStateId(etatLower) || orderStateId;
             if (finalStateId) {

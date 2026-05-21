@@ -30,8 +30,8 @@ export function Commande() {
             setLoading(true);
             setError(null);
             try {
-                // const all = await listOrdersLight({declencher : 1});
-                const all = await listOrdersLight({ declencher: 1 });
+                const all = await listOrdersLight({declencher : 1});
+                // const all = await listOrdersLight();
                 const userId = Number(session.id);
                 const mine = all.filter((o) => o.id_customer === userId);
 
@@ -122,7 +122,8 @@ export function Commande() {
                                         </td>
                                         <td>
                                             <button
-                                                onClick={() => navigate("/Traitement", { state: { Response: {liste: o, id : o.id ,valeur: number[idx]} } })}
+                                                onClick={() =>{ if(number[idx] >= 0) navigate("/Traitement", { state: { Response: {liste: o, id : o.id ,valeur: number[idx]}}})
+                                                                else window.alert("Veuillez entrer une valeur valide.")}}
                                             >
                                                 Dupliquer
                                             </button>

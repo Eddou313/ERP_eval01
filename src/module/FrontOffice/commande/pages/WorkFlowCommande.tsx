@@ -278,7 +278,8 @@ export default function WorkFlowCommande() {
 						};
 
 						const retryOrderId = await createCommande(retryForm);
-						await updateOrderState(retryOrderId, 1);
+						const dateJ = new Date().toISOString().split("T")[0];
+						await updateOrderState(retryOrderId, 1,dateJ);
 						if (clearCartAfterOrder) {
 
 							setCart(null);

@@ -565,6 +565,8 @@ export async function getStockByProductId(productId: number,productAttributeId?:
   try {
     const queryWithProduct: Record<string, string> = {
       "filter[id_product]": `[${productId}]`,
+      "filter[id_shop]": `[1]`,
+      "filter[id_shop_group]": `[1]`,
       display: "full",
     };
 

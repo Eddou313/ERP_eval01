@@ -232,8 +232,12 @@ export async function getOrder(id: number): Promise<OrderResource> {
     throw new Error(`ID commande invalide: ${id}`);
   }
 
-  const response = await requestPrestashopXml<OrderGetResponse>(`/orders/${id}`, {
-    query: { display: "full" },
+  const response = await requestPrestashopXml<OrderGetResponse>(`/orders/${id}`, 
+  {
+    query: { 
+      display: "full",
+      // "filter[email]": `[${gmail}]`,
+    },
   });
 
   if (!response?.prestashop?.order) {
