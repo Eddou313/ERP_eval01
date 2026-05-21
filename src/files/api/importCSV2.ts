@@ -7,6 +7,7 @@ import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/S
 import { applyStockModification } from "../../module/Backoffice/stock/api/stockMovementService";
 import { requestPrestashopXml } from "../../utils/prestashopClient";
 import { numFromUnknown } from "../../utils/helper";
+import { regrouperStocks } from "./RegroupeProduit";
 
 export type ProductAttributeStockImportRow = colonneCSV["produit_Attribut_StockImport"];
 
@@ -133,6 +134,7 @@ async function findCombinationIdBySupplierReference(productId: number, reference
 }
 
 export async function importProduitAttributStockCsv(rows: ProductAttributeStockImportRow[], options?: { onProgress?: (progress: ImportProgress) => void }): Promise<{ imported: number; failed: number }> {
+    rows = regrouperStocks(rows);
     const productsCache = new Map<string, ProductLight | null>();
     const attributeGroups = await listAttributeGroupsLight();
     const attributeValues = await listAttributeValuesLight();

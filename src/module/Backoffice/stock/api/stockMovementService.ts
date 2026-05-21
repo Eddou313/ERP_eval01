@@ -321,20 +321,20 @@ export async function applyStockModification(
       };
     }
 
-    // 2. Enregistrer le mouvement de stock
-    const movementResult = await recordStockMovement(
-      idProduct,
-      quantityDelta,
-      idProductAttribute,
-      reason,
-      idEmployee,
-    );
-    if (!movementResult.success) {
-      return {
-        success: false,
-        message: `Stock modifié mais mouvement non enregistré: ${movementResult.message}`,
-      };
-    }
+    // // 2. Enregistrer le mouvement de stock
+    // const movementResult = await recordStockMovement(
+    //   idProduct,
+    //   quantityDelta,
+    //   idProductAttribute,
+    //   reason,
+    //   idEmployee,
+    // );
+    // if (!movementResult.success) {
+    //   return {
+    //     success: false,
+    //     message: `Stock modifié mais mouvement non enregistré: ${movementResult.message}`,
+    //   };
+    // }
 
     const direction = quantityDelta > 0 ? "augmenté" : "diminué";
     const sign = quantityDelta > 0 ? "+" : "";

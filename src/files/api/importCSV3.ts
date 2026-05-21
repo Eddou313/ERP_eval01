@@ -11,6 +11,7 @@ import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashop
 import { asArray } from "../../utils/helper";
 import { toPrestashopDate } from "./utils";
 import { getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
+import { regrouperCommandes } from "./RegroupeCommande";
 
 export type OrderImportRow = colonneCSV["Commande_client_produit"];
 
@@ -246,6 +247,9 @@ async function findCustomerIdByEmail(email: string): Promise<number | null> {
 }
 
 export async function importProduitCommandeCsv(rows: OrderImportRow[], options?: { onProgress?: (progress: ImportProgress) => void }): Promise<{ customersCreated: number; cartsCreated: number; ordersCreated: number; failed: number }> {
+    rows = regrouperCommandes(rows);
+    console.log("commande final : ",rows);
+
     const productsCache = new Map<string, ProductLight | null>();
     const carriers = await getAllModeLivraison().catch(() => []);
     const defaultCarrierId = carriers[0]?.id || 1;

@@ -179,13 +179,13 @@ export function ImportGlobal() {
                     onProgress: (progress) => updateProgress("attributes", { ...progress, label: "Déclinaisons", status: progress.processed >= progress.total ? "done" : "running" }),
                 });
                 updateProgress("attributes", { label: "Déclinaisons", total: parsedAttributes.length, processed: parsedAttributes.length, imported: result.imported, failed: result.failed, status: "done", current: "Terminé" });
-                // summaryMessages.pusstockEntryComboh(`Déclinaisons: ${result.imported} importées, ${result.failed} en échec`);
                 
             }
             if (file3) {
                 console.log("Fichier 3 parsé:", parsedOrders);
                 setCommande_client_produit(parsedOrders);
                 updateProgress("orders", { label: "Commandes", total: parsedOrders.length, processed: 0, imported: 0, failed: 0, status: "running", current: "Démarrage" });
+                // console.log(parsedOrders);
                 const result = await importProduitCommandeCsv(parsedOrders, {
                     onProgress: (progress) => updateProgress("orders", { ...progress, label: "Commandes", status: progress.processed >= progress.total ? "done" : "running" }),
                 });
