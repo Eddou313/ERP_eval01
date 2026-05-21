@@ -121,8 +121,9 @@ export async function recordStockMovement(
       date_add: dateAdd,
     };
 
-    const candidates: Array<{ path: string; root: "stock_movement" }> = [
+    const candidates: Array<{ path: string; root: "stock_movement" | "stock_mvt" }> = [
       { path: "/stock_movements", root: "stock_movement" },
+      { path: "/stock_mvts", root: "stock_mvt" },
     ];
 
     let lastErrorMessage = "";
@@ -140,8 +141,16 @@ export async function recordStockMovement(
           bodyXml: xmlPayload,
         });
 
-        const createdMovement = response?.prestashop?.[candidate.root];
-        const movementId = numFromUnknown(createdMovement?.id ?? createdMovement?.["@_id"]);
+        const createdMovement = response?.prestashop?.[candidate.root]
+          ?? response?.prestashop?.stock_movements?.stock_movement
+          ?? response?.prestashop?.stock_mvts?.stock_mvt;
+
+        const movementId = numFromUnknown(
+          createdMovement?.id
+          ?? createdMovement?.["@_id"]
+          ?? createdMovement?.id_stock_mvt
+          ?? createdMovement?.id_stock_movement
+        );
 
         if (movementId && movementId > 0) {
           console.log(`✓ Mouvement de stock créé: ID ${movementId}, produit ${idProduct}, Δ${sign > 0 ? "+" : ""}${absoluteQuantity}`);
@@ -151,6 +160,11 @@ export async function recordStockMovement(
             message: `Mouvement enregistré (ID ${movementId})`,
           };
         }
+
+        return {
+          success: true,
+          message: `Mouvement enregistré pour le produit ${idProduct}`,
+        };
       } catch (error) {
         const errorMsg = error instanceof PrestashopWebserviceError
           ? `${error.message}${error.responseText ? ` - ${error.responseText}` : ""}`
@@ -252,6 +266,8 @@ export async function updateStockViaApi(
       },
     });
 
+// http://localhost:8001/module/stockapi/update?id_product=21&id_product_attribute=43&delta=5
+
     await requestPrestashopXml(`/stock_availables/${stockAvailableId}`, {
       method: "PUT",
       bodyXml: xmlPayload,
@@ -261,6 +277,48 @@ export async function updateStockViaApi(
     return true;
   } catch (error) {
     console.error("Erreur lors de la mise à jour du stock via API:", error);
+    return false;
+  }
+}
+
+/**
+ * Met à jour le stock puis crée le mouvement correspondant.
+ * @param idProduct ID du produit
+ * @param quantityDelta Différence de quantité à appliquer
+ * @param idProductAttribute ID de la variante (optionnel)
+ * @param reason Raison du mouvement
+ * @param idEmployee ID de l'employé
+ * @returns true si succès, false sinon
+ */
+export async function updateStockAndCreateMovement(
+  idProduct: number,
+  quantityDelta: number,
+  idProductAttribute?: number,
+  reason: string = "adjustment",
+  idEmployee: number = 1
+): Promise<boolean> {
+  try {
+    const stockUpdated = await updateStockViaApi(idProduct, quantityDelta, idProductAttribute);
+    if (!stockUpdated) {
+      return false;
+    }
+
+    const movementResult = await recordStockMovement(
+      idProduct,
+      quantityDelta,
+      idProductAttribute,
+      reason,
+      idEmployee,
+    );
+
+    if (!movementResult.success) {
+      console.error(`Stock mis à jour mais mouvement non enregistré: ${movementResult.message}`);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour du stock et de la création du mouvement:", error);
     return false;
   }
 }
@@ -313,28 +371,13 @@ export async function applyStockModification(
 
   try {
     // 1. Mettre à jour le stock
-    const stockUpdated = await updateStockViaApi(idProduct, quantityDelta, idProductAttribute);
+    const stockUpdated = await updateStockAndCreateMovement(idProduct, quantityDelta, idProductAttribute, reason, idEmployee);
     if (!stockUpdated) {
       return {
         success: false,
         message: "Erreur lors de la mise à jour du stock",
       };
     }
-
-    // // 2. Enregistrer le mouvement de stock
-    // const movementResult = await recordStockMovement(
-    //   idProduct,
-    //   quantityDelta,
-    //   idProductAttribute,
-    //   reason,
-    //   idEmployee,
-    // );
-    // if (!movementResult.success) {
-    //   return {
-    //     success: false,
-    //     message: `Stock modifié mais mouvement non enregistré: ${movementResult.message}`,
-    //   };
-    // }
 
     const direction = quantityDelta > 0 ? "augmenté" : "diminué";
     const sign = quantityDelta > 0 ? "+" : "";
