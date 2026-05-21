@@ -258,7 +258,9 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     try {
       const customer = await getClient(form.id_customer);
       secureKey = customer?.secure_key || "";
-    } catch {
+      console.log(`Clé récupérée pour le client ${form.id_customer} :`, secureKey);
+    } catch (err) {
+      console.error(`Échec de la récupération du client ${form.id_customer} :`, err);
       secureKey = "";
     }
   }
@@ -274,7 +276,7 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     ...form,
     module: paymentMethod.module,
     payment: paymentMethod.label,
-    secure_key: secureKey,
+    secure_key: form.secure_key || secureKey,
   };
 
   // Envoie la création
@@ -320,7 +322,7 @@ export async function updateOrder(id: number, form: OrderForm): Promise<void> {
  * Appelle le module personnalisé shiporder pour changer l'état
  * Endpoint: /module/mon_module/shiporder?id_order=X&action=delivered
  */
-export async function updateOrderState(id: number, newState: number): Promise<void> {
+export async function updateOrderState(id: number, newState: number, date: string): Promise<void> {
   try {
     const order = await getOrder(id);
     if (Number(order.current_state) === 5) {
@@ -346,6 +348,7 @@ export async function updateOrderState(id: number, newState: number): Promise<vo
         order_state_update: {
           id_order: id,
           id_order_state: newState,
+          date_add : date,
         },
       },
     });

@@ -2,12 +2,12 @@ import { listProductsLight } from "../../module/Backoffice/produit/api/productsA
 import { getProductAttributeGroups } from "../../module/Backoffice/attribue&Caracteristique/api/attributsCaracteristiquesApi";
 import { normalizeText } from "../../utils/helper";
 import type { colonneCSV } from "./object";
-import { importClient } from "../../module/Backoffice/client/api/clientApi";
+import { getClient, importClient } from "../../module/Backoffice/client/api/clientApi";
 import { createClientAddress } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { createCart } from "../../module/Backoffice/panier/api/panierApi";
 import { createOrder, updateOrderState } from "../../module/Backoffice/commande/api/commandesApi";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
-import { requestPrestashopXml, buildPrestashopXml } from "../../utils/prestashopClient";
+import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { asArray } from "../../utils/helper";
 import { toPrestashopDate } from "./utils";
 import { getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
@@ -116,7 +116,7 @@ export function stringifyAchatItems(items: AchatItem[]): string {
         const reference = item.reference || "";
         const quantity = item.quantity || 0;
         const variant = item.variant || "";
-        
+
         return `("${reference}";${quantity};"${variant}")`;
     });
 
@@ -255,6 +255,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
     let ordersCreated = 0;
     let failed = 0;
     let processed = 0;
+
     const reportProgress = (current?: string) => {
         options?.onProgress?.({ processed, total: rows.length, imported: ordersCreated, failed, current });
     };
@@ -310,7 +311,6 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
             }
 
             const customerDateAdd = String(row.date ?? "").trim();
-
             const normalizedCustomerDate = customerDateAdd ? toPrestashopDate(customerDateAdd) : "";
             console.log(`Date client: "${customerDateAdd}" → "${normalizedCustomerDate}"`);
             if (customerDateAdd && !normalizedCustomerDate) {
@@ -337,6 +337,9 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                 customersCreated += 1;
             }
 
+            const customer = await getClient(customerId).catch(() => null);
+            const customerSecureKey = customer?.secure_key || "";
+
             const addressParts = (row.adresse || "").split(/,|\n/);
             const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
             const addressPostal = addressParts[1]?.trim() || "00000";
@@ -357,6 +360,7 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                 id_currency: 1,
                 id_shop: 1,
                 id_shop_group: 1,
+                secure_key: customerSecureKey,
                 id_address_delivery: addressId,
                 id_address_invoice: addressId,
                 id_carrier: defaultCarrierId,
@@ -367,27 +371,32 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                     quantity: line.quantity,
                 })),
             });
-            // Forcer la date du panier selon la colonne CSV (date_add/date_upd)
+            const cartSecureKey = cart.secureKey || customerSecureKey;
+
             if (normalizedCustomerDate) {
                 const dateTime = `${normalizedCustomerDate} 00:00:00`;
                 try {
                     const cartXml = buildPrestashopXml({
                         prestashop: {
                             cart: {
-                                id_currency: 1,
+                                id: cart.id,
+                                id_customer: customerId,
                                 id_lang: 1,
+                                id_currency: 1,
+                                id_shop: 1,
+                                id_shop_group: 1,
+                                secure_key: cartSecureKey,
                                 id_address_delivery: addressId,
                                 id_address_invoice: addressId,
                                 id_carrier: defaultCarrierId,
-                                id: cart.id,
                                 date_add: dateTime,
-                                date_upd: dateTime
-                            }
-                        }
+                                date_upd: dateTime,
+                            },
+                        },
                     });
                     await requestPrestashopXml(`/carts/${cart.id}`, { method: "PUT", bodyXml: cartXml });
-                } catch (e) {
-                    console.warn(`Impossible de forcer la date du panier ${cart.id}:`, e);
+                } catch (error) {
+                    console.warn(`Impossible de forcer la date du panier ${cart.id}:`, error);
                 }
             }
             cartsCreated += 1;
@@ -408,31 +417,23 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                 id_currency: 1,
                 id_lang: 1,
                 id_carrier: defaultCarrierId,
-                payment_code: "cash",
-                module: "cash",
-                payment: "Paiement par virement",
+                secure_key: cartSecureKey,
+                payment_code: "bankwire",
+                module: "ps_wirepayment",
+                payment: "Virement bancaire",
                 current_state: orderStateId || 2,
                 conversion_rate: 1,
-                total_paid_tax_incl: 0,
-                total_paid_tax_excl: 0,
-                total_paid: 0,
-                total_paid_real: 0,
-                total_products: 0,
-                total_products_wt: 0,
-                total_shipping: 0,
-                // ...(normalizedCustomerDate ? { date_add: normalizedCustomerDate, date_upd: normalizedCustomerDate } : {}),
-                order_rows: resolvedRows.map((line) => ({
-                    product_id: line.productId,
-                    product_quantity: line.quantity,
-                })),
             } as any);
-            // Forcer la date de la commande selon la colonne CSV (date_add/date_upd)
+            ordersCreated += 1;
+            const dateTime = `${normalizedCustomerDate} 00:00:00`;
+
             if (normalizedCustomerDate) {
                 const dateTime = `${normalizedCustomerDate} 00:00:00`;
                 try {
                     const orderXml = buildPrestashopXml({
                         prestashop: {
                             order: {
+                                id: orderId,
                                 id_customer: customerId,
                                 id_cart: cart.id,
                                 id_address_delivery: addressId,
@@ -440,40 +441,45 @@ export async function importProduitCommandeCsv(rows: OrderImportRow[], options?:
                                 id_currency: 1,
                                 id_lang: 1,
                                 id_carrier: defaultCarrierId,
-                                payment_code: "cash",
-                                module: "cash",
-                                payment: "Paiement par virement",
+                                secure_key: cartSecureKey,
+                                payment_code: "bankwire",
+                                module: "ps_wirepayment",
+                                payment: "Virement bancaire",
                                 current_state: orderStateId || 2,
-                                conversion_rate: 1,
-                                total_paid_tax_incl: 0,
-                                total_paid_tax_excl: 0,
-                                total_paid: 0,
-                                total_paid_real: 0,
-                                total_products: 0,
-                                total_products_wt: 0,
-                                total_shipping: 0,
-                                id: orderId,
                                 date_add: dateTime,
-                                date_upd: dateTime
-                            }
-                        }
+                                date_upd: dateTime,
+                                total_paid : 0,
+                                total_paid_real : 0,
+                                total_products : 0,
+                                total_products_wt : 0,
+                                conversion_rate : 1,
+                            },
+                        },
                     });
                     await requestPrestashopXml(`/orders/${orderId}`, { method: "PUT", bodyXml: orderXml });
-                } catch (e) {
-                    console.warn(`Impossible de forcer la date de la commande ${orderId}:`, e);
+                } catch (error) {
+                    console.warn(`Impossible de forcer la date de la commande ${orderId}:`, error);
                 }
             }
-            ordersCreated += 1;
 
             const finalStateId = getStateId(etatLower) || orderStateId;
             if (finalStateId) {
-                await updateOrderState(orderId, finalStateId);
+                await updateOrderState(orderId, finalStateId, dateTime);
             }
 
             reportProgress(`Commande ${orderId}`);
-        } catch (error) {
+        } catch (error: any) {
             failed += 1;
             console.error("Erreur lors de l'import du CSV commande:", row, error);
+            console.log("--- Détails de l'erreur brute PrestaShop ---");
+            console.log("Message :", error?.message);
+            console.log("Statut :", error?.status || error?.statusCode);
+            if (error?.responseText) {
+                console.error("ResponseText trouvé :", error.responseText);
+            } else if (error?.response?.data) {
+                console.error("Données de réponse trouvées :", error.response.data);
+            }
+            console.log("--------------------------------------------");
         } finally {
             processed += 1;
             reportProgress(row.email || row.nom || "Ligne commande");

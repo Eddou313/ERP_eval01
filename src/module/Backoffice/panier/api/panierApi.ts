@@ -451,6 +451,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
     id,
     id_order: orderIdRaw,
     id_customer: customerInfo.idCustomer,
+    secureKey: textFromUnknown(cart.secure_key),
     customerName: customerInfo.customerName,
     customerEmail: customerInfo.customerEmail,
     customerRegistrationDate: customerInfo.customerRegistrationDate,

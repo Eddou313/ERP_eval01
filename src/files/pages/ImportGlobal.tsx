@@ -170,7 +170,6 @@ export function ImportGlobal() {
                 const result = await importProduitCsv(parsedProducts, {
                     imageMap
                 });
-                await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
             }
             if (file2) {
                 console.log("Fichier 2 parsé:", parsedAttributes);
