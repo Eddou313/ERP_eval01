@@ -9,7 +9,7 @@ import { importProduitCommandeCsv } from "../api/importCSV3";
 import { COMMANDE_CLIENT_PRODUIT_COLUMNS, COMMANDE_CLIENT_PRODUIT_DATE_COLUMNS, PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS, PRODUIT_ATTRIBUT_STOCK_POSITIVE_NUMBER_COLUMNS, PRODUIT_IMPORT_COLUMNS, PRODUIT_IMPORT_DATE_COLUMNS, PRODUIT_IMPORT_POSITIVE_NUMBER_COLUMNS, type colonneCSV } from "../api/object"
 import { formatDate, transformToObjects, normalizeText } from "../../utils/helper"
 
-import { ZipFile } from "../../import/pages/ZipFile"
+import { ZipFile } from "./ZipFile"
 import { SupprimerStocksEtMouvements } from '../../module/Backoffice/stock/api/Suppression';
 
 type ImportProgress = {
