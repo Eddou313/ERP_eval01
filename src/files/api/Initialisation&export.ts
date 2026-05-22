@@ -79,36 +79,36 @@ export function validateColumnNames(
  */
 // Convertir les nombres français (virgule) en nombres JavaScript (point)
 const convertFrenchNumbersInObject = (obj: any): any => {
-    if (Array.isArray(obj)) {
-        return obj.map(item => convertFrenchNumbersInObject(item));
-    }
-    if (obj !== null && typeof obj === 'object') {
-        return Object.entries(obj).reduce((acc, [key, value]) => {
-            if (typeof value === 'string') {
-                // Convertir "12,5" en 12.5 si c'est un nombre
-                const trimmed = value.trim();
-                const converted = trimmed.replace(',', '.');
-                // Vérifier si c'est un nombre valide
-                if (!isNaN(Number(converted)) && converted !== '' && converted.match(/^-?\d+\.?\d*$/)) {
-                    acc[key] = Number(converted);
-                } else {
-                    acc[key] = value;
-                }
-            } else if (typeof value === 'object') {
-                acc[key] = convertFrenchNumbersInObject(value);
-            } else {
-                acc[key] = value;
-            }
-            return acc;
-        }, {} as any);
-    }
-    return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertFrenchNumbersInObject(item));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (typeof value === 'string') {
+        // Convertir "12,5" en 12.5 si c'est un nombre
+        const trimmed = value.trim();
+        const converted = trimmed.replace(',', '.');
+        // Vérifier si c'est un nombre valide
+        if (!isNaN(Number(converted)) && converted !== '' && converted.match(/^-?\d+\.?\d*$/)) {
+          acc[key] = Number(converted);
+        } else {
+          acc[key] = value;
+        }
+      } else if (typeof value === 'object') {
+        acc[key] = convertFrenchNumbersInObject(value);
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as any);
+  }
+  return obj;
 };
 
 export const parseCSVFile = <T>(
-    file: File, 
-    separator: string, 
-    expectedColumns?: (keyof any)[],
+  file: File,
+  separator: string,
+  expectedColumns?: (keyof any)[],
   expectedDateColumns?: string[],
   expectedPositiveNumberColumns?: string[]
 ): Promise<T[]> => {
@@ -182,38 +182,39 @@ export const parseCSVFile = <T>(
 export async function InitialisationGLobal(): Promise<void> {
   try {
     console.log("Initialisation globale en cours...");
-        console.log("Suppression des commandes...");
-        await InitOrder();
+    console.log("Suppression des commandes...");
+    await InitOrder();
 
-        console.log("Suppression des paniers...");
-        await initPanier();
+    console.log("Suppression des paniers...");
+    await initPanier();
 
-        console.log("Suppression des adresses...");
-        await InitAdresse();
+    console.log("Suppression des adresses...");
+    await InitAdresse();
 
-        console.log("Suppression des clients...");
-        await initClients();
+    console.log("Suppression des clients...");
+    await initClients();
 
-        console.log("Suppression des stocks et mouvements de stock...");
-        await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
+    console.log("Suppression des images produits...");
+    await InitProductImages();
 
-        console.log("Suppression des images produits...");
-        await InitProductImages();
+    console.log("Suppression des produits...");
+    await InitProducts();
 
-        console.log("Suppression des produits...");
-        await InitProducts();
-        
-        console.log("Suppression des valeurs d'attributs...");
-        await InitAttributesAndCharacteristics();
+    console.log("Suppression des valeurs d'attributs...");
+    await InitAttributesAndCharacteristics();
 
 
-        console.log("Suppression des catégories...");
-        await InitCategory();
+    console.log("Suppression des catégories...");
+    await InitCategory();
 
-        console.log("Suppression des taxes...");
-        await InitTaxes();
+    console.log("Suppression des taxes...");
+    await InitTaxes();
 
-        console.log("Initialisation globale réussie !");
+    console.log("Suppression des stocks et mouvements de stock...");
+    await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
+
+
+    console.log("Initialisation globale réussie !");
   } catch (error: any) {
     console.error("Erreur lors de l'initialisation globale:", error);
     throw new Error(`Erreur lors de l'initialisation global: ${error?.message ?? String(error)}`);

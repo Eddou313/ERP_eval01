@@ -4,6 +4,7 @@ import type { colonneCSV } from "../api/colonne";
 import { COMMANDE_CLIENT_PRODUIT_COLUMNS, COMMANDE_CLIENT_PRODUIT_DATE_COLUMNS, PRODUIT_ATTRIBUT_STOCK_IMPORT_COLUMNS, PRODUIT_ATTRIBUT_STOCK_POSITIVE_NUMBER_COLUMNS, PRODUIT_IMPORT_COLUMNS, PRODUIT_IMPORT_DATE_COLUMNS, PRODUIT_IMPORT_POSITIVE_NUMBER_COLUMNS } from "../api/colonne";
 import { parseFile } from "../api/parse";
 import { importProduitCsv } from "../api/importCSV1";
+import { importCsv2ToPrestashop } from "../api/importCSV2";
 export function Import() {
 
     const [config, setConfig] = useState({
@@ -45,8 +46,21 @@ export function Import() {
             ]);
 
             if (csv1) {
+                console.log("Produit import :", parsedProducts);
                 setMes(`Imporattion du fichier csv 1`);
-                const result = await importProduitCsv(parsedProducts,imageProduit);
+                await importProduitCsv(parsedProducts,imageProduit);
+            }
+
+            if(csv2)
+            {
+                console.log("Attribut stock import :", parsedAttributes);
+                setMes(`Imporattion du fichier csv 2`);
+                await importCsv2ToPrestashop(parsedAttributes);
+            }
+
+            if(csv3)
+            {
+                console.log("Commande client produit import :", parsedOrders);
             }
 
         } catch (error: any) {

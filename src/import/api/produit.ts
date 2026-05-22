@@ -1,4 +1,5 @@
-import { slugify } from "../../utils/helper";
+import { listProductsLight } from "../../module/Backoffice/produit/api/productsApi";
+import { normalizeText, slugify } from "../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { xmlToJson } from "../../utils/xml";
 
@@ -106,4 +107,52 @@ export async function uploadProductImage(productId: number, file: Blob, fileName
     }
 
     throw new Error("Impossible de récupérer l'ID de l'image uploadée");
+}
+
+export async function getProductIdByReference(reference: string): Promise<number | null> {
+    try {
+        const res = await requestPrestashopXml<any>("/products", {
+            query: { display: "[id,reference]", limit: "999" },
+        });
+
+        const products = res?.prestashop?.products?.product;
+        if (!products) return null;
+
+        const list = Array.isArray(products) ? products : [products];
+        const found = list.find((p: any) => p.reference === reference);
+
+        return found ? Number(found.id) : null;
+    } catch {
+        return null;
+    }
+}
+type ProductLight = Awaited<ReturnType<typeof listProductsLight>>[number];
+function normalizeProductReference(value: string): string {
+    return normalizeText(String(value ?? "").trim());
+}
+export async function findProductByReference(reference: string, cache: Map<string, ProductLight | null>): Promise<ProductLight | null> {
+    const normalizedReference = normalizeProductReference(reference);
+    if (!normalizedReference) {
+        return null;
+    }
+
+    if (cache.has(normalizedReference)) {
+        return cache.get(normalizedReference) ?? null;
+    }
+
+    const products = await listProductsLight();
+    const compactTarget = compactReference(reference);
+    const match =
+        products.find((product) => {
+            const productReference = normalizeProductReference(product.reference ?? "");
+            if (productReference === normalizedReference) return true;
+            return compactReference(productReference) === compactTarget;
+        }) ?? null;
+
+    cache.set(normalizedReference, match);
+    return match;
+}
+
+function compactReference(value: string): string {
+    return normalizeProductReference(value).replace(/[^a-z0-9]/g, "");
 }
