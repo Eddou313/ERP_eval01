@@ -151,3 +151,56 @@ export async function getOrCreateAttributeValue(
  
   return id;
 }
+
+export async function getCombinationId(productId: number, karazany: string): Promise<number> {
+  // Chercher la valeur d'attribut par nom
+  const res = await requestPrestashopXml<any>("/product_option_values", {
+    query: { display: "[id,name]", limit: "999" },
+  });
+
+  const values = res?.prestashop?.product_option_values?.product_option_value;
+  if (!values) return 0;
+
+  const list = Array.isArray(values) ? values : [values];
+  const found = list.find(
+    (v: any) =>
+      (v.name?.language?.["#text"] ?? v.name?.language ?? v.name)
+        ?.toString()
+        .toLowerCase() === karazany.toLowerCase()
+  );
+  if (!found) return 0;
+
+  const valueId = Number(found.id);
+
+  // Chercher la combination du produit avec cette valeur
+  const combRes = await requestPrestashopXml<any>("/combinations", {
+    query: {
+      display: "[id,id_product]",
+      "filter[id_product]": `[${productId}]`,
+      limit: "999",
+    },
+  });
+
+  const combs = combRes?.prestashop?.combinations?.combination;
+  if (!combs) return 0;
+
+  const combList = Array.isArray(combs) ? combs : [combs];
+
+  for (const comb of combList) {
+    // Vérifier les associations
+    const detail = await requestPrestashopXml<any>(`/combinations/${comb.id}`, {
+      query: { display: "full" },
+    });
+
+    const optValues =
+      detail?.prestashop?.combination?.associations?.product_option_values?.product_option_value;
+    if (!optValues) continue;
+
+    const optList = Array.isArray(optValues) ? optValues : [optValues];
+    if (optList.some((o: any) => Number(o.id) === valueId)) {
+      return Number(comb.id);
+    }
+  }
+
+  return 0;
+}

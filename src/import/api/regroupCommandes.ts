@@ -3,7 +3,7 @@ import type { Commande } from "./importCSV3";
 type ProduitAchat = {
   reference: string;
   quantite: number;
-  fournisseur: string;
+  karazany: string;
 };
 
 export function regrouperCommandes(commandes: Commande[]): Commande[] {
@@ -36,7 +36,7 @@ export function regrouperCommandes(commandes: Commande[]): Commande[] {
       const exist = existing.produits.find(
         (p) =>
           p.reference === produit.reference &&
-          p.fournisseur === produit.fournisseur
+          p.karazany === produit.karazany
       );
 
       if (exist) {
@@ -58,7 +58,7 @@ export function regrouperCommandes(commandes: Commande[]): Commande[] {
   }));
 }
 
-function parseAchat(achat: string): ProduitAchat[] {
+export function parseAchat(achat: string): ProduitAchat[] {
   if (!achat) return [];
 
   // IMPORTANT : ([^"]*) et non +
@@ -72,20 +72,20 @@ function parseAchat(achat: string): ProduitAchat[] {
     produits.push({
       reference: match[1],
       quantite: Number(match[2]),
-      fournisseur: match[3],
+      karazany: match[3],
     });
   }
 
   return produits;
 }
 
-function buildAchat(produits: ProduitAchat[]): string {
+export function buildAchat(produits: ProduitAchat[]): string {
   return (
     "[" +
     produits
       .map(
         (p) =>
-          `("${p.reference}";${p.quantite};"${p.fournisseur}")`
+          `("${p.reference}";${p.quantite};"${p.karazany}")`
       )
       .join(",") +
     "]"

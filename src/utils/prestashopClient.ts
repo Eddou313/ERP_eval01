@@ -118,6 +118,7 @@ export async function requestPrestashopXml<T>(
     const text = await response.text();
 
     if (!response.ok) {
+      
       // Fallback: certains endpoints n'acceptent pas DELETE directement (405).
       // Pour les DELETE réessayons avec un POST + X-HTTP-Method-Override: DELETE
       if (response.status === 405 && method === "DELETE") {

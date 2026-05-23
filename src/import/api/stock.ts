@@ -1,5 +1,8 @@
 import { recordStockMovement } from "../../module/Backoffice/stock/api/stockMovementService";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
+import { getCombinationId } from "./attribut";
+import type { ProductCache, ProduitAchat } from "./importCSV3";
+import { findProductByReference } from "./produit";
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -166,3 +169,29 @@ export async function updateStockWithMovement(
     await recalculerStockParent(productId, combinationId, quantity);
   }
 }
+
+export async function deduireStockPourCommande(
+  produits: ProduitAchat[],
+  productsCache: ProductCache
+): Promise<void> {
+  for (const produit of produits) {
+    const productReel = await findProductByReference(produit.reference, productsCache);
+    if (!productReel) {
+      console.warn(`[stock] Produit introuvable pour déduction : ${produit.reference}`);
+      continue;
+    }
+ 
+    const productId = Number(productReel.id);
+    const combinationId =
+      produit.karazany.trim() !== ""
+        ? await getCombinationId(productId, produit.karazany)
+        : 0;
+ 
+    await updateStockWithMovement(productId, produit.quantite, combinationId, -1);
+ 
+    console.log(
+      `[stock] Déduction — ${produit.reference}${produit.karazany ? `(${produit.karazany})` : ""} : -${produit.quantite}`
+    );
+  }
+}
+ 
