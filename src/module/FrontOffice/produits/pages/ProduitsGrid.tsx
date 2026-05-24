@@ -85,7 +85,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
                   </>
                 );
               })()}
-              <span className="currentPrice">date de disponibilité: {product.available_date || product.date_add}</span>
+              <span className="currentPrice">date de disponibilité: {product.available_date }</span>
             </div>
             {product.quantity && product.quantity > 0 ? (
               <span className="inStock">

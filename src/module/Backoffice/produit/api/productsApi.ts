@@ -31,6 +31,21 @@ async function resolveDefaultCombinationId(product: any, productId: number): Pro
   }
 }
 
+export async function getRealProductStock(product: any, productId: number, productAttributeId?: number): Promise<number | null> {
+  const resolvedAttributeId = Number(productAttributeId || 0);
+
+  if (resolvedAttributeId > 0) {
+    return getStockByProductId(productId, resolvedAttributeId);
+  }
+
+  const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
+  if (defaultCombinationId > 0) {
+    return getStockByProductId(productId, defaultCombinationId);
+  }
+
+  return getStockByProductId(productId);
+}
+
 async function resolveCombinationPriceImpact(productId: number, combinationId: number): Promise<number> {
   if (!combinationId) return 0;
 
@@ -237,8 +252,8 @@ export async function getProduct(id: number): Promise<ProductListItem> {
   const json = await requestPrestashopXml<ProductGetResponse>(`/products/${id}`);
   const p = json.prestashop.product;
 
-  const stock = await getStockByProductId(id);
   const pricing = await resolveProductPriceWorkflow(p, id);
+  const stock = await getRealProductStock(p, id, pricing.defaultCombinationId);
 
   return mapProductFromApi(p, stock ?? 0, pricing);
 }
