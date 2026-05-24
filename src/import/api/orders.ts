@@ -6,8 +6,8 @@ import { generateSecureKey } from "./importCSV3";
 import { computeCartTotals } from "./carts";
 import type { ClientForm } from "./customers";
 import { updateStockWithMovement } from "./stock";
-import { getCombinationId } from "./attribut";
-import { findProductByReference } from "./produit";
+
+type StockMovementSign = 1 | -1;
 
 // ─────────────────────────────────────────────
 // ÉTATS ET STOCK
@@ -21,6 +21,33 @@ export const STOCK_DECREMENT_STATES = new Set<number>([
 export const STOCK_INCREMENT_STATES = new Set<number>([
   6, // annulé
 ]);
+
+function getStockMovementSignForTransition(
+  previousState: number,
+  nextState: number
+): StockMovementSign | null {
+  if (previousState === nextState) return null;
+
+  // Une commande déjà livrée ne doit plus bouger de stock.
+  if (previousState === 5) return null;
+
+  // Paiement accepté : on réserve le stock une seule fois.
+  if (nextState === 2) {
+    return previousState === 2 ? null : -1;
+  }
+
+  // Livraison : si le stock a déjà été réservé en 2, on ne recommence pas.
+  if (nextState === 5) {
+    return previousState === 2 ? null : -1;
+  }
+
+  // Annulation : on rétablit le stock uniquement si la commande avait déjà réservé.
+  if (nextState === 6) {
+    return previousState === 2 ? 1 : null;
+  }
+
+  return null;
+}
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -210,8 +237,8 @@ export async function createOrderFromCart(
     id_shop: 1,
     id_carrier: carrierId,
     secure_key: secureKey,
-    orderStateId: orderStateId,
-    current_state: orderStateId,
+    orderStateId: 1,
+    current_state: 1,
     dateTime,
     conversion_rate: 1,
     module: "ps_cashondelivery",
@@ -239,7 +266,7 @@ export async function createOrderFromCart(
             module: "ps_cashondelivery",
             payment: "Paiement à la livraison",
             reference: order.reference || `IMP-${Date.now()}`,
-            current_state: orderStateId,
+            current_state: 1, // état initial (panier) pour éviter les mouvements de stock intempestifs
             date_add: dateTime,
             date_upd: dateTime,
             conversion_rate: 1,
@@ -261,15 +288,6 @@ export async function createOrderFromCart(
     await updateOrderState(orderId, orderStateId, dateTime);
   }
 
-  if (orderStateId === 5) {
-    // Livré → sortie définitive du stock
-    await applyStockMovementFromOrder(orderId, -1);
-  } else if (orderStateId === 6) {
-    // Annulé → restauration du stock
-    await applyStockMovementFromOrder(orderId, 1);
-  }
-  // État 2 (paiement accepté) → pas de mouvement ici
-
   return orderId;
 }
 
@@ -282,10 +300,19 @@ export async function updateOrderState(
   newState: number,
   date: string
 ): Promise<void> {
+  let previousState = 0;
+
   try {
     const order = await getOrder(id);
-    if (Number(order.current_state) === 5) {
+    previousState = Number(order.current_state) || 0;
+
+    if (previousState === 5) {
       alert("Une commande déjà livrée ne peut être modifiée");
+      return;
+    }
+
+    if (previousState === newState) {
+      console.log(`✓ État commande #${id} déjà à ${newState}`);
       return;
     }
   } catch {
@@ -334,12 +361,8 @@ export async function updateOrderState(
   console.log(`✓ État commande #${id} → ${newState}`);
 
   // ── Mouvement de stock après changement d'état ──
-  if (newState === 5) {
-    // Livré → décrément définitif
-    await applyStockMovementFromOrder(id, -1);
-  } else if (newState === 6) {
-    // Annulé → restauration
-    await applyStockMovementFromOrder(id, 1);
+  const stockMovementSign = getStockMovementSignForTransition(previousState, newState);
+  if (stockMovementSign !== null) {
+    await applyStockMovementFromOrder(id, stockMovementSign);
   }
-  // État 2 (paiement accepté) → pas de mouvement ici
 }
