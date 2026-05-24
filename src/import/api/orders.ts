@@ -1,9 +1,10 @@
-import { createOrder, getOrder } from "../../module/Backoffice/commande/api/commandesApi";
+import { getOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { textFromUnknown, validateUnsignedId } from "../../utils/helper";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { getCart } from "../../module/Backoffice/panier/api/panierApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { generateSecureKey, type Commande } from "./importCSV3";
+import { computeCartTotals } from "./carts";
 
 async function resolveCarrierId(carrierId: unknown): Promise<number> {
   const numericCarrierId = Number(carrierId);
@@ -16,8 +17,9 @@ async function resolveCarrierId(carrierId: unknown): Promise<number> {
   return 1;
 }
 
-export async function getOrCreateCustomer(cmd: Commande): Promise<{ id: number; secureKey: string }> {
-  // Chercher si le client existe déjà par email
+export async function getOrCreateCustomer(
+  cmd: Commande
+): Promise<{ id: number; secureKey: string }> {
   const res = await requestPrestashopXml<any>("/customers", {
     query: {
       display: "[id,email,secure_key]",
@@ -37,7 +39,6 @@ export async function getOrCreateCustomer(cmd: Commande): Promise<{ id: number; 
     }
   }
 
-  // Créer le client
   const [prenom, ...restNom] = cmd.nom.trim().split(" ");
   const nom = restNom.join(" ") || prenom;
 
@@ -50,7 +51,7 @@ export async function getOrCreateCustomer(cmd: Commande): Promise<{ id: number; 
           lastname: nom,
           email: cmd.email,
           passwd: cmd.pwd,
-          id_default_group: 3,  // groupe "Clients"
+          id_default_group: 3,
           active: 1,
           deleted: 0,
         },
@@ -60,6 +61,7 @@ export async function getOrCreateCustomer(cmd: Commande): Promise<{ id: number; 
 
   const newId = Number(created?.prestashop?.customer?.id);
   if (!newId) throw new Error(`Création client échouée pour ${cmd.email}`);
+
   return {
     id: newId,
     secureKey: created?.prestashop?.customer?.secure_key || generateSecureKey(),
@@ -78,8 +80,7 @@ export async function createOrderFromCart(
   const [day, month, year] = dateStr.split("/");
   const dateTime = `${year}-${month}-${day} 00:00:00`;
 
-  // ── Récupérer le panier ──
-  const cartDetail = await getCart(cartId).catch(() => null);
+  // ── Un seul GET /carts/:id ──
   const cartRes = await requestPrestashopXml<any>(`/carts/${cartId}`, {
     query: { display: "full" },
   });
@@ -90,26 +91,11 @@ export async function createOrderFromCart(
   const addrDelivery = Number(cart.id_address_delivery) || Number(fallbackAddressId) || 0;
   const addrInvoice = Number(cart.id_address_invoice) || addrDelivery;
   const carrierId = await resolveCarrierId(cart.id_carrier);
-  const totalProducts = Number(cartDetail?.total_products ?? cartDetail?.total ?? 0);
-  const rawRows = cart.associations?.cart_rows?.cart_row;
-  const orderRows = (cartDetail?.items?.length
-    ? cartDetail.items
-    : Array.isArray(rawRows)
-      ? rawRows
-      : rawRows
-        ? [rawRows]
-        : []
-  ).map((row: any) => ({
-    product_id: Number(row.product_id ?? row.id_product) || 0,
-    product_quantity: Number(row.quantity ?? row.product_quantity) || 0,
-  }));
 
-  if (!addrDelivery) throw new Error(`Adresse de livraison manquante pour le panier ${cartId}`);
-  if (!addrInvoice) throw new Error(`Adresse de facturation manquante pour le panier ${cartId}`);
-  if (!validateUnsignedId(carrierId)) throw new Error(`Transporteur invalide pour le panier ${cartId}`);
-  if (orderRows.length === 0) throw new Error(`Panier ${cartId} vide ou lignes introuvables`);
+  if (!addrDelivery) throw new Error(`Adresse de livraison manquante — panier ${cartId}`);
+  if (!validateUnsignedId(carrierId)) throw new Error(`Transporteur invalide — panier ${cartId}`);
 
-  // ── 1. Créer la commande directement via /orders ──
+  // ── 1. Créer la commande ──
   const orderId = await createOrderDirect({
     id_customer: customer.id,
     id_cart: cartId,
@@ -118,28 +104,13 @@ export async function createOrderFromCart(
     id_currency: 1,
     id_lang: 1,
     id_shop: 1,
-    id_shop_group: 1,
     id_carrier: carrierId,
     secure_key: secureKey,
-    payment_code: "cash",
-    module: "ps_cashondelivery",
-    payment: "Paiement à la livraison",
-    total_paid: totalProducts,
-    total_paid_tax_incl: totalProducts,
-    total_paid_tax_excl: totalProducts,
-    total_paid_real: totalProducts,
-    total_products: totalProducts,
-    total_products_wt: totalProducts,
-    total_shipping: 0,
-    total_shipping_tax_incl: 0,
-    total_shipping_tax_excl: 0,
-    conversion_rate: 1,
-    date_add: dateTime,
-    date_upd: dateTime,
-    order_rows: orderRows,
+    orderStateId: orderStateId || 2,
+    dateTime,
   });
 
-  // ── 2. Forcer la date via PUT (PS remet souvent la date courante) ──
+  // ── 2. Forcer la date via PUT ──
   try {
     const order = await getOrder(orderId);
     await requestPrestashopXml(`/orders/${orderId}`, {
@@ -173,7 +144,7 @@ export async function createOrderFromCart(
       }),
     });
   } catch (error) {
-    console.warn(`[orders] Impossible de forcer la date de la commande ${orderId}:`, error);
+    console.warn(`[orders] Impossible de forcer la date ${orderId}:`, error);
   }
 
   // ── 3. Mettre à jour l'état ──
@@ -250,8 +221,7 @@ export async function updateOrderState(id: number, newState: number, date: strin
     throw new Error(`Impossible de changer l'état de la commande #${id}: ${errorMsg}`);
   }
 }
-
-async function createOrderDirect(params: {
+export async function createOrderDirect(params: {
   id_customer: number;
   id_cart: number;
   id_address_delivery: number;
@@ -259,55 +229,64 @@ async function createOrderDirect(params: {
   id_currency: number;
   id_lang: number;
   id_shop: number;
-  id_shop_group?: number;
   id_carrier: number;
   secure_key: string;
-  payment_code: string;
-  module: string,
-  payment: string,
-  total_paid: number;
-  total_paid_tax_incl: number;
-  total_paid_tax_excl: number;
-  total_paid_real: number;
-  total_products: number;
-  total_products_wt: number;
-  total_shipping: number;
-  total_shipping_tax_incl: number;
-  total_shipping_tax_excl: number;
-  conversion_rate: number;
-  date_add: string;
-  date_upd: string;
-  order_rows: Array<{ product_id: number; product_quantity: number }>;
+  orderStateId: number;
+  dateTime: string;
 }): Promise<number> {
-  const orderId = await createOrder({
-    id_customer: params.id_customer,
-    id_cart: params.id_cart,
-    id_address_delivery: params.id_address_delivery,
-    id_address_invoice: params.id_address_invoice,
-    id_currency: params.id_currency,
-    id_lang: params.id_lang,
-    id_carrier: params.id_carrier,
-    id_shop: params.id_shop,
-    id_shop_group: params.id_shop_group ?? 1,
-    secure_key: params.secure_key,
-    payment_code: params.payment_code,
-    total_paid: params.total_paid,
-    total_paid_tax_incl: params.total_paid_tax_incl,
-    total_paid_tax_excl: params.total_paid_tax_excl,
-    total_paid_real: params.total_paid_real,
-    total_products: params.total_products,
-    total_products_wt: params.total_products_wt,
-    total_shipping: params.total_shipping,
-    total_shipping_tax_incl: params.total_shipping_tax_incl,
-    total_shipping_tax_excl: params.total_shipping_tax_excl,
-    conversion_rate: params.conversion_rate,
-    date_add: params.date_add,
-    module: params.module,
-    payment: params.payment,
-    date_upd: params.date_upd,
-    order_rows: params.order_rows,
-  } as any);
+  // computeCartTotals fait son propre GET /carts/:id
+  // il est isolé dans carts.ts pour être réutilisable
+  const totals = await computeCartTotals(params.id_cart);
 
+  const created = await requestPrestashopXml<any>("/orders", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        order: {
+          id_address_delivery: params.id_address_delivery,
+          id_address_invoice: params.id_address_invoice,
+          id_cart: params.id_cart,
+          id_currency: params.id_currency,
+          id_lang: params.id_lang,
+          id_customer: params.id_customer,
+          id_carrier: params.id_carrier,
+          id_shop: params.id_shop,
+          secure_key: params.secure_key,
+          module: "ps_cashondelivery",
+          payment: "Paiement à la livraison",
+          recyclable: 0,
+          gift: 0,
+          gift_message: "",
+          mobile_theme: 0,
+          total_discounts: 0,
+          total_discounts_tax_incl: 0,
+          total_discounts_tax_excl: 0,
+          total_paid: totals.total_paid,
+          total_paid_tax_incl: totals.total_paid,
+          total_paid_tax_excl: totals.total_products,
+          total_paid_real: totals.total_paid_real,
+          total_products: totals.total_products,
+          total_products_wt: totals.total_products_wt,
+          total_shipping: 0,
+          total_shipping_tax_incl: 0,
+          total_shipping_tax_excl: 0,
+          total_wrapping: 0,
+          total_wrapping_tax_incl: 0,
+          total_wrapping_tax_excl: 0,
+          round_mode: 2,
+          round_type: 1,
+          conversion_rate: 1,
+          reference: `IMP-${Date.now()}`,
+          current_state: params.orderStateId,
+          date_add: params.dateTime,
+          date_upd: params.dateTime,
+          associations: { order_rows: [] },
+        },
+      },
+    }),
+  });
+
+  const orderId = Number(created?.prestashop?.order?.id);
   if (!orderId) throw new Error("Création commande échouée (ID invalide)");
   return orderId;
 }

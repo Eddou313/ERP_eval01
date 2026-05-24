@@ -95,9 +95,9 @@ export async function requestPrestashopXml<T>(
   const bodyXml = opts.bodyXml?.replace(/^<\?xml[^>]*\?>\s*/i, "");
 
   if (bodyXml) {
-    // console.log(
-    //   `\n===== XML OUT ${method} ${resourcePath} =====\n${bodyXml}\n===== END XML OUT =====\n`,
-    // );
+    console.log(
+      `\n===== XML OUT ${method} ${resourcePath} =====\n${bodyXml}\n===== END XML OUT =====\n`,
+    );
   }
 
   try {
