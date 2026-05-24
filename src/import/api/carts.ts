@@ -2,16 +2,15 @@ import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/Livra
 import { validateUnsignedId } from "../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { getCombinationId } from "./attribut";
-import { getOrCreateAddress } from "./customers";
-import { generateSecureKey, type ProduitAchat } from "./importCSV3";
+import { type ProduitAchat } from "./importCSV3";
 import { findProductByReference } from "./produit";
 
 export async function createCart(
     customerId: number,
     secure_key: string,
-    adresse: string
-): Promise<{ cartId: number; addressId: number; secure_key: string }> {
-    const addressId = await getOrCreateAddress(customerId, adresse);
+    adresse: number
+): Promise<{ cartId: number }> {
+    const addressId = adresse;
 
     const created = await requestPrestashopXml<any>("/carts", {
         method: "POST",
@@ -38,8 +37,11 @@ export async function createCart(
     });
 
     const cartId = Number(created?.prestashop?.cart?.id);
-    if (!cartId) throw new Error(`Création panier échouée`);
-    return { cartId, addressId, secure_key };
+    if (!cartId) {
+        throw new Error(`Création panier échouée`);
+        return { cartId: 0 };
+    }
+    return { cartId };
 }
 
 export async function addProductsToCart(
@@ -121,6 +123,8 @@ export async function addProductsToCart(
                     mobile_theme: 0,
                     delivery_option: "",
                     secure_key: secureKey,
+                    id_shop: 1,
+                    id_shop_group: 1,
                     allow_seperated_package: 0,
                     date_add: dateAdd,
                     date_upd: dateAdd,
@@ -151,79 +155,207 @@ export async function computeCartTotals(cartId: number): Promise<{
     total_paid: number;
     total_paid_real: number;
 }> {
-    const fallback = {
-        total_products: 1,
-        total_products_wt: 1,
-        total_paid: 1,
+
+    const emptyTotals = {
+        total_products: 0,
+        total_products_wt: 0,
+        total_paid: 0,
         total_paid_real: 0,
     };
 
     try {
+
         const res = await requestPrestashopXml<any>(`/carts/${cartId}`, {
-            query: { display: "full" },
+            query: {
+                display: "full",
+            },
         });
 
-        const rawRows = res?.prestashop?.cart?.associations?.cart_rows?.cart_row;
-        if (!rawRows) return fallback;
+        const rawRows =
+            res?.prestashop?.cart?.associations?.cart_rows?.cart_row;
 
-        const list = Array.isArray(rawRows) ? rawRows : [rawRows];
-        let totalHt = 0;
-        let totalTtc = 0;
+        if (!rawRows) {
+            return emptyTotals;
+        }
 
-        for (const row of list) {
-            // ✅ extractId gère les objets xlink { "#text": "104", ... }
-            const productId = extractId(row.id_product);
-            const combinationId = extractId(row.id_product_attribute);
-            const qty = extractId(row.quantity) || Number(row.quantity) || 1;
+        const rows = Array.isArray(rawRows)
+            ? rawRows
+            : [rawRows];
 
-            if (!productId) {
-                console.warn(`[cart totals] id_product invalide — panier ${cartId}:`, row.id_product);
+        const grouped = new Map<
+            string,
+            {
+                productId: number;
+                combinationId: number;
+                quantity: number;
+            }
+        >();
+
+        for (const row of rows) {
+
+            const productId = Number(extractId(row.id_product));
+            const combinationId = Number(extractId(row.id_product_attribute)) || 0;
+
+            const quantity = Number(row.quantity) || 0;
+
+            if (!productId || quantity <= 0) {
                 continue;
             }
 
-            let priceHt = 0;
+            const key = `${productId}_${combinationId}`;
+
+            if (!grouped.has(key)) {
+                grouped.set(key, {
+                    productId,
+                    combinationId,
+                    quantity,
+                });
+            } else {
+                grouped.get(key)!.quantity += quantity;
+            }
+        }
+
+        let totalHt = 0;
+        let totalTtc = 0;
+
+        for (const item of grouped.values()) {
+
+            let basePriceHt = 0;
             let taxRate = 20;
 
             try {
-                const prodRes = await requestPrestashopXml<any>(`/products/${productId}`, {
-                    query: { display: "[price,tax_rate]" },
-                });
-                priceHt = Number(prodRes?.prestashop?.product?.price) || 0;
-                taxRate = Number(prodRes?.prestashop?.product?.tax_rate) || 20;
-            } catch {
-                console.warn(`[cart totals] Produit ${productId} introuvable`);
-            }
 
-            let impactHt = 0;
-            if (combinationId > 0) {
+                const productRes = await requestPrestashopXml<any>(
+                    `/products/${item.productId}`,
+                    {
+                        query: {
+                            display: "[price,id_tax_rules_group]",
+                        },
+                    }
+                );
+
+                const product = productRes?.prestashop?.product;
+
+                basePriceHt = Number(product?.price) || 0;
+
+                const taxRulesGroupId =
+                    Number(product?.id_tax_rules_group) || 0;
+
+                if (taxRulesGroupId > 0) {
+                    try {
+
+                        const taxRuleRes =
+                            await requestPrestashopXml<any>(
+                                `/tax_rule_groups/${taxRulesGroupId}`,
+                                {
+                                    query: {
+                                        display: "full",
+                                    },
+                                }
+                            );
+
+                        const taxRule =
+                            taxRuleRes?.prestashop?.tax_rule_group;
+
+                        const rawTaxRule =
+                            taxRule?.associations?.tax_rules?.tax_rule;
+
+                        const firstTaxRule =
+                            Array.isArray(rawTaxRule)
+                                ? rawTaxRule[0]
+                                : rawTaxRule;
+
+                        const taxId =
+                            Number(extractId(firstTaxRule?.id_tax));
+
+                        if (taxId > 0) {
+
+                            const taxRes =
+                                await requestPrestashopXml<any>(
+                                    `/taxes/${taxId}`,
+                                    {
+                                        query: {
+                                            display: "[rate]",
+                                        },
+                                    }
+                                );
+
+                            taxRate =
+                                Number(
+                                    taxRes?.prestashop?.tax?.rate
+                                ) || 20;
+                        }
+
+                    } catch {
+                        console.warn(
+                            `[cart totals] Taxe introuvable pour groupe ${taxRulesGroupId}`
+                        );
+                    }
+                }
+
+            } catch {
+                console.warn(
+                    `[cart totals] Produit ${item.productId} introuvable`
+                );
+                continue;
+            }
+            let combinationImpactHt = 0;
+
+            if (item.combinationId > 0) {
+
                 try {
-                    const combRes = await requestPrestashopXml<any>(`/combinations/${combinationId}`, {
-                        query: { display: "[price]" },
-                    });
-                    impactHt = Number(combRes?.prestashop?.combination?.price) || 0;
+
+                    const combRes =
+                        await requestPrestashopXml<any>(
+                            `/combinations/${item.combinationId}`,
+                            {
+                                query: {
+                                    display: "[price]",
+                                },
+                            }
+                        );
+
+                    combinationImpactHt =
+                        Number(
+                            combRes?.prestashop?.combination?.price
+                        ) || 0;
+
                 } catch {
-                    console.warn(`[cart totals] Combination ${combinationId} introuvable`);
+                    console.warn(
+                        `[cart totals] Combinaison ${item.combinationId} introuvable`
+                    );
                 }
             }
 
-            const unitHt = priceHt + impactHt;
-            const unitTtc = unitHt * (1 + taxRate / 100);
+            const unitHt =
+                basePriceHt + combinationImpactHt;
 
-            totalHt += unitHt * qty;
-            totalTtc += unitTtc * qty;
+            const unitTtc =
+                unitHt * (1 + taxRate / 100);
+
+            totalHt += unitHt * item.quantity;
+            totalTtc += unitTtc * item.quantity;
         }
 
-        const totalHtR = Math.round(totalHt * 100) / 100 || 1;
-        const totalTtcR = Math.round(totalTtc * 100) / 100 || 1;
+
+        totalHt = Math.round(totalHt * 100) / 100;
+        totalTtc = Math.round(totalTtc * 100) / 100;
 
         return {
-            total_products: totalHtR,
-            total_products_wt: totalTtcR,
-            total_paid: totalTtcR,
-            total_paid_real: 0,
+            total_products: totalHt,
+            total_products_wt: totalTtc,
+            total_paid: totalTtc,
+            total_paid_real: totalTtc,
         };
-    } catch {
-        return fallback;
+
+    } catch (error) {
+
+        console.error(
+            `[cart totals] erreur panier ${cartId}`,
+            error
+        );
+
+        return emptyTotals;
     }
 }
 

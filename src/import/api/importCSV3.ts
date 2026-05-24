@@ -68,7 +68,7 @@ export async function importProduitCommandeCsv(
             const addressCity = addressParts[2]?.trim() || "Ville";
 
             const addressId = await createClientAddress(customer.id, {
-                firstname : customer?.firstname,
+                firstname: customer?.firstname,
                 lastname: customer?.lastname || ".",
                 address1: addressLine1,
                 postcode: addressPostal,
@@ -76,28 +76,30 @@ export async function importProduitCommandeCsv(
                 id_country: 8,
             });
 
-            // // ── 2. Créer le panier (retourne cartId + addressId) ──
-            // const { cartId, addressId } = await createCart(customer.id, customer.secureKey,cmd.adresse);
-            // if (!cartId) throw new Error(`Impossible de créer le panier`);
-            // cartsCreated++;
-
+            // ── 2. Créer le panier (retourne cartId + addressId) ──
+            const { cartId } = await createCart(customer.id, customer.secure_key, addressId);
+            if (!cartId) {
+                throw new Error(`Impossible de créer le panier`);
+                continue;
+            }
             // // ── 3. Ajouter TOUS les produits en un seul PUT ──
-            // //    customerId et addressId passés explicitement pour éviter les 0
-            // await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
+            //    customerId et addressId passés explicitement pour éviter les 0
+            await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
+            cartsCreated++;
 
             // // ── 4. Etat vide → panier uniquement ──
-            // if (etat === "panier") continue;
+            if (etat === "panier") continue;
 
             // // ── 5. Créer la commande depuis le panier ──
-            // const orderId = await createOrderFromCart(
-            //     cartId,
-            //     customer,                        // { id, secureKey }
-            //     ETAT_TO_ORDER_STATE[etat] ?? 2,
-            //     cmd.date,
-            //     addressId                        // fallback adresse
-            // );
-            // if (!orderId) throw new Error(`Impossible de créer la commande`);
-            // ordersCreated++;
+            const orderId = await createOrderFromCart(
+                cartId,
+                customer,                        // { id, secureKey }
+                ETAT_TO_ORDER_STATE[etat] ?? 2,
+                cmd.date,
+                addressId                        // fallback adresse
+            );
+            if (!orderId) throw new Error(`Impossible de créer la commande`);
+            ordersCreated++;
 
             // // ── 6. Forcer l'état final (updateOrderState déjà appelé dans createOrderFromCart
             // //       mais on le refait ici si getStateId retourne un état différent) ──
@@ -111,7 +113,8 @@ export async function importProduitCommandeCsv(
 
             // // ── 7. Gérer le stock selon l'état ──
             // if (etat === "paiement accepté" || etat === "livré") {
-            //     await deduireStockPourCommande(produits, productsCache);
+            // if (etat === "livré") {
+                // await deduireStockPourCommande(produits, productsCache);
             // }
             // "annulé" → aucune action stock
 

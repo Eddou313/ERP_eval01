@@ -2,8 +2,19 @@ import { getOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { textFromUnknown, validateUnsignedId } from "../../utils/helper";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
-import { generateSecureKey} from "./importCSV3";
+import { generateSecureKey } from "./importCSV3";
 import { computeCartTotals } from "./carts";
+import type { ClientForm } from "./customers";
+
+export const STOCK_DECREMENT_STATES = new Set<number>([
+    2, // paiement accepté
+    5, // livré (suppose déjà payé)
+]);
+
+// Etats qui restaurent le stock
+export const STOCK_INCREMENT_STATES = new Set<number>([
+    6, // annulé
+]);
 
 async function resolveCarrierId(carrierId: unknown): Promise<number> {
   const numericCarrierId = Number(carrierId);
@@ -18,7 +29,7 @@ async function resolveCarrierId(carrierId: unknown): Promise<number> {
 
 export async function createOrderFromCart(
   cartId: number,
-  customer: { id: number; secureKey: string },
+  customer: ClientForm,
   orderStateId: number,
   dateStr: string,
   fallbackAddressId?: number
@@ -33,7 +44,7 @@ export async function createOrderFromCart(
   const cart = cartRes?.prestashop?.cart;
   if (!cart) throw new Error(`Panier ${cartId} introuvable`);
 
-  const secureKey = customer.secureKey || cart.secure_key || generateSecureKey();
+  const secureKey = customer.secure_key || cart.secure_key || generateSecureKey();
   const addrDelivery = Number(cart.id_address_delivery) || Number(fallbackAddressId) || 0;
   const addrInvoice = Number(cart.id_address_invoice) || addrDelivery;
   const carrierId = await resolveCarrierId(cart.id_carrier);
@@ -54,6 +65,8 @@ export async function createOrderFromCart(
     secure_key: secureKey,
     orderStateId: orderStateId || 2,
     dateTime,
+    current_state: orderStateId || 2,
+    conversion_rate: 1,
   });
 
   // ── 2. Forcer la date via PUT ──
@@ -94,9 +107,9 @@ export async function createOrderFromCart(
   }
 
   // ── 3. Mettre à jour l'état ──
-  if (orderStateId) {
-    await updateOrderState(orderId, orderStateId, dateTime);
-  }
+  // if (orderStateId) {
+  //   await updateOrderState(orderId, orderStateId, dateTime);
+  // }
 
   return orderId;
 }
@@ -179,9 +192,10 @@ export async function createOrderDirect(params: {
   secure_key: string;
   orderStateId: number;
   dateTime: string;
-}): Promise<number> {
+  current_state: number;
+  conversion_rate: number;
+}): Promise < number > {
   // computeCartTotals fait son propre GET /carts/:id
-  // il est isolé dans carts.ts pour être réutilisable
   const totals = await computeCartTotals(params.id_cart);
 
   const created = await requestPrestashopXml<any>("/orders", {
@@ -221,9 +235,9 @@ export async function createOrderDirect(params: {
           total_wrapping_tax_excl: 0,
           round_mode: 2,
           round_type: 1,
-          conversion_rate: 1,
+          conversion_rate: params.conversion_rate,
           reference: `IMP-${Date.now()}`,
-          current_state: params.orderStateId,
+          current_state: params.current_state,
           date_add: params.dateTime,
           date_upd: params.dateTime,
           associations: { order_rows: [] },
@@ -233,6 +247,6 @@ export async function createOrderDirect(params: {
   });
 
   const orderId = Number(created?.prestashop?.order?.id);
-  if (!orderId) throw new Error("Création commande échouée (ID invalide)");
+  if(!orderId) throw new Error("Création commande échouée (ID invalide)");
   return orderId;
 }
