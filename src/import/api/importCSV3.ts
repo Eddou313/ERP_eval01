@@ -94,29 +94,12 @@ export async function importProduitCommandeCsv(
             const orderId = await createOrderFromCart(
                 cartId,
                 customer,                        // { id, secureKey }
-                ETAT_TO_ORDER_STATE[etat] ?? 2,
+                ETAT_TO_ORDER_STATE[etat],
                 cmd.date,
                 addressId                        // fallback adresse
             );
             if (!orderId) throw new Error(`Impossible de créer la commande`);
             ordersCreated++;
-
-            // // ── 6. Forcer l'état final (updateOrderState déjà appelé dans createOrderFromCart
-            // //       mais on le refait ici si getStateId retourne un état différent) ──
-            // const [day, month, year] = cmd.date.split("/");
-            // const dateTime = `${year}-${month}-${day} 00:00:00`;
-
-            // const finalStateId = getStateId(etat) ?? ETAT_TO_ORDER_STATE[etat];
-            // if (finalStateId) {
-            //     await updateOrderState(orderId, finalStateId, dateTime);
-            // }
-
-            // // ── 7. Gérer le stock selon l'état ──
-            // if (etat === "paiement accepté" || etat === "livré") {
-            // if (etat === "livré") {
-                // await deduireStockPourCommande(produits, productsCache);
-            // }
-            // "annulé" → aucune action stock
 
         } catch (err: any) {
             console.error(`[commande] Erreur pour ${cmd.email}:`, err?.message);

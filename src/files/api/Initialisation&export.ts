@@ -8,6 +8,8 @@ import { InitProductImages, InitProducts } from "../../module/Backoffice/produit
 import { InitTaxes } from "../../module/Backoffice/taxes/taxes";
 import Papa from 'papaparse';
 import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
+import { requestPrestashopXml } from "../../utils/prestashopClient";
+import { asArray, numFromUnknown } from "../../utils/helper";
 
 /**
  * Normalise un nom de colonne: enlève les accents et espaces superflus
@@ -182,6 +184,9 @@ export const parseCSVFile = <T>(
 export async function InitialisationGLobal(): Promise<void> {
   try {
     console.log("Initialisation globale en cours...");
+    console.log("Suppression de l'historique des commandes...");
+    await InitOrderHistory();
+
     console.log("Suppression des commandes...");
     await InitOrder();
 
@@ -218,5 +223,35 @@ export async function InitialisationGLobal(): Promise<void> {
   } catch (error: any) {
     console.error("Erreur lors de l'initialisation globale:", error);
     throw new Error(`Erreur lors de l'initialisation global: ${error?.message ?? String(error)}`);
+  }
+}
+
+async function InitOrderHistory(): Promise<void> {
+  try {
+    const response = await requestPrestashopXml<any>("/order_histories", {
+      query: { display: "full", limit: 500 },
+    });
+
+    const rawHistories = response?.prestashop?.order_histories?.order_history;
+    const histories = asArray<any>(rawHistories);
+
+    for (const history of histories) {
+      const historyId = numFromUnknown(history?.id ?? history?.["@_id"]);
+      if (!historyId) continue;
+
+      try {
+        await requestPrestashopXml(`/order_histories/${historyId}`, { method: "DELETE" });
+        console.log(`✓ Suppression historique commande id=${historyId}`);
+      } catch (error: any) {
+        const status = Number(error?.status ?? 0);
+        if (status === 405) {
+          console.warn(`Suppression historique commande id=${historyId} non supportée par le webservice, on continue.`);
+          continue;
+        }
+        console.error(`Erreur suppression historique commande id=${historyId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Erreur lors de la suppression des historiques de commande:", error);
   }
 }

@@ -5,16 +5,26 @@ import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashop
 import { generateSecureKey } from "./importCSV3";
 import { computeCartTotals } from "./carts";
 import type { ClientForm } from "./customers";
+import { updateStockWithMovement } from "./stock";
+import { getCombinationId } from "./attribut";
+import { findProductByReference } from "./produit";
+
+// ─────────────────────────────────────────────
+// ÉTATS ET STOCK
+// ─────────────────────────────────────────────
 
 export const STOCK_DECREMENT_STATES = new Set<number>([
-    2, // paiement accepté
-    5, // livré (suppose déjà payé)
+  2, // paiement accepté
+  5, // livré
 ]);
 
-// Etats qui restaurent le stock
 export const STOCK_INCREMENT_STATES = new Set<number>([
-    6, // annulé
+  6, // annulé
 ]);
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
 
 async function resolveCarrierId(carrierId: unknown): Promise<number> {
   const numericCarrierId = Number(carrierId);
@@ -27,6 +37,144 @@ async function resolveCarrierId(carrierId: unknown): Promise<number> {
   return 1;
 }
 
+function extractId(val: unknown): number {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === "number") return val;
+  if (typeof val === "string") return Number(val) || 0;
+  if (typeof val === "object") {
+    const obj = val as Record<string, unknown>;
+    const text = obj["#text"] ?? obj["_"] ?? obj["__text"] ?? obj["$t"] ?? null;
+    if (text !== null) return Number(text) || 0;
+  }
+  return 0;
+}
+
+// ─────────────────────────────────────────────
+// MOUVEMENT DE STOCK DEPUIS UNE COMMANDE
+// Lit les lignes de la commande et agit selon le signe
+// sign =  1 → incrément (annulation)
+// sign = -1 → décrément (livraison)
+// ─────────────────────────────────────────────
+
+async function applyStockMovementFromOrder(
+  orderId: number,
+  sign: 1 | -1
+): Promise<void> {
+  try {
+    const orderRes = await requestPrestashopXml<any>(`/orders/${orderId}`, {
+      query: { display: "full" },
+    });
+
+    const rawRows =
+      orderRes?.prestashop?.order?.associations?.order_rows?.order_row;
+    if (!rawRows) {
+      console.warn(`[stock] Aucune ligne trouvée pour la commande ${orderId}`);
+      return;
+    }
+
+    const rows = Array.isArray(rawRows) ? rawRows : [rawRows];
+
+    for (const row of rows) {
+      const productId = extractId(row.product_id ?? row.id_product);
+      const combinationId = extractId(row.product_attribute_id ?? row.id_product_attribute);
+      const qty = extractId(row.product_quantity ?? row.quantity) || 1;
+
+      if (!productId) continue;
+
+      await updateStockWithMovement(productId, qty, combinationId, sign);
+
+      console.log(
+        `[stock] ${sign === -1 ? "Décrément" : "Incrément"} — produit ${productId}` +
+        (combinationId ? `(comb. ${combinationId})` : "") +
+        ` : ${sign > 0 ? "+" : ""}${sign * qty}`
+      );
+    }
+  } catch (err: any) {
+    console.warn(`[stock] Erreur mouvement commande ${orderId}:`, err?.message);
+  }
+}
+
+// ─────────────────────────────────────────────
+// CRÉATION COMMANDE DIRECTE
+// Déclarée avant createOrderFromCart
+// ─────────────────────────────────────────────
+
+export async function createOrderDirect(params: {
+  id_customer: number;
+  id_cart: number;
+  id_address_delivery: number;
+  id_address_invoice: number;
+  id_currency: number;
+  id_lang: number;
+  id_shop: number;
+  id_carrier: number;
+  secure_key: string;
+  orderStateId: number;
+  current_state: number;
+  dateTime: string;
+  conversion_rate: number;
+  module: string;
+  payment: string;
+}): Promise<number> {
+  const totals = await computeCartTotals(params.id_cart);
+
+  const created = await requestPrestashopXml<any>("/orders", {
+    method: "POST",
+    bodyXml: buildPrestashopXml({
+      prestashop: {
+        order: {
+          id_address_delivery: params.id_address_delivery,
+          id_address_invoice: params.id_address_invoice,
+          id_cart: params.id_cart,
+          id_currency: params.id_currency,
+          id_lang: params.id_lang,
+          id_customer: params.id_customer,
+          id_carrier: params.id_carrier,
+          id_shop: params.id_shop,
+          secure_key: params.secure_key,
+          module: params.module,
+          payment: params.payment,
+          recyclable: 0,
+          gift: 0,
+          gift_message: "",
+          mobile_theme: 0,
+          total_discounts: 0,
+          total_discounts_tax_incl: 0,
+          total_discounts_tax_excl: 0,
+          total_paid: totals.total_paid,
+          total_paid_tax_incl: totals.total_paid,
+          total_paid_tax_excl: totals.total_products,
+          total_paid_real: totals.total_paid_real,
+          total_products: totals.total_products,
+          total_products_wt: totals.total_products_wt,
+          total_shipping: 0,
+          total_shipping_tax_incl: 0,
+          total_shipping_tax_excl: 0,
+          total_wrapping: 0,
+          total_wrapping_tax_incl: 0,
+          total_wrapping_tax_excl: 0,
+          round_mode: 2,
+          round_type: 1,
+          conversion_rate: params.conversion_rate,
+          reference: `IMP-${Date.now()}`,
+          current_state: params.current_state,  // ✅ supprimé orderStateId (doublon)
+          date_add: params.dateTime,
+          date_upd: params.dateTime,
+          associations: { order_rows: [] },
+        },
+      },
+    }),
+  });
+
+  const orderId = Number(created?.prestashop?.order?.id);
+  if (!orderId) throw new Error("Création commande échouée (ID invalide)");
+  return orderId;
+}
+
+// ─────────────────────────────────────────────
+// COMMANDE DEPUIS PANIER
+// ─────────────────────────────────────────────
+
 export async function createOrderFromCart(
   cartId: number,
   customer: ClientForm,
@@ -37,7 +185,6 @@ export async function createOrderFromCart(
   const [day, month, year] = dateStr.split("/");
   const dateTime = `${year}-${month}-${day} 00:00:00`;
 
-  // ── Un seul GET /carts/:id ──
   const cartRes = await requestPrestashopXml<any>(`/carts/${cartId}`, {
     query: { display: "full" },
   });
@@ -63,10 +210,12 @@ export async function createOrderFromCart(
     id_shop: 1,
     id_carrier: carrierId,
     secure_key: secureKey,
-    orderStateId: orderStateId || 2,
+    orderStateId: orderStateId,
+    current_state: orderStateId,
     dateTime,
-    current_state: orderStateId || 2,
     conversion_rate: 1,
+    module: "ps_cashondelivery",
+    payment: "Paiement à la livraison",
   });
 
   // ── 2. Forcer la date via PUT ──
@@ -89,7 +238,8 @@ export async function createOrderFromCart(
             secure_key: secureKey,
             module: "ps_cashondelivery",
             payment: "Paiement à la livraison",
-            current_state: orderStateId || 2,
+            reference: order.reference || `IMP-${Date.now()}`,
+            current_state: orderStateId,
             date_add: dateTime,
             date_upd: dateTime,
             conversion_rate: 1,
@@ -107,146 +257,89 @@ export async function createOrderFromCart(
   }
 
   // ── 3. Mettre à jour l'état ──
-  // if (orderStateId) {
-  //   await updateOrderState(orderId, orderStateId, dateTime);
-  // }
+  if (orderStateId) {
+    await updateOrderState(orderId, orderStateId, dateTime);
+  }
+
+  if (orderStateId === 5) {
+    // Livré → sortie définitive du stock
+    await applyStockMovementFromOrder(orderId, -1);
+  } else if (orderStateId === 6) {
+    // Annulé → restauration du stock
+    await applyStockMovementFromOrder(orderId, 1);
+  }
+  // État 2 (paiement accepté) → pas de mouvement ici
 
   return orderId;
 }
 
-export async function updateOrderState(id: number, newState: number, date: string): Promise<void> {
+// ─────────────────────────────────────────────
+// MISE À JOUR ÉTAT + MOUVEMENT DE STOCK
+// ─────────────────────────────────────────────
+
+export async function updateOrderState(
+  id: number,
+  newState: number,
+  date: string
+): Promise<void> {
   try {
     const order = await getOrder(id);
     if (Number(order.current_state) === 5) {
-      alert("une commande deja livreer ne peut etre modifier");
+      alert("Une commande déjà livrée ne peut être modifiée");
       return;
     }
-  }
-  catch (e: any) {
-    // alert("le etat ne vas pas etre prend en compte" + e.message);
-  }
-
-  if (!validateUnsignedId(id)) {
-    throw new Error(`ID commande invalide: ${id}`);
+  } catch {
+    // Commande non trouvée → on continue
   }
 
-  if (!validateUnsignedId(newState)) {
-    throw new Error(`État invalide: ${newState}`);
-  }
+  if (!validateUnsignedId(id)) throw new Error(`ID commande invalide: ${id}`);
+  if (!validateUnsignedId(newState)) throw new Error(`État invalide: ${newState}`);
 
-  try {
-    const xml = buildPrestashopXml({
-      prestashop: {
-        order_state_update: {
-          id_order: id,
-          id_order_state: newState,
-          date_add: date,
-        },
+  const xml = buildPrestashopXml({
+    prestashop: {
+      order_state_update: {
+        id_order: id,
+        id_order_state: newState,
+        date_add: date,
       },
-    });
-
-    // Appel via requestPrestashopXml qui passe par le proxy Vite /api
-    const response = await requestPrestashopXml<any>(
-      "/order_state_update",
-      {
-        method: "POST",
-        bodyXml: xml,
-      }
-    );
-
-    const responseData =
-      response?.prestashop?.response ||
-      response?.prestashop?.order_state_update ||
-      response?.prestashop?.order_state_updates?.order_state_update ||
-      null;
-
-    const successValue = responseData?.success;
-    const success =
-      successValue === undefined ||
-      successValue === null ||
-      successValue === "true" ||
-      successValue === true ||
-      responseData?.id_order === id ||
-      responseData?.id_order_state === newState;
-    const message = textFromUnknown(responseData?.message);
-
-    if (!success) {
-      throw new Error(`Erreur module shiporder: ${message || "Réponse invalide"}`);
-    }
-
-    console.log(`✓ État de la commande #${id} changé à ${newState}: ${message}`);
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : String(error);
-    throw new Error(`Impossible de changer l'état de la commande #${id}: ${errorMsg}`);
-  }
-}
-export async function createOrderDirect(params: {
-  id_customer: number;
-  id_cart: number;
-  id_address_delivery: number;
-  id_address_invoice: number;
-  id_currency: number;
-  id_lang: number;
-  id_shop: number;
-  id_carrier: number;
-  secure_key: string;
-  orderStateId: number;
-  dateTime: string;
-  current_state: number;
-  conversion_rate: number;
-}): Promise < number > {
-  // computeCartTotals fait son propre GET /carts/:id
-  const totals = await computeCartTotals(params.id_cart);
-
-  const created = await requestPrestashopXml<any>("/orders", {
-    method: "POST",
-    bodyXml: buildPrestashopXml({
-      prestashop: {
-        order: {
-          id_address_delivery: params.id_address_delivery,
-          id_address_invoice: params.id_address_invoice,
-          id_cart: params.id_cart,
-          id_currency: params.id_currency,
-          id_lang: params.id_lang,
-          id_customer: params.id_customer,
-          id_carrier: params.id_carrier,
-          id_shop: params.id_shop,
-          secure_key: params.secure_key,
-          module: "ps_cashondelivery",
-          payment: "Paiement à la livraison",
-          recyclable: 0,
-          gift: 0,
-          gift_message: "",
-          mobile_theme: 0,
-          total_discounts: 0,
-          total_discounts_tax_incl: 0,
-          total_discounts_tax_excl: 0,
-          total_paid: totals.total_paid,
-          total_paid_tax_incl: totals.total_paid,
-          total_paid_tax_excl: totals.total_products,
-          total_paid_real: totals.total_paid_real,
-          total_products: totals.total_products,
-          total_products_wt: totals.total_products_wt,
-          total_shipping: 0,
-          total_shipping_tax_incl: 0,
-          total_shipping_tax_excl: 0,
-          total_wrapping: 0,
-          total_wrapping_tax_incl: 0,
-          total_wrapping_tax_excl: 0,
-          round_mode: 2,
-          round_type: 1,
-          conversion_rate: params.conversion_rate,
-          reference: `IMP-${Date.now()}`,
-          current_state: params.current_state,
-          date_add: params.dateTime,
-          date_upd: params.dateTime,
-          associations: { order_rows: [] },
-        },
-      },
-    }),
+    },
   });
 
-  const orderId = Number(created?.prestashop?.order?.id);
-  if(!orderId) throw new Error("Création commande échouée (ID invalide)");
-  return orderId;
+  const response = await requestPrestashopXml<any>("/order_state_update", {
+    method: "POST",
+    bodyXml: xml,
+  });
+
+  const responseData =
+    response?.prestashop?.response ||
+    response?.prestashop?.order_state_update ||
+    response?.prestashop?.order_state_updates?.order_state_update ||
+    null;
+
+  const successValue = responseData?.success;
+  const success =
+    successValue === undefined ||
+    successValue === null ||
+    successValue === "true" ||
+    successValue === true ||
+    responseData?.id_order === id ||
+    responseData?.id_order_state === newState;
+
+  if (!success) {
+    throw new Error(
+      `Erreur module shiporder: ${textFromUnknown(responseData?.message) || "Réponse invalide"}`
+    );
+  }
+
+  console.log(`✓ État commande #${id} → ${newState}`);
+
+  // ── Mouvement de stock après changement d'état ──
+  if (newState === 5) {
+    // Livré → décrément définitif
+    await applyStockMovementFromOrder(id, -1);
+  } else if (newState === 6) {
+    // Annulé → restauration
+    await applyStockMovementFromOrder(id, 1);
+  }
+  // État 2 (paiement accepté) → pas de mouvement ici
 }
