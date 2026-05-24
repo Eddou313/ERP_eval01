@@ -1,7 +1,8 @@
 import { getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
 import { addProductsToCart, createCart } from "./carts";
 import type { colonneCSV } from "./colonne";
-import { createOrderFromCart, getOrCreateCustomer, updateOrderState } from "./orders";
+import { createClientAddress, findCustomerIdByEmail, getClient, getOrCreateCustomer } from "./customers";
+import { createOrderFromCart, updateOrderState } from "./orders";
 import type { findProductByReference } from "./produit";
 import { parseAchat, regrouperCommandes } from "./regroupCommandes";
 import { deduireStockPourCommande } from "./stock";
@@ -57,45 +58,61 @@ export async function importProduitCommandeCsv(
             if (!customer) throw new Error(`Impossible de créer le client "${cmd.email}"`);
             customersCreated++;
 
-            console.log(`clef secure du client ${cmd.email} : ${customer.secureKey}`);
+            console.log(`clef secure du client ${cmd.email} : ${customer.secure_key}`);
 
-            // ── 2. Créer le panier (retourne cartId + addressId) ──
-            const { cartId, addressId } = await createCart(customer.id, customer.secureKey,cmd.adresse);
-            if (!cartId) throw new Error(`Impossible de créer le panier`);
-            cartsCreated++;
+            // const customerDetail = await getClient(customer.id).catch(() => null);
 
-            // ── 3. Ajouter TOUS les produits en un seul PUT ──
-            //    customerId et addressId passés explicitement pour éviter les 0
-            await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
+            const addressParts = (cmd.adresse || "").split(/,|\n/);
+            const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
+            const addressPostal = addressParts[1]?.trim() || "00000";
+            const addressCity = addressParts[2]?.trim() || "Ville";
 
-            // ── 4. Etat vide → panier uniquement ──
-            if (etat === "panier") continue;
+            const addressId = await createClientAddress(customer.id, {
+                firstname : customer?.firstname,
+                lastname: customer?.lastname || ".",
+                address1: addressLine1,
+                postcode: addressPostal,
+                city: addressCity,
+                id_country: 8,
+            });
 
-            // ── 5. Créer la commande depuis le panier ──
-            const orderId = await createOrderFromCart(
-                cartId,
-                customer,                        // { id, secureKey }
-                ETAT_TO_ORDER_STATE[etat] ?? 2,
-                cmd.date,
-                addressId                        // fallback adresse
-            );
-            if (!orderId) throw new Error(`Impossible de créer la commande`);
-            ordersCreated++;
+            // // ── 2. Créer le panier (retourne cartId + addressId) ──
+            // const { cartId, addressId } = await createCart(customer.id, customer.secureKey,cmd.adresse);
+            // if (!cartId) throw new Error(`Impossible de créer le panier`);
+            // cartsCreated++;
 
-            // ── 6. Forcer l'état final (updateOrderState déjà appelé dans createOrderFromCart
-            //       mais on le refait ici si getStateId retourne un état différent) ──
-            const [day, month, year] = cmd.date.split("/");
-            const dateTime = `${year}-${month}-${day} 00:00:00`;
+            // // ── 3. Ajouter TOUS les produits en un seul PUT ──
+            // //    customerId et addressId passés explicitement pour éviter les 0
+            // await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
 
-            const finalStateId = getStateId(etat) ?? ETAT_TO_ORDER_STATE[etat];
-            if (finalStateId) {
-                await updateOrderState(orderId, finalStateId, dateTime);
-            }
+            // // ── 4. Etat vide → panier uniquement ──
+            // if (etat === "panier") continue;
 
-            // ── 7. Gérer le stock selon l'état ──
-            if (etat === "paiement accepté" || etat === "livré") {
-                await deduireStockPourCommande(produits, productsCache);
-            }
+            // // ── 5. Créer la commande depuis le panier ──
+            // const orderId = await createOrderFromCart(
+            //     cartId,
+            //     customer,                        // { id, secureKey }
+            //     ETAT_TO_ORDER_STATE[etat] ?? 2,
+            //     cmd.date,
+            //     addressId                        // fallback adresse
+            // );
+            // if (!orderId) throw new Error(`Impossible de créer la commande`);
+            // ordersCreated++;
+
+            // // ── 6. Forcer l'état final (updateOrderState déjà appelé dans createOrderFromCart
+            // //       mais on le refait ici si getStateId retourne un état différent) ──
+            // const [day, month, year] = cmd.date.split("/");
+            // const dateTime = `${year}-${month}-${day} 00:00:00`;
+
+            // const finalStateId = getStateId(etat) ?? ETAT_TO_ORDER_STATE[etat];
+            // if (finalStateId) {
+            //     await updateOrderState(orderId, finalStateId, dateTime);
+            // }
+
+            // // ── 7. Gérer le stock selon l'état ──
+            // if (etat === "paiement accepté" || etat === "livré") {
+            //     await deduireStockPourCommande(produits, productsCache);
+            // }
             // "annulé" → aucune action stock
 
         } catch (err: any) {
@@ -103,7 +120,7 @@ export async function importProduitCommandeCsv(
             failed++;
         }
     }
-
+    console.log(`vita`);
     return { customersCreated, cartsCreated, ordersCreated, failed };
 }
 

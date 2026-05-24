@@ -1,9 +1,8 @@
 import { getOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { textFromUnknown, validateUnsignedId } from "../../utils/helper";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
-import { getCart } from "../../module/Backoffice/panier/api/panierApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
-import { generateSecureKey, type Commande } from "./importCSV3";
+import { generateSecureKey} from "./importCSV3";
 import { computeCartTotals } from "./carts";
 
 async function resolveCarrierId(carrierId: unknown): Promise<number> {
@@ -16,59 +15,6 @@ async function resolveCarrierId(carrierId: unknown): Promise<number> {
 
   return 1;
 }
-
-export async function getOrCreateCustomer(
-  cmd: Commande
-): Promise<{ id: number; secureKey: string }> {
-  const res = await requestPrestashopXml<any>("/customers", {
-    query: {
-      display: "[id,email,secure_key]",
-      "filter[email]": `[${cmd.email}]`,
-      limit: "1",
-    },
-  });
-
-  const existing = res?.prestashop?.customers?.customer;
-  if (existing) {
-    const list = Array.isArray(existing) ? existing : [existing];
-    if (list[0]?.id) {
-      return {
-        id: Number(list[0].id),
-        secureKey: list[0].secure_key || generateSecureKey(),
-      };
-    }
-  }
-
-  const [prenom, ...restNom] = cmd.nom.trim().split(" ");
-  const nom = restNom.join(" ") || prenom;
-
-  const created = await requestPrestashopXml<any>("/customers", {
-    method: "POST",
-    bodyXml: buildPrestashopXml({
-      prestashop: {
-        customer: {
-          firstname: prenom,
-          lastname: nom,
-          email: cmd.email,
-          passwd: cmd.pwd,
-          id_default_group: 3,
-          active: 1,
-          deleted: 0,
-        },
-      },
-    }),
-  });
-
-  const newId = Number(created?.prestashop?.customer?.id);
-  if (!newId) throw new Error(`Création client échouée pour ${cmd.email}`);
-
-  return {
-    id: newId,
-    secureKey: created?.prestashop?.customer?.secure_key || generateSecureKey(),
-  };
-}
-
-
 
 export async function createOrderFromCart(
   cartId: number,
