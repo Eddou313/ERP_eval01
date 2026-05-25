@@ -347,16 +347,19 @@ export async function updateOrderState(id: number, newState: number, date: strin
   }
 
   try {
+    const normalizedDate = date.includes("T")
+      ? date.replace("T", " ").replace("Z", "").slice(0, 19)
+      : date.slice(0, 19);
+
     const xml = buildPrestashopXml({
       prestashop: {
         order_state_update: {
           id_order: id,
           id_order_state: newState,
-          date_add : date,
+          date_add: normalizedDate,
         },
       },
     });
-
     // Appel via requestPrestashopXml qui passe par le proxy Vite /api
     const response = await requestPrestashopXml<any>(
       "/order_state_update",
@@ -365,7 +368,7 @@ export async function updateOrderState(id: number, newState: number, date: strin
         bodyXml: xml,
       }
     );
-
+    console.log(response);
     const responseData =
       response?.prestashop?.response ||
       response?.prestashop?.order_state_update ||

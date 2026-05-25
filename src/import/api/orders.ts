@@ -237,8 +237,8 @@ export async function createOrderFromCart(
     id_shop: 1,
     id_carrier: carrierId,
     secure_key: secureKey,
-    orderStateId: 1,
-    current_state: 1,
+    orderStateId: orderStateId,
+    current_state: orderStateId,
     dateTime,
     conversion_rate: 1,
     module: "ps_cashondelivery",
@@ -266,7 +266,7 @@ export async function createOrderFromCart(
             module: "ps_cashondelivery",
             payment: "Paiement à la livraison",
             reference: order.reference || `IMP-${Date.now()}`,
-            current_state: 1, // état initial (panier) pour éviter les mouvements de stock intempestifs
+            current_state: 11, // état initial (panier) pour éviter les mouvements de stock intempestifs
             date_add: dateTime,
             date_upd: dateTime,
             conversion_rate: 1,

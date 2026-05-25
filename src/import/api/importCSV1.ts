@@ -94,14 +94,25 @@ function parseTtcToHt(priceTtc: number, taxRate: number): number {
     return Number((priceTtc / (1 + rate / 100)).toFixed(6));
 }
 
-export async function importProduitCsv(rows: ProductImportRow[], imageMap?: Map<string, ZipImageAsset>): Promise<{ imported: number; failed: number }> {
+export async function importProduitCsv(
+    rows: ProductImportRow[],
+    imageMap?: Map<string, ZipImageAsset>,
+    options?: {
+        onProgress?: (progress: { processed: number; total: number; imported: number; failed: number; current?: string }) => void;
+    },
+): Promise<{ imported: number; failed: number }> {
     const importContext = await prepareProductImportContext(rows);
 
     let imported = 0;
     let failed = 0;
+    const total = rows.length;
 
     console.info(`Demarage de l import csv1`);
-    for (const row of rows) {
+    options?.onProgress?.({ processed: 0, total, imported, failed, current: "Démarrage" });
+
+    for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
+        let current = String(row.reference ?? row.nom ?? `Ligne ${index + 1}`);
         try {
             const taxRate = parseTaxRate(row.Taxe);
             const categoryName = String(row.categorie ?? "").trim();
@@ -128,7 +139,6 @@ export async function importProduitCsv(rows: ProductImportRow[], imageMap?: Map<
                     );
                     if (!confirmed) {
                         throw new Error(`Import arrêté par l'utilisateur pour la date ${rawAvailableDate}`);
-                        return { imported, failed }
                     }
                 }
 
@@ -155,6 +165,7 @@ export async function importProduitCsv(rows: ProductImportRow[], imageMap?: Map<
                 description_short: `Import CSV - ${row.reference}`,
                 link_rewrite: slugify(row.nom),
             });
+            current = String(row.reference ?? row.nom ?? `Ligne ${index + 1}`);
 
             const imageAsset = imageMap?.get(normalizeImageReference(row.reference));
             if (imageAsset) {
@@ -169,8 +180,18 @@ export async function importProduitCsv(rows: ProductImportRow[], imageMap?: Map<
         } catch (error) {
             failed += 1;
             console.error("Erreur lors de l'import du produit CSV:", row, error);
+        } finally {
+            options?.onProgress?.({
+                processed: index + 1,
+                total,
+                imported,
+                failed,
+                current,
+            });
         }
     }
+
+    options?.onProgress?.({ processed: total, total, imported, failed, current: "Terminé" });
     console.info(`Import CSV1 terminer`);
     return { imported, failed };
 }

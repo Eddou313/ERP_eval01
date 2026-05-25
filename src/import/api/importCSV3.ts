@@ -1,11 +1,9 @@
-import { getStateId } from "../../module/Backoffice/commande/api/ObjetEtat";
 import { addProductsToCart, createCart } from "./carts";
 import type { colonneCSV } from "./colonne";
-import { createClientAddress, findCustomerIdByEmail, getClient, getOrCreateCustomer } from "./customers";
-import { createOrderFromCart, updateOrderState } from "./orders";
+import { createClientAddress, getOrCreateCustomer } from "./customers";
+import { createOrderFromCart } from "./orders";
 import type { findProductByReference } from "./produit";
 import { parseAchat, regrouperCommandes } from "./regroupCommandes";
-import { deduireStockPourCommande } from "./stock";
 
 export type Commande = colonneCSV["Commande_client_produit"];
 
@@ -22,6 +20,14 @@ export interface ImportCommandeResult {
     message: string;
 }
 
+export type ImportProgress = {
+    processed: number;
+    total: number;
+    imported: number;
+    failed: number;
+    current?: string;
+};
+
 export const ETAT_TO_ORDER_STATE: Record<string, number> = {
     "paiement accepté": 2,
     "livré": 5,
@@ -32,7 +38,10 @@ export type ProductCache = Map<string, Awaited<ReturnType<typeof findProductByRe
 
 
 export async function importProduitCommandeCsv(
-    rows: Commande[]
+    rows: Commande[],
+    options?: {
+        onProgress?: (progress: ImportProgress) => void;
+    },
 ): Promise<{
     customersCreated: number;
     cartsCreated: number;
@@ -41,14 +50,17 @@ export async function importProduitCommandeCsv(
 }> {
     rows = regrouperCommandes(rows);
 
-    const productsCache: ProductCache = new Map();
-
     let customersCreated = 0;
     let cartsCreated = 0;
     let ordersCreated = 0;
     let failed = 0;
+    const total = rows.length;
 
-    for (const cmd of rows) {
+    options?.onProgress?.({ processed: 0, total, imported: 0, failed: 0, current: "Démarrage" });
+
+    for (let index = 0; index < rows.length; index++) {
+        const cmd = rows[index];
+        let current = cmd.email;
         try {
             const produits = parseAchat(cmd.achat);
             const etat = normaliserEtat(cmd.etat);
@@ -57,6 +69,7 @@ export async function importProduitCommandeCsv(
             const customer = await getOrCreateCustomer(cmd);
             if (!customer) throw new Error(`Impossible de créer le client "${cmd.email}"`);
             customersCreated++;
+            current = cmd.email;
 
             console.log(`clef secure du client ${cmd.email} : ${customer.secure_key}`);
 
@@ -104,8 +117,23 @@ export async function importProduitCommandeCsv(
         } catch (err: any) {
             console.error(`[commande] Erreur pour ${cmd.email}:`, err?.message);
             failed++;
+        } finally {
+            options?.onProgress?.({
+                processed: index + 1,
+                total,
+                imported: ordersCreated,
+                failed,
+                current,
+            });
         }
     }
+    options?.onProgress?.({
+        processed: total,
+        total,
+        imported: ordersCreated,
+        failed,
+        current: "Terminé",
+    });
     console.log(`vita`);
     return { customersCreated, cartsCreated, ordersCreated, failed };
 }

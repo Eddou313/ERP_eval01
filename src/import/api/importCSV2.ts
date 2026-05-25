@@ -1,7 +1,7 @@
 import type { listProductsLight } from "../../module/Backoffice/produit/api/productsApi";
 import { createCombination, getOrCreateAttributeGroup, getOrCreateAttributeValue } from "./attribut";
 import { type colonneCSV } from "./colonne";
-import { findProductByReference, getProductIdByReference } from "./produit";
+import { findProductByReference } from "./produit";
 import { updateStockWithMovement } from "./stock";
 
 export type Csv2Row = colonneCSV["produit_Attribut_StockImport"];
@@ -11,29 +11,51 @@ export interface ImportResult {
     message: string;
 }
 
+export type ImportProgress = {
+    processed: number;
+    total: number;
+    imported: number;
+    failed: number;
+    current?: string;
+};
+
 type ProductLight = Awaited<ReturnType<typeof listProductsLight>>[number];
-export async function importCsv2ToPrestashop(rows: Csv2Row[]): Promise<ImportResult[]> {
+export async function importCsv2ToPrestashop(
+    rows: Csv2Row[],
+    options?: {
+        onProgress?: (progress: ImportProgress) => void;
+    },
+): Promise<ImportResult[]> {
     rows = regrouperStocks(rows);
     const productsCache = new Map<string, ProductLight | null>();
     const results: ImportResult[] = [];
     // const total = rows.length;
     const firstCombinationByProduct = new Map<number, boolean>();
+    const total = rows.length;
+    let imported = 0;
+    let failed = 0;
+
+    options?.onProgress?.({ processed: 0, total, imported, failed, current: "Démarrage" });
     for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         let { reference, specificité, karazany, stock_initial, prix_vente_ttc } = row;
+        let current = reference;
 
         console.log(`commencement de l import csv2 `);
         try {
             const productReel = await findProductByReference(row.reference, productsCache);
             const productId = productReel ? Number(productReel.id) : null;
             if (!productId) {
+                failed += 1;
                 results.push({
                     reference,
                     status: "error",
                     message: `Produit introuvable pour la référence "${reference}"`,
                 });
+                options?.onProgress?.({ processed: i + 1, total, imported, failed, current: `Produit introuvable: ${reference}` });
                 continue;
             }
+            current = reference;
 
             const hasAttribute = specificité?.trim() !== "" && karazany?.trim() !== "";
             stock_initial = Number(row.stock_initial) || 0;
@@ -42,6 +64,7 @@ export async function importCsv2ToPrestashop(rows: Csv2Row[]): Promise<ImportRes
             if (!hasAttribute) {
                 // ── Produit standard : juste mettre à jour le stock ──
                 await updateStockWithMovement(productId, stock_initial);
+                imported += 1;
                 results.push({
                     reference,
                     status: "success",
@@ -62,6 +85,7 @@ export async function importCsv2ToPrestashop(rows: Csv2Row[]): Promise<ImportRes
                 if (isFirst) firstCombinationByProduct.set(productId, true);
                 
                 await createCombination(productId, valueId, stock_initial, priceImpactHt,isFirst);
+                imported += 1;
                 results.push({
                     reference,
                     status: "success",
@@ -69,13 +93,30 @@ export async function importCsv2ToPrestashop(rows: Csv2Row[]): Promise<ImportRes
                 });
             }
         } catch (err: any) {
+            failed += 1;
             results.push({
                 reference,
                 status: "error",
                 message: err?.message ?? "Erreur inconnue",
             });
+        } finally {
+            options?.onProgress?.({
+                processed: i + 1,
+                total,
+                imported,
+                failed,
+                current,
+            });
         }
     }
+
+    options?.onProgress?.({
+        processed: total,
+        total,
+        imported,
+        failed,
+        current: "Terminé",
+    });
 
     return results;
 }

@@ -89,7 +89,7 @@ export default function CommandesListPage() {
 
     try {
       setSaving(true);
-      await updateOrderState(editingOrder.id, newState);
+      await updateOrderState(editingOrder.id, newState, new Date().toISOString());
       setEditingOrder(null);
       await refresh();
     } catch (e: any) {
