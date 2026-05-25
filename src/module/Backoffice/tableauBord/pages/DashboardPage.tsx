@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type JSX } from "react";
 import { useNavigate } from "react-router-dom";
 import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
-import { type OrderListItem } from "../../commande/api/ObjetOrder";
+import { type OrderListItem, CART_PENDING_STATE_ID } from "../../commande/api/ObjetOrder";
 import { StockDashboard } from "./StockDashboard";
 import StatsPage from "./StatsPage";
 import EvolutionStockPage from "./Evolution_stock";
@@ -77,6 +77,14 @@ export function DashboardPage(): JSX.Element {
   const topDays = metrics.slice(0, 8);
   const avgOrder = orders.filter((order) => order.current_state === 0).length;
   // const avgOrder = totalOrders > 0 ? totalAmount / totalOrders : 0;
+  // Chiffres d'affaires séparés: commandes réelles vs paniers
+  const caPaniers = orders
+    .filter((o) => Number(o.current_state) === CART_PENDING_STATE_ID)
+    .reduce((s, o) => s + (Number(o.total_paid_tax_incl) || 0), 0);
+
+  const caCommandesSansPanier = orders
+    .filter((o) => Number(o.current_state) !== CART_PENDING_STATE_ID)
+    .reduce((s, o) => s + (Number(o.total_paid_tax_incl) || 0), 0);
 
   return (
     <main style={styles.container}>
@@ -90,14 +98,14 @@ export function DashboardPage(): JSX.Element {
           </p>
         </div>
         <div>
-          <button
+          {/* <button
             onClick={() => navigate("/stock/evolution")}
             style={styles.navButton}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1d4ed8")}
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#2563eb")}
           >
             Évolution du stock ↗
-          </button>
+          </button> */}
         </div>
       </header>
 
@@ -142,6 +150,14 @@ export function DashboardPage(): JSX.Element {
             <div style={styles.card}>
               <span style={styles.cardLabel}>Chiffre d'affaires</span>
               <span style={{ ...styles.cardValue, color: "#10b981" }}>{formatCurrency(totalAmount)}</span>
+            </div>
+            <div style={styles.card}>
+              <span style={styles.cardLabel}>CA commandes (sans panier)</span>
+              <span style={{ ...styles.cardValue, color: "#0ea5a4" }}>{formatCurrency(caCommandesSansPanier)}</span>
+            </div>
+            <div style={styles.card}>
+              <span style={styles.cardLabel}>CA paniers</span>
+              <span style={{ ...styles.cardValue, color: "#f59e0b" }}>{formatCurrency(caPaniers)}</span>
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>Panier</span>

@@ -194,14 +194,16 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
   const res = await requestPrestashopXml<any>("/addresses", {
     query: {
       display: "full",
-      "filter[id_customer]": `[${idCustomer}]`,
+      // "filter[id_customer]": `[${idCustomer}]`,
 
-      "filter[firstname]": `[${form.firstname}]`,
-      "filter[lastname]": `[${form.lastname}]`,
+      // "filter[firstname]": `[${form.firstname}]`,
+      // "filter[lastname]": `[${form.lastname}]`,
+      // "filter[address1]": `[${form.address1}]`,
+      // "filter[postcode]": `[${form.postcode}]`,
+      // "filter[city]": `[${form.city}]`,
+      // "filter[id_country]": `[${form.id_country}]`,
+      "filter[id_customer]": `[${idCustomer}]`,
       "filter[address1]": `[${form.address1}]`,
-      "filter[postcode]": `[${form.postcode}]`,
-      "filter[city]": `[${form.city}]`,
-      "filter[id_country]": `[${form.id_country}]`,
 
       limit: "1",
     },
@@ -234,12 +236,12 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
         address2: form.other || "",
         postcode: form.postcode,
         city: form.city,
-        id_country: form.id_country,
+        id_country: form.id_country || 8,
         phone: form.phone || "",
         phone_mobile: form.phone_mobile || "",
         id_state: 0,
         deleted: 0,               // ✅ requis
-        active: 1,
+        // active: 1,
       },
     },
   });
