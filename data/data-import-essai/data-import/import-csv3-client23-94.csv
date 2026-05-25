@@ -1,0 +1,6 @@
+date,nom,email,pwd,adresse,achat,etat
+12/05/2026,Miora Client vingttrois,client23@mail.com,mKUzQlsm,"Mahamasina, Antananarivo","[(""P_21"";3;""S""),(""P_28"";2;""""),(""P_01"";4;""128GB""),(""P_21"";2;""M"")]",
+10/05/2026,Tahina Client quatrevingtquatorze,client94@mail.com,dD12N6Ej,"Mahamasina, Antananarivo","[(""P_24"";4;""M""),(""P_17"";2;""""),(""P_14"";2;""""),(""P_07"";2;""""),(""P_25"";1;""128GB"")]",paiement accepté
+12/05/2026,Tahina Client quatrevingtquatorze,client94@mail.com,dD12N6Ej,"Mahamasina, Antananarivo","[(""P_07"";3;"""")]",paiement accepté
+13/05/2026,Tahina Client quatrevingtquatorze,client94@mail.com,dD12N6Ej,"Mahamasina, Antananarivo","[(""P_02"";1;""M""),(""P_24"";4;""S""),(""P_17"";4;""""),(""P_18"";2;"""")]",paiement accepté
+14/05/2026,Tahina Client quatrevingtquatorze,client94@mail.com,dD12N6Ej,"Mahamasina, Majunga","[(""P_26"";2;""M"")]",paiement accepté

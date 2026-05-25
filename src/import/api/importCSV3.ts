@@ -63,6 +63,7 @@ export async function importProduitCommandeCsv(
         let current = cmd.email;
         try {
             const produits = regrouperAchat(parseAchat(cmd.achat));
+            console.log(produits);
             const etat = normaliserEtat(cmd.etat);
 
             // ── 1. Créer ou récupérer le client ──
@@ -74,11 +75,14 @@ export async function importProduitCommandeCsv(
             console.log(`clef secure du client ${cmd.email} : ${customer.secure_key}`);
 
             // const customerDetail = await getClient(customer.id).catch(() => null);
+            // const addressParts = (cmd.adresse || "").split(/,|\n/);
+            // const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
+            // const addressPostal = addressParts[1]?.trim() || "00000";
+            // const addressCity = addressParts[2]?.trim() || "Ville";
 
-            const addressParts = (cmd.adresse || "").split(/,|\n/);
-            const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
-            const addressPostal = addressParts[1]?.trim() || "00000";
-            const addressCity = addressParts[2]?.trim() || "Ville";
+            const addressLine1 = (cmd.adresse || "").trim() || "Adresse non spécifiée";
+            const addressPostal = "00000";
+            const addressCity = "Ville";
 
             const addressId = await createClientAddress(customer.id, {
                 firstname: customer?.firstname,

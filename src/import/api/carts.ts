@@ -82,10 +82,10 @@ export async function addProductsToCart(
         }
 
         const productId = Number(productReel.id);
-        const combinationId = produit.karazany.trim() !== ""
-            ? await getCombinationId(productId, produit.karazany)
-            : 0;
+        const combin = await getCombinationId(productId, produit.karazany);
+        const combinationId = produit.karazany.trim() !== "" ? combin : 0;
 
+        console.log(combinationId);
         const existing = existingRows.find(
             (r) =>
                 extractId(r.id_product) === productId &&
@@ -113,10 +113,13 @@ export async function addProductsToCart(
             prestashop: {
                 cart: {
                     id: cartId,
-                    id_currency: Number(cart.id_currency) || 1,
-                    id_lang: Number(cart.id_lang) || 1,
+                    // id_currency: Number(cart.id_currency) || 1,
+                    // id_lang: Number(cart.id_lang) || 1,
+                    id_currency: extractId(cart.id_currency) || 1,
+                    id_lang: extractId(cart.id_lang) || 1,
                     id_customer: customerId,
-                    id_carrier: Number(cart.id_carrier) ,
+                    id_carrier: extractId(cart.id_carrier) || 0,
+                    // id_carrier: Number(cart.id_carrier) ,
                     id_address_delivery: addressId,
                     id_address_invoice: addressId,
                     recyclable: 0,
@@ -126,8 +129,8 @@ export async function addProductsToCart(
                     // delivery_option: "",
                     secure_key: secureKey,
                     allow_seperated_package: 0,
-                    id_shop:1,
-                    id_shop_group:1,
+                    id_shop: 1,
+                    id_shop_group: 1,
                     date_add: dateAdd,
                     date_upd: dateAdd,
                     associations: {

@@ -149,17 +149,17 @@ export function Import() {
             if (csv1) {
                 console.log("Produit import :", parsedProducts);
                 updateStepProgress("csv1", { label: "Fichier 1", detail: `Import de ${parsedProducts.length} produit(s)...`, total: parsedProducts.length, processed: 0, imported: 0, failed: 0, status: "running", percent: 0 });
-                await importProduitCsv(parsedProducts, imageProduit, {
-                    onProgress: (step) => updateStepProgress("csv1", {
-                        label: "Fichier 1",
-                        detail: step.current ?? "Traitement en cours",
-                        processed: step.processed,
-                        total: step.total,
-                        imported: step.imported,
-                        failed: step.failed,
-                        status: step.processed >= step.total ? "done" : "running",
-                    }),
-                });
+                // await importProduitCsv(parsedProducts, imageProduit, {
+                    // onProgress: (step) => updateStepProgress("csv1", {
+                        // label: "Fichier 1",
+                        // detail: step.current ?? "Traitement en cours",
+                        // processed: step.processed,
+                        // total: step.total,
+                        // imported: step.imported,
+                        // failed: step.failed,
+                        // status: step.processed >= step.total ? "done" : "running",
+                    // }),
+                // });
                 updateStepProgress("csv1", { label: "Fichier 1", detail: "Import terminé", percent: 100, status: "done" });
             } else {
                 updateStepProgress("csv1", { label: "Fichier 1", detail: "Aucun fichier sélectionné", percent: 100, status: "done" });
@@ -168,17 +168,17 @@ export function Import() {
             if (csv2) {
                 console.log("Attribut stock import :", parsedAttributes);
                 updateStepProgress("csv2", { label: "Fichier 2", detail: `Import de ${parsedAttributes.length} ligne(s)...`, total: parsedAttributes.length, processed: 0, imported: 0, failed: 0, status: "running", percent: 0 });
-                await importCsv2ToPrestashop(parsedAttributes, {
-                    onProgress: (step) => updateStepProgress("csv2", {
-                        label: "Fichier 2",
-                        detail: step.current ?? "Traitement en cours",
-                        processed: step.processed,
-                        total: step.total,
-                        imported: step.imported,
-                        failed: step.failed,
-                        status: step.processed >= step.total ? "done" : "running",
-                    }),
-                });
+                // await importCsv2ToPrestashop(parsedAttributes, {
+                    // onProgress: (step) => updateStepProgress("csv2", {
+                        // label: "Fichier 2",
+                        // detail: step.current ?? "Traitement en cours",
+                        // processed: step.processed,
+                        // total: step.total,
+                        // imported: step.imported,
+                        // failed: step.failed,
+                        // status: step.processed >= step.total ? "done" : "running",
+                    // }),
+                // });
                 updateStepProgress("csv2", { label: "Fichier 2", detail: "Import terminé", percent: 100, status: "done" });
             } else {
                 updateStepProgress("csv2", { label: "Fichier 2", detail: "Aucun fichier sélectionné", percent: 100, status: "done" });

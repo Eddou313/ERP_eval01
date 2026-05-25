@@ -1,6 +1,6 @@
 import { asArray, boolFromUnknown, numFromUnknown, textFromUnknown } from "../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
-import { generateSecureKey, type Commande } from "./importCSV3";
+import type { Commande } from "./importCSV3";
 
 export async function getOrCreateCustomer(
   cmd: Commande
@@ -191,19 +191,22 @@ export async function getClient(id: number): Promise<ClientForm & { id: number; 
 }
 
 export async function createClientAddress(idCustomer: number, form: ClientAddressImportForm): Promise<number> {
+  const normalizeText = (value: string | undefined): string =>
+    String(value ?? "").trim().replace(/\s+/g, " ");
+
+  const address1 = normalizeText(form.address1) || "Adresse non specifiee";
+  const postcode = normalizeText(form.postcode) || "00000";
+  const city = normalizeText(form.city) || "Ville";
+  const idCountry = Number(form.id_country) || 8;
+
   const res = await requestPrestashopXml<any>("/addresses", {
     query: {
       display: "full",
-      // "filter[id_customer]": `[${idCustomer}]`,
-
-      // "filter[firstname]": `[${form.firstname}]`,
-      // "filter[lastname]": `[${form.lastname}]`,
-      // "filter[address1]": `[${form.address1}]`,
-      // "filter[postcode]": `[${form.postcode}]`,
-      // "filter[city]": `[${form.city}]`,
-      // "filter[id_country]": `[${form.id_country}]`,
       "filter[id_customer]": `[${idCustomer}]`,
-      "filter[address1]": `[${form.address1}]`,
+      "filter[address1]": `[${address1}]`,
+      "filter[postcode]": `[${postcode}]`,
+      "filter[city]": `[${city}]`,
+      "filter[id_country]": `[${idCountry}]`,
 
       limit: "1",
     },
@@ -222,41 +225,61 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
       return existingId;
     }
   }
-  // else
-  const xml = buildPrestashopXml({
-    prestashop: {
-      address: {
-        id_customer: idCustomer,
-        alias: form.alias || `${form.firstname} ${form.lastname}`.trim() || "Adresse",
-        firstname: form.firstname,
-        lastname: form.lastname,
-        company: form.company || "",
-        vat_number: form.vat_number || "",
-        address1: form.address1,
-        address2: form.other || "",
-        postcode: form.postcode,
-        city: form.city,
-        id_country: form.id_country || 8,
-        phone: form.phone || "",
-        phone_mobile: form.phone_mobile || "",
-        id_state: 0,
-        deleted: 0,               // ✅ requis
-        // active: 1,
+  const firstname = normalizeText(form.firstname) || "Client";
+  const lastname = normalizeText(form.lastname) || "Client";
+  // const baseAlias = normalizeText(form.alias || `${firstname} ${lastname}`) || "Adresse";
+  const baseAlias = getFirstWord(firstname) || "Adresse";
+
+  let lastError: any = null;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    const alias = attempt === 1 ? baseAlias : `${baseAlias}-${attempt}`;
+    const xml = buildPrestashopXml({
+      prestashop: {
+        address: {
+          id_customer: idCustomer,
+          alias,
+          firstname,
+          lastname,
+          company: form.company || "",
+          vat_number: form.vat_number || "",
+          address1,
+          address2: form.other || "",
+          postcode,
+          city,
+          id_country: idCountry,
+          phone: form.phone || "",
+          phone_mobile: form.phone_mobile || "",
+          id_state: 0,
+          deleted: 0,
+        },
       },
-    },
-  });
+    });
 
-  const response = await requestPrestashopXml<{ prestashop: { address: { id: unknown } } }>("/addresses", {
-    method: "POST",
-    bodyXml: xml,
-  });
+    try {
+      const response = await requestPrestashopXml<{ prestashop: { address: { id: unknown } } }>("/addresses", {
+        method: "POST",
+        bodyXml: xml,
+      });
 
-  const id = Number(response?.prestashop?.address?.id);
-  if (!Number.isFinite(id) || id <= 0) {
-    throw new Error("Erreur lors de la création de l'adresse");
+      const id = Number(response?.prestashop?.address?.id);
+      if (Number.isFinite(id) && id > 0) {
+        return id;
+      }
+    } catch (error: any) {
+      lastError = error;
+      if (error?.status !== 400) {
+        throw error;
+      }
+    }
   }
 
-  return id;
+  throw new Error(
+    `Erreur lors de la creation de l'adresse: ${lastError?.responseText || lastError?.message || "unknown"}`,
+  );
+}
+
+export function getFirstWord(text: string): string {
+    return text.trim().split(/\s+/)[0] || "";
 }
 
 export type ClientForm = {
