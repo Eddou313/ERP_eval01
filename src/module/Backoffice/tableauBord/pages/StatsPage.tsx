@@ -9,6 +9,7 @@ export default function StatsPage(): JSX.Element {
   const [totalPurchasesHT, setTotalPurchasesHT] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
+  const [totalProfitHT, setTotalProfitHT] = useState(0);
   const [byCategory, setByCategory] = useState<CategoryStat[]>([]);
   const [canceledByCategory, setCanceledByCategory] = useState<CategoryStat[]>([]);
   const [canceledTotals, setCanceledTotals] = useState({ sales: 0, purchases: 0, profit: 0 });
@@ -24,6 +25,7 @@ export default function StatsPage(): JSX.Element {
         setTotalPurchasesHT(res.totalPurchasesHT || 0);
         setTotalPurchases(res.totalPurchases || 0);
         setTotalProfit(res.totalProfit || 0);
+        setTotalProfitHT((res.totalSalesHT || 0) - (res.totalPurchasesHT || 0));
         setCanceledByCategory(res.canceledByCategory || []);
         setCanceledTotals(res.canceledTotals || { sales: 0, purchases: 0, profit: 0 });
 
@@ -77,35 +79,42 @@ export default function StatsPage(): JSX.Element {
       {/* section des KPI Cards */}
       <div style={styles.kpiGrid}>
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Ventes totales (HT)</span>
+          <span style={styles.cardLabel}>Ventes totales estimées (HT)</span>
           <span style={{ ...styles.cardValue, color: "#059669" }}>
             {totalSalesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Ventes totales (TTC)</span>
+          <span style={styles.cardLabel}>Ventes totales estimées (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
             {totalSalesTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Coût total des achats (HT)</span>
+          <span style={styles.cardLabel}>Achats estimés (HT)</span>
           <span style={{ ...styles.cardValue, color: "#dc2626" }}>
             {totalPurchasesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Coût total des achats</span>
+          <span style={styles.cardLabel}>Achats estimés (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#ef4444" }}>
             {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Bénéfice estimé</span>
+          <span style={styles.cardLabel}>Bénéfice estimé (HT)</span>
+          <span style={{ ...styles.cardValue, color: "#1d4ed8" }}>
+            {totalProfitHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          </span>
+        </div>
+
+        <div style={styles.card}>
+          <span style={styles.cardLabel}>Bénéfice estimé (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#1e3a8a" }}>
             {totalProfit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
@@ -119,9 +128,9 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
-              <th style={styles.th}>Ventes (TTC)</th>
-              <th style={styles.th}>Achat</th>
-              <th style={styles.th}>Bénéfice</th>
+              <th style={styles.th}>Ventes estimées (TTC)</th>
+              <th style={styles.th}>Achat estimé</th>
+              <th style={styles.th}>Bénéfice estimé</th>
             </tr>
           </thead>
           <tbody>
@@ -169,9 +178,9 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
-              <th style={styles.th}>Ventes (TTC)</th>
-              <th style={styles.th}>Achat</th>
-              <th style={styles.th}>Bénéfice</th>
+              <th style={styles.th}>Ventes estimées (TTC)</th>
+              <th style={styles.th}>Achat estimé</th>
+              <th style={styles.th}>Bénéfice estimé</th>
             </tr>
           </thead>
           <tbody>
