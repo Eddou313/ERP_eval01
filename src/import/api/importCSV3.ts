@@ -62,7 +62,7 @@ export async function importProduitCommandeCsv(
         const cmd = rows[index];
         let current = cmd.email;
         try {
-            const produits = parseAchat(cmd.achat);
+            const produits = regrouperAchat(parseAchat(cmd.achat));
             const etat = normaliserEtat(cmd.etat);
 
             // ── 1. Créer ou récupérer le client ──
@@ -153,6 +153,24 @@ export function generateSecureKey(): string {
     return Array.from({ length: 32 }, () =>
         Math.floor(Math.random() * 16).toString(16)
     ).join("");
+}
+
+export function regrouperAchat(produits: ProduitAchat[]): ProduitAchat[] {
+    const map = new Map<string, ProduitAchat>();
+
+    for (const produit of produits) {
+        const key = `${produit.reference}|${produit.karazany}`;
+        const existing = map.get(key);
+
+        if (existing) {
+            existing.quantite += produit.quantite;
+            continue;
+        }
+
+        map.set(key, { ...produit });
+    }
+
+    return Array.from(map.values());
 }
 // -----
 
