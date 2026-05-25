@@ -73,6 +73,7 @@ export async function addProductsToCart(
 
     const newRows: any[] = [];
 
+    // ── Traiter les produits séquentiellement (évite ERR_NETWORK_CHANGED) ──
     for (const produit of produits) {
         const productReel = await findProductByReference(produit.reference, new Map());
         if (!productReel) {
@@ -105,6 +106,7 @@ export async function addProductsToCart(
 
     const allRows = [...existingRows, ...newRows];
 
+    // ✅ Supprimé : id_shop et id_shop_group → causes le 500
     await requestPrestashopXml<any>(`/carts/${cartId}`, {
         method: "PUT",
         bodyXml: buildPrestashopXml({
@@ -123,9 +125,8 @@ export async function addProductsToCart(
                     mobile_theme: 0,
                     delivery_option: "",
                     secure_key: secureKey,
-                    id_shop: 1,
-                    id_shop_group: 1,
                     allow_seperated_package: 0,
+                    id_shop:1,
                     date_add: dateAdd,
                     date_upd: dateAdd,
                     associations: {
@@ -138,7 +139,6 @@ export async function addProductsToCart(
         }),
     });
 }
-
 export async function resolveCarrierId(carrierId: unknown): Promise<number> {
     const numericCarrierId = Number(carrierId);
     if (validateUnsignedId(numericCarrierId)) return numericCarrierId;
@@ -155,7 +155,6 @@ export async function computeCartTotals(cartId: number): Promise<{
     total_paid: number;
     total_paid_real: number;
 }> {
-
     const emptyTotals = {
         total_products: 0,
         total_products_wt: 0,
@@ -164,52 +163,27 @@ export async function computeCartTotals(cartId: number): Promise<{
     };
 
     try {
-
         const res = await requestPrestashopXml<any>(`/carts/${cartId}`, {
-            query: {
-                display: "full",
-            },
+            query: { display: "full" },
         });
 
-        const rawRows =
-            res?.prestashop?.cart?.associations?.cart_rows?.cart_row;
+        const rawRows = res?.prestashop?.cart?.associations?.cart_rows?.cart_row;
+        if (!rawRows) return emptyTotals;
 
-        if (!rawRows) {
-            return emptyTotals;
-        }
+        const rows = Array.isArray(rawRows) ? rawRows : [rawRows];
 
-        const rows = Array.isArray(rawRows)
-            ? rawRows
-            : [rawRows];
-
-        const grouped = new Map<
-            string,
-            {
-                productId: number;
-                combinationId: number;
-                quantity: number;
-            }
-        >();
+        const grouped = new Map<string, { productId: number; combinationId: number; quantity: number }>();
 
         for (const row of rows) {
-
-            const productId = Number(extractId(row.id_product));
-            const combinationId = Number(extractId(row.id_product_attribute)) || 0;
-
+            const productId = extractId(row.id_product);
+            const combinationId = extractId(row.id_product_attribute) || 0;
             const quantity = Number(row.quantity) || 0;
 
-            if (!productId || quantity <= 0) {
-                continue;
-            }
+            if (!productId || quantity <= 0) continue;
 
             const key = `${productId}_${combinationId}`;
-
             if (!grouped.has(key)) {
-                grouped.set(key, {
-                    productId,
-                    combinationId,
-                    quantity,
-                });
+                grouped.set(key, { productId, combinationId, quantity });
             } else {
                 grouped.get(key)!.quantity += quantity;
             }
@@ -218,143 +192,70 @@ export async function computeCartTotals(cartId: number): Promise<{
         let totalHt = 0;
         let totalTtc = 0;
 
+        // ── Séquentiel pour éviter ERR_NETWORK_CHANGED ──
         for (const item of grouped.values()) {
-
             let basePriceHt = 0;
             let taxRate = 20;
 
             try {
-
-                const productRes = await requestPrestashopXml<any>(
-                    `/products/${item.productId}`,
-                    {
-                        query: {
-                            display: "[price,id_tax_rules_group]",
-                        },
-                    }
-                );
-
+                const productRes = await requestPrestashopXml<any>(`/products/${item.productId}`, {
+                    query: { display: "[price,id_tax_rules_group]" },
+                });
                 const product = productRes?.prestashop?.product;
-
                 basePriceHt = Number(product?.price) || 0;
+                const taxGroupId = extractId(product?.id_tax_rules_group);
 
-                const taxRulesGroupId =
-                    Number(product?.id_tax_rules_group) || 0;
-
-                if (taxRulesGroupId > 0) {
+                if (taxGroupId > 0) {
                     try {
-
-                        const taxRuleRes =
-                            await requestPrestashopXml<any>(
-                                `/tax_rule_groups/${taxRulesGroupId}`,
-                                {
-                                    query: {
-                                        display: "full",
-                                    },
-                                }
-                            );
-
-                        const taxRule =
-                            taxRuleRes?.prestashop?.tax_rule_group;
-
-                        const rawTaxRule =
-                            taxRule?.associations?.tax_rules?.tax_rule;
-
-                        const firstTaxRule =
-                            Array.isArray(rawTaxRule)
-                                ? rawTaxRule[0]
-                                : rawTaxRule;
-
-                        const taxId =
-                            Number(extractId(firstTaxRule?.id_tax));
+                        const taxGroupRes = await requestPrestashopXml<any>(`/tax_rule_groups/${taxGroupId}`, {
+                            query: { display: "full" },
+                        });
+                        const rawTaxRule = taxGroupRes?.prestashop?.tax_rule_group?.associations?.tax_rules?.tax_rule;
+                        const firstRule = Array.isArray(rawTaxRule) ? rawTaxRule[0] : rawTaxRule;
+                        const taxId = extractId(firstRule?.id_tax);
 
                         if (taxId > 0) {
-
-                            const taxRes =
-                                await requestPrestashopXml<any>(
-                                    `/taxes/${taxId}`,
-                                    {
-                                        query: {
-                                            display: "[rate]",
-                                        },
-                                    }
-                                );
-
-                            taxRate =
-                                Number(
-                                    taxRes?.prestashop?.tax?.rate
-                                ) || 20;
+                            const taxRes = await requestPrestashopXml<any>(`/taxes/${taxId}`, {
+                                query: { display: "[rate]" },
+                            });
+                            taxRate = Number(taxRes?.prestashop?.tax?.rate) || 20;
                         }
-
                     } catch {
-                        console.warn(
-                            `[cart totals] Taxe introuvable pour groupe ${taxRulesGroupId}`
-                        );
+                        console.warn(`[cart totals] Taxe introuvable pour groupe ${taxGroupId}`);
                     }
                 }
-
             } catch {
-                console.warn(
-                    `[cart totals] Produit ${item.productId} introuvable`
-                );
+                console.warn(`[cart totals] Produit ${item.productId} introuvable`);
                 continue;
             }
+
             let combinationImpactHt = 0;
-
             if (item.combinationId > 0) {
-
                 try {
-
-                    const combRes =
-                        await requestPrestashopXml<any>(
-                            `/combinations/${item.combinationId}`,
-                            {
-                                query: {
-                                    display: "[price]",
-                                },
-                            }
-                        );
-
-                    combinationImpactHt =
-                        Number(
-                            combRes?.prestashop?.combination?.price
-                        ) || 0;
-
+                    const combRes = await requestPrestashopXml<any>(`/combinations/${item.combinationId}`, {
+                        query: { display: "[price]" },
+                    });
+                    combinationImpactHt = Number(combRes?.prestashop?.combination?.price) || 0;
                 } catch {
-                    console.warn(
-                        `[cart totals] Combinaison ${item.combinationId} introuvable`
-                    );
+                    console.warn(`[cart totals] Combinaison ${item.combinationId} introuvable`);
                 }
             }
 
-            const unitHt =
-                basePriceHt + combinationImpactHt;
-
-            const unitTtc =
-                unitHt * (1 + taxRate / 100);
+            const unitHt = basePriceHt + combinationImpactHt;
+            const unitTtc = unitHt * (1 + taxRate / 100);
 
             totalHt += unitHt * item.quantity;
             totalTtc += unitTtc * item.quantity;
         }
 
-
-        totalHt = Math.round(totalHt * 100) / 100;
-        totalTtc = Math.round(totalTtc * 100) / 100;
-
         return {
-            total_products: totalHt,
-            total_products_wt: totalTtc,
-            total_paid: totalTtc,
-            total_paid_real: totalTtc,
+            total_products: Math.round(totalHt * 100) / 100,
+            total_products_wt: Math.round(totalTtc * 100) / 100,
+            total_paid: Math.round(totalTtc * 100) / 100,
+            total_paid_real: Math.round(totalTtc * 100) / 100,
         };
-
     } catch (error) {
-
-        console.error(
-            `[cart totals] erreur panier ${cartId}`,
-            error
-        );
-
+        console.error(`[cart totals] erreur panier ${cartId}`, error);
         return emptyTotals;
     }
 }

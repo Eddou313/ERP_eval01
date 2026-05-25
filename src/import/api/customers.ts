@@ -237,6 +237,9 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
         id_country: form.id_country,
         phone: form.phone || "",
         phone_mobile: form.phone_mobile || "",
+        id_state: 0,
+        deleted: 0,               // ✅ requis
+        active: 1,
       },
     },
   });
