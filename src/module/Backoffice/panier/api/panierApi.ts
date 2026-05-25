@@ -61,7 +61,7 @@ export function clearGuestCartCookie(): void {
 async function getProductInfo(
   productId: number,
   attributeId?: number | null,
-): Promise<{ name: string; reference: string; price: number; stock?: number; imageId?: number; attributesLabel?: string } | null> {
+): Promise<{ name: string; reference: string; price: number; priceHt: number; stock?: number; imageId?: number; attributesLabel?: string } | null> {
   if (!productId) return null;
   try {
     const response = await requestPrestashopXml<any>(`/products/${productId}`);
@@ -121,6 +121,7 @@ async function getProductInfo(
     const name = comboReference ? `${baseName}\nRéf. : ${baseReference} / ${comboReference}` : `${baseName}\nRéf. : ${baseReference}`;
     const reference = comboReference ? `${baseReference} / ${comboReference}` : baseReference;
     const price = pricing.finalPrice;
+    const priceHt = pricing.priceHt;
 
     // Try to fetch stock (best-effort). If attributeId provided, filter by it.
     let stock: number | undefined = undefined;
@@ -136,7 +137,7 @@ async function getProductInfo(
       stock = undefined;
     }
 
-    return { name, reference, price, stock, imageId, attributesLabel };
+    return { name, reference, price, priceHt, stock, imageId, attributesLabel };
   } catch {
     return null;
   }
@@ -416,6 +417,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
     quantity: Number(r.quantity) || 0,
     stock: undefined as number | undefined,
     total: Number(r.price || 0) * Number(r.quantity || 0),
+    total_ht: 0,
     image_id: undefined as number | undefined,
     attributes_label: "",
   }));
@@ -427,13 +429,16 @@ export  async function getCart(id: number): Promise<CartDetail> {
 
       const composedName = prod.reference ? `${prod.name}\nRéf. : ${prod.reference}` : prod.name;
       const unitPrice = prod.price || it.unit_price || 0;
+      const unitPriceHt = prod.priceHt || it.unit_price || 0;
       const stock = it.stock ?? prod.stock;
       const total = unitPrice * (it.quantity || 0);
+      const totalHt = unitPriceHt * (it.quantity || 0);
 
       return {
         ...it,
         name: it.name || composedName,
         unit_price: unitPrice,
+        total_ht: totalHt,
         stock,
         total,
         image_id: prod.imageId,
@@ -446,6 +451,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
   // On masque ces lignes à la lecture pour éviter qu'un produit supprimé réapparaisse dans le panier.
   const visibleItems = items.filter((item) => Number(item.quantity) > 0);
   const totalProducts = visibleItems.reduce((s: number, it: { total: number }) => s + (it.total || 0), 0);
+  const totalProductsHt = visibleItems.reduce((s: number, it: { total_ht?: number }) => s + (Number(it.total_ht) || 0), 0);
 
   return {
     id,
@@ -461,6 +467,7 @@ export  async function getCart(id: number): Promise<CartDetail> {
     date_upd: textFromUnknown(cart.date_upd),
     items: visibleItems,
     total_products: totalProducts,
+    total_products_tax_excl: totalProductsHt,
     total: totalProducts,
   };
 }

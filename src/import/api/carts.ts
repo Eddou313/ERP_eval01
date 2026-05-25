@@ -1,9 +1,12 @@
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { validateUnsignedId } from "../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
-import { getCombinationId } from "./attribut";
 import { type ProduitAchat } from "./importCSV3";
-import { findProductByReference } from "./produit";
+import {
+    findCombinationIdInContext,
+    findImportedProductByReference,
+    type ImportSessionContext,
+} from "./importContext";
 
 export async function createCart(
     customerId: number,
@@ -49,7 +52,8 @@ export async function addProductsToCart(
     produits: ProduitAchat[],
     date: string,
     customerId: number,
-    addressId: number
+    addressId: number,
+    context?: ImportSessionContext,
 ): Promise<void> {
     const [day, month, year] = date.split("/");
     const dateAdd = `${year}-${month}-${day} 00:00:00`;
@@ -75,15 +79,20 @@ export async function addProductsToCart(
 
     // ── Traiter les produits séquentiellement (évite ERR_NETWORK_CHANGED) ──
     for (const produit of produits) {
-        const productReel = await findProductByReference(produit.reference, new Map());
+        const productReel = context ? findImportedProductByReference(context, produit.reference) : null;
         if (!productReel) {
             console.warn(`[cart] Produit introuvable : ${produit.reference}`);
             continue;
         }
 
         const productId = Number(productReel.id);
-        const combin = await getCombinationId(productId, produit.karazany);
-        const combinationId = produit.karazany.trim() !== "" ? combin : 0;
+        const combinationId = context && produit.karazany.trim() !== ""
+            ? findCombinationIdInContext(context, productId, produit.karazany)
+            : 0;
+
+        if (produit.karazany.trim() !== "" && !combinationId) {
+            throw new Error(`Combinaison introuvable dans le contexte pour ${produit.reference} / ${produit.karazany}`);
+        }
 
         console.log(combinationId);
         const existing = existingRows.find(
@@ -159,6 +168,30 @@ export async function computeCartTotals(cartId: number): Promise<{
     total_paid: number;
     total_paid_real: number;
 }> {
+    return computeCartTotalsInternal(cartId, undefined);
+}
+
+export async function computeCartTotalsFromContext(
+    cartId: number,
+    context: ImportSessionContext,
+): Promise<{
+    total_products: number;
+    total_products_wt: number;
+    total_paid: number;
+    total_paid_real: number;
+}> {
+    return computeCartTotalsInternal(cartId, context);
+}
+
+async function computeCartTotalsInternal(
+    cartId: number,
+    context?: ImportSessionContext,
+): Promise<{
+    total_products: number;
+    total_products_wt: number;
+    total_paid: number;
+    total_paid_real: number;
+}> {
     const emptyTotals = {
         total_products: 0,
         total_products_wt: 0,
@@ -195,6 +228,29 @@ export async function computeCartTotals(cartId: number): Promise<{
 
         let totalHt = 0;
         let totalTtc = 0;
+
+        if (context) {
+            for (const item of grouped.values()) {
+                const product = context.productsById.get(item.productId);
+                if (!product) {
+                    throw new Error(`[cart totals] Produit ${item.productId} absent du contexte d'import`);
+                }
+
+                const combination = item.combinationId > 0 ? context.combinationById.get(item.combinationId) : null;
+                const unitHt = product.priceHt + Number(combination?.priceImpactHt ?? 0);
+                const unitTtc = unitHt * (1 + product.taxRate / 100);
+
+                totalHt += unitHt * item.quantity;
+                totalTtc += unitTtc * item.quantity;
+            }
+
+            return {
+                total_products: Math.round(totalHt * 100) / 100,
+                total_products_wt: Math.round(totalTtc * 100) / 100,
+                total_paid: Math.round(totalTtc * 100) / 100,
+                total_paid_real: Math.round(totalTtc * 100) / 100,
+            };
+        }
 
         // ── Séquentiel pour éviter ERR_NETWORK_CHANGED ──
         for (const item of grouped.values()) {

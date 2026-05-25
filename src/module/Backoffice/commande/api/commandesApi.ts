@@ -103,6 +103,7 @@ function extractOrderListItem(orderXml: Record<string, unknown>): OrderListItem 
     id_customer: numFromUnknown(orderXml.id_customer),
     payment: textFromUnknown(orderXml.payment).trim(),
     total_paid_tax_incl: numFromUnknown(orderXml.total_paid_tax_incl),
+    total_paid_tax_excl: numFromUnknown(orderXml.total_paid_tax_excl),
     current_state: numFromUnknown(orderXml.current_state) || 1,
     date_add: textFromUnknown(orderXml.date_add).split(" ")[0],
   };
@@ -192,6 +193,7 @@ export async function listOrders(
             id_customer: detail.id_customer,
             payment: "Panier en cours",
             total_paid_tax_incl: Number(detail.total) || 0,
+            total_paid_tax_excl: Number(detail.total_products_tax_excl) || Number(detail.total_products) || Number(detail.total) || 0,
             current_state: CART_PENDING_STATE_ID,
             date_add: detail.date_add || textFromUnknown((cart as any).date_add).split(" ")[0],
           } as OrderListItem;

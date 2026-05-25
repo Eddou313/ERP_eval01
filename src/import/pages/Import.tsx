@@ -6,6 +6,7 @@ import { parseFile } from "../api/parse";
 import { importProduitCsv } from "../api/importCSV1";
 import { importCsv2ToPrestashop } from "../api/importCSV2";
 import { importProduitCommandeCsv } from "../api/importCSV3";
+import { createImportSessionContext } from "../api/importContext";
 import "./Import.css";
 import { InitialisationGLobal, type InitialisationProgress } from "../../files/api/Initialisation&export";
 
@@ -102,6 +103,7 @@ export function Import() {
         setMes("");
         setImporting(true);
         resetProgress();
+        let importContext = createImportSessionContext();
 
         if (!csv1 && !csv2 && !csv3) {
             setMes("Inserer au moins un fichier csv valide !");
@@ -149,7 +151,7 @@ export function Import() {
             if (csv1) {
                 console.log("Produit import :", parsedProducts);
                 updateStepProgress("csv1", { label: "Fichier 1", detail: `Import de ${parsedProducts.length} produit(s)...`, total: parsedProducts.length, processed: 0, imported: 0, failed: 0, status: "running", percent: 0 });
-                await importProduitCsv(parsedProducts, imageProduit, {
+                const csv1Result = await importProduitCsv(parsedProducts, imageProduit, {
                     onProgress: (step) => updateStepProgress("csv1", {
                         label: "Fichier 1",
                         detail: step.current ?? "Traitement en cours",
@@ -160,6 +162,7 @@ export function Import() {
                         status: step.processed >= step.total ? "done" : "running",
                     }),
                 });
+                importContext = csv1Result.context;
                 updateStepProgress("csv1", { label: "Fichier 1", detail: "Import terminé", percent: 100, status: "done" });
             } else {
                 updateStepProgress("csv1", { label: "Fichier 1", detail: "Aucun fichier sélectionné", percent: 100, status: "done" });
@@ -178,7 +181,7 @@ export function Import() {
                         failed: step.failed,
                         status: step.processed >= step.total ? "done" : "running",
                     }),
-                });
+                }, importContext);
                 updateStepProgress("csv2", { label: "Fichier 2", detail: "Import terminé", percent: 100, status: "done" });
             } else {
                 updateStepProgress("csv2", { label: "Fichier 2", detail: "Aucun fichier sélectionné", percent: 100, status: "done" });
@@ -197,7 +200,7 @@ export function Import() {
                         failed: step.failed,
                         status: step.processed >= step.total ? "done" : "running",
                     }),
-                });
+                }, importContext);
                 updateStepProgress("csv3", { label: "Fichier 3", detail: "Import terminé", percent: 100, status: "done" });
             } else {
                 updateStepProgress("csv3", { label: "Fichier 3", detail: "Aucun fichier sélectionné", percent: 100, status: "done" });

@@ -1,4 +1,9 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
+import {
+  attributeGroupKey,
+  attributeValueKey,
+  type ImportSessionContext,
+} from "./importContext";
 import { updateStockWithMovement } from "./stock";
 
 export async function createCombination(
@@ -7,7 +12,7 @@ export async function createCombination(
   stockInitial: number,
   priceImpactHt: number,
   isFirstCombination: boolean,
-): Promise<void> {
+): Promise<number> {
   const payload = {
     prestashop: {
       combination: {
@@ -46,12 +51,59 @@ export async function createCombination(
   });
 
   const combinationId = Number(created?.prestashop?.combination?.id);
+  if (!combinationId) {
+    throw new Error(`Échec création combination pour le produit ${productId}`);
+  }
 
   // Mettre à jour le stock via stock_availables + mouvement
   await updateStockWithMovement(productId, stockInitial, combinationId);
+
+  return combinationId;
 }
 
-export async function getOrCreateAttributeGroup(name: string): Promise<number> {
+export async function getOrCreateAttributeGroup(name: string, context?: ImportSessionContext): Promise<number> {
+  const importContext = context as ImportSessionContext | undefined;
+  const key = attributeGroupKey(name);
+
+  if (importContext?.attributeGroupIdByName.has(key)) {
+    return importContext.attributeGroupIdByName.get(key) ?? 0;
+  }
+
+  if (importContext) {
+    const response = await requestPrestashopXml<{
+      prestashop: { product_option: { id: unknown } };
+    }>("/product_options", {
+      method: "POST",
+      bodyXml: buildPrestashopXml({
+        prestashop: {
+          product_option: {
+            name: {
+              language: {
+                "@_id": 1,
+                "#text": name,
+              },
+            },
+            public_name: {
+              language: {
+                "@_id": 1,
+                "#text": name,
+              },
+            },
+            group_type: "select",
+            is_color_group: 0,
+            position: 0,
+          },
+        },
+      }),
+    });
+
+    const id = Number(response?.prestashop?.product_option?.id);
+    if (!id) throw new Error(`Échec création attribute group "${name}"`);
+
+    importContext.attributeGroupIdByName.set(key, id);
+    return id;
+  }
+
   // ── 1. Chercher si le groupe existe déjà ──
   const groupsRes = await requestPrestashopXml<any>("/product_options", {
     query: { display: "[id,name]", limit: "999" },
@@ -100,12 +152,53 @@ export async function getOrCreateAttributeGroup(name: string): Promise<number> {
   const id = Number(response?.prestashop?.product_option?.id);
   if (!id) throw new Error(`Échec création attribute group "${name}"`);
 
+  if (context) {
+    context.attributeGroupIdByName.set(key, id);
+  }
+
   return id;
 }
 export async function getOrCreateAttributeValue(
   groupId: number,
-  value: string
+  value: string,
+  context?: ImportSessionContext,
 ): Promise<number> {
+  const importContext = context as ImportSessionContext | undefined;
+  const key = attributeValueKey(groupId, value);
+
+  if (importContext?.attributeValueIdByGroupAndName.has(key)) {
+    return importContext.attributeValueIdByGroupAndName.get(key) ?? 0;
+  }
+
+  if (importContext) {
+    const response = await requestPrestashopXml<{
+      prestashop: { product_option_value: { id: unknown } };
+    }>("/product_option_values", {
+      method: "POST",
+      bodyXml: buildPrestashopXml({
+        prestashop: {
+          product_option_value: {
+            id_attribute_group: groupId,
+            name: {
+              language: {
+                "@_id": 1,
+                "#text": value,
+              },
+            },
+            color: "",
+            position: 0,
+          },
+        },
+      }),
+    });
+
+    const id = Number(response?.prestashop?.product_option_value?.id);
+    if (!id) throw new Error(`Échec création attribute value "${value}"`);
+
+    importContext.attributeValueIdByGroupAndName.set(key, id);
+    return id;
+  }
+
   // ── 1. Chercher si la valeur existe déjà ──
   const res = await requestPrestashopXml<any>("/product_option_values", {
     query: { display: "[id,id_attribute_group,name]", limit: "999" },
@@ -148,6 +241,10 @@ export async function getOrCreateAttributeValue(
 
   const id = Number(response?.prestashop?.product_option_value?.id);
   if (!id) throw new Error(`Échec création attribute value "${value}"`);
+
+  if (context) {
+    context.attributeValueIdByGroupAndName.set(key, id);
+  }
 
   return id;
 }
