@@ -57,7 +57,9 @@ async function fetchCategoryName(categoryId: number) {
 }
 
 export async function getDashboardStats(): Promise<{
+  totalSalesHT: number;
   totalSalesTTC: number;
+  totalPurchasesHT: number;
   totalPurchases: number;
   totalProfit: number;
   profitByCategory: CategoryStat[];
@@ -66,7 +68,9 @@ export async function getDashboardStats(): Promise<{
 }> {
   const salesTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
   const canceledTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
+  let totalSalesHT = 0;
   let totalSalesTTC = 0;
+  let totalPurchasesHT = 0;
   let totalPurchases = 0;
   let canceledSales = 0;
   let canceledPurchases = 0;
@@ -80,35 +84,40 @@ export async function getDashboardStats(): Promise<{
     const currentState = numFromUnknown(order?.current_state);
 
     const rows = asArray(order?.associations?.order_rows?.order_row ?? []);
-    const rowBaseAmounts = [] as Array<{ productId: number; qty: number; salesAmount: number }>;
+    const rowBaseAmounts = [] as Array<{ productId: number; qty: number; salesAmountTTC: number; salesAmountHT: number }>;
 
     for (const row of rows) {
       const productId = numFromUnknown(row?.product_id ?? row?.id_product ?? row?.id ?? row?.['@_id'] ?? 0) || 0;
       const qty = Number(row?.product_quantity ?? row?.product_qty ?? row?.quantity ?? 0) || 0;
 
-      const salesAmount = Number(row?.total_price_tax_incl);
-      const fallbackSalesAmount = (Number(row?.unit_price_tax_incl ?? row?.product_price_wt ?? 0) || 0) * qty;
+      const salesAmountTTC = Number(row?.total_price_tax_incl);
+      const fallbackSalesAmountTTC = (Number(row?.unit_price_tax_incl ?? row?.product_price_wt ?? 0) || 0) * qty;
+      const salesAmountHT = Number(row?.total_price_tax_excl);
+      const fallbackSalesAmountHT = (Number(row?.unit_price_tax_excl ?? row?.product_price ?? row?.unit_price ?? 0) || 0) * qty;
 
       rowBaseAmounts.push({
         productId,
         qty,
-        salesAmount: Number.isFinite(salesAmount) && salesAmount > 0 ? salesAmount : fallbackSalesAmount,
+        salesAmountTTC: Number.isFinite(salesAmountTTC) && salesAmountTTC > 0 ? salesAmountTTC : fallbackSalesAmountTTC,
+        salesAmountHT: Number.isFinite(salesAmountHT) && salesAmountHT > 0 ? salesAmountHT : fallbackSalesAmountHT,
       });
     }
 
-    const orderSalesTTC = rowBaseAmounts.reduce((sum, item) => sum + item.salesAmount, 0);
+    const orderSalesTTC = rowBaseAmounts.reduce((sum, item) => sum + item.salesAmountTTC, 0);
+    const orderSalesHT = rowBaseAmounts.reduce((sum, item) => sum + item.salesAmountHT, 0);
     let orderPurchases = 0;
-    const rowComputed = [] as Array<{ catId: number; saleAmount: number; purchaseAmount: number }>;
+    const rowComputed = [] as Array<{ catId: number; saleAmountTTC: number; saleAmountHT: number; purchaseAmount: number }>;
 
     for (const item of rowBaseAmounts) {
       const prodInfo = item.productId > 0 ? await fetchProductInfo(item.productId) : { price: 0, wholesale: 0, categories: [] };
       const wholesale = prodInfo.wholesale || 0;
       const purchaseAmount = wholesale * item.qty;
-      const saleAmount = item.salesAmount;
+      const saleAmountTTC = item.salesAmountTTC;
+      const saleAmountHT = item.salesAmountHT;
 
       orderPurchases += purchaseAmount;
       const catId = prodInfo.categories?.[0] ?? 0;
-      rowComputed.push({ catId, saleAmount, purchaseAmount });
+      rowComputed.push({ catId, saleAmountTTC, saleAmountHT, purchaseAmount });
     }
 
     if (currentState === 6) {
@@ -118,7 +127,7 @@ export async function getDashboardStats(): Promise<{
       for (const row of rowComputed) {
         const catId = row.catId;
         const entry = canceledTotalsByCategory.get(catId) ?? { sales: 0, purchases: 0 };
-        entry.sales += row.saleAmount;
+        entry.sales += row.saleAmountTTC;
         entry.purchases += row.purchaseAmount;
         canceledTotalsByCategory.set(catId, entry);
       }
@@ -126,12 +135,14 @@ export async function getDashboardStats(): Promise<{
     }
 
     totalSalesTTC += orderSalesTTC;
+    totalSalesHT += orderSalesHT;
     totalPurchases += orderPurchases;
+    totalPurchasesHT += orderPurchases;
 
     for (const row of rowComputed) {
       const catId = row.catId;
       const entry = salesTotalsByCategory.get(catId) ?? { sales: 0, purchases: 0 };
-      entry.sales += row.saleAmount;
+      entry.sales += row.saleAmountTTC;
       entry.purchases += row.purchaseAmount;
       salesTotalsByCategory.set(catId, entry);
     }
@@ -169,6 +180,8 @@ export async function getDashboardStats(): Promise<{
 
   return {
     totalSalesTTC,
+    totalSalesHT,
+    totalPurchasesHT,
     totalPurchases,
     totalProfit: totalSalesTTC - totalPurchases,
     profitByCategory,

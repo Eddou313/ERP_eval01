@@ -158,6 +158,7 @@ export async function createOrderDirect(params: {
           id_customer: params.id_customer,
           id_carrier: params.id_carrier,
           id_shop: params.id_shop,
+          id_shop_group: 1,
           secure_key: params.secure_key,
           module: params.module,
           payment: params.payment,

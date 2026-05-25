@@ -4,7 +4,9 @@ import { getCategory } from "../api/../../categorie/api/categoriesApi";
 
 export default function StatsPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
+  const [totalSalesHT, setTotalSalesHT] = useState(0);
   const [totalSalesTTC, setTotalSalesTTC] = useState(0);
+  const [totalPurchasesHT, setTotalPurchasesHT] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
   const [byCategory, setByCategory] = useState<CategoryStat[]>([]);
@@ -17,7 +19,9 @@ export default function StatsPage(): JSX.Element {
       try {
         const res = await getDashboardStats();
         if (!mounted) return;
+        setTotalSalesHT(res.totalSalesHT || 0);
         setTotalSalesTTC(res.totalSalesTTC || 0);
+        setTotalPurchasesHT(res.totalPurchasesHT || 0);
         setTotalPurchases(res.totalPurchases || 0);
         setTotalProfit(res.totalProfit || 0);
         setCanceledByCategory(res.canceledByCategory || []);
@@ -73,9 +77,23 @@ export default function StatsPage(): JSX.Element {
       {/* section des KPI Cards */}
       <div style={styles.kpiGrid}>
         <div style={styles.card}>
+          <span style={styles.cardLabel}>Ventes totales (HT)</span>
+          <span style={{ ...styles.cardValue, color: "#059669" }}>
+            {totalSalesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          </span>
+        </div>
+
+        <div style={styles.card}>
           <span style={styles.cardLabel}>Ventes totales (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
             {totalSalesTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          </span>
+        </div>
+
+        <div style={styles.card}>
+          <span style={styles.cardLabel}>Coût total des achats (HT)</span>
+          <span style={{ ...styles.cardValue, color: "#dc2626" }}>
+            {totalPurchasesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
