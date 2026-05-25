@@ -1,0 +1,122 @@
+/* Styles basiques pour la page Stock */
+.stock-page {
+  padding: 16px;
+  font-family: Inter, Arial, Helvetica, sans-serif;
+}
+.stock-table-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+.stock-table th,
+.stock-table td {
+  padding: 10px 12px;
+  border: 1px solid #e6e6e6;
+  text-align: left;
+  vertical-align: middle;
+}
+.stock-table thead th {
+  background: #fafafa;
+  font-weight: 600;
+}
+.col-photo img {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.col-name {
+  max-width: 300px;
+  white-space: normal;
+}
+.product-main {
+  font-weight: 600;
+}
+.product-combination {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  gap: 8px;
+}
+.btn {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn:hover { filter: brightness(0.98); }
+.btn-view { color: #0b5fff; border-color: #dbeafe; }
+.btn-adjust { color: #065f46; border-color: #bbf7d0; }
+.out-of-stock td { background: #fff7f7; }
+
+@media (max-width: 720px) {
+  .stock-table { min-width: 600px; }
+  .col-name { max-width: 150px; }
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.modal {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  width: 420px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+.modal h3 { margin: 0 0 8px 0; }
+.modal-row { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+.modal-row input { padding:8px; border:1px solid #e6e6e6; border-radius:4px; }
+.modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+
+/* Messages */
+.message {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 14px;
+  z-index: 10000;
+  animation: slideIn 0.3s ease-out;
+}
+.message-success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+.message-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.pagination { display:flex; gap:8px; align-items:center; margin-top:12px; }
+.page-info { font-weight:600; }

@@ -230,7 +230,7 @@ export async function createCombination(productId: number, attributeValueIds: nu
           reference: reference || "",
           price: priceImpactHt,
           quantity,
-          default_on: 0,
+          default_on: 1,
           minimal_quantity: 1,
           associations: {
             product_option_values: {
@@ -473,8 +473,16 @@ export async function getProductAttributeGroups(productId: number): Promise<Prod
 
             return {
               id: combinationId,
+              id_product: numFromUnknown(combination?.id_product) || productId,
               quantity: numFromUnknown(combination?.quantity),
               price: numFromUnknown(combination?.price),
+              reference: textFromUnknown(combination?.reference),
+              supplier_reference: textFromUnknown(combination?.supplier_reference),
+              ean13: textFromUnknown(combination?.ean13),
+              isbn: textFromUnknown(combination?.isbn),
+              upc: textFromUnknown(combination?.upc),
+              mpn: textFromUnknown(combination?.mpn),
+              wholesale_price: numFromUnknown(combination?.wholesale_price),
               attributes,
             };
           })

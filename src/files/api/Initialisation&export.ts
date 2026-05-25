@@ -4,9 +4,76 @@ import { InitAdresse } from "../../module/Backoffice/client/api/clientAdresAPI";
 import { initClients } from "../../module/Backoffice/client/api/clientApi";
 import { InitOrder } from "../../module/Backoffice/commande/api/commandesApi";
 import { initPanier } from "../../module/Backoffice/panier/api/panierApi";
-import { InitProducts } from "../../module/Backoffice/produit/api/productsApi";
+import { InitProductImages, InitProducts } from "../../module/Backoffice/produit/api/productsApi";
+import { InitTaxes } from "../../module/Backoffice/taxes/taxes";
 import Papa from 'papaparse';
-// import { ensureTaxExists, listTaxesLight } from "../../module/Backoffice/taxes/api/taxe";
+import { SupprimerStocksEtMouvements } from "../../module/Backoffice/stock/api/Suppression";
+import { requestPrestashopXml } from "../../utils/prestashopClient";
+import { asArray, numFromUnknown } from "../../utils/helper";
+
+/**
+ * Normalise un nom de colonne: enlève les accents et espaces superflus
+ */
+function normalizeColumnName(name: string): string {
+  return (name || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Enlève les accents
+    .replace(/\s+/g, "_"); // Remplace espaces par underscore
+}
+
+function isValidCsvDate(value: string): boolean {
+  const trimmed = String(value ?? "").trim();
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    return false;
+  }
+
+  const [day, month, year] = trimmed.split("/").map(Number);
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
+function isPositiveCsvNumber(value: unknown): boolean {
+  const numericValue = typeof value === "number" ? value : Number(String(value ?? "").trim().replace(",", "."));
+  return Number.isFinite(numericValue) && numericValue > 0;
+}
+
+/**
+ * Valide que les colonnes du CSV correspondent aux colonnes attendues
+ * @throws Error si les colonnes ne correspondent pas
+ */
+export function validateColumnNames(
+  csvColumns: string[],
+  expectedColumns: (keyof any)[]
+): void {
+  const normalizedCsvColumns = csvColumns.map(normalizeColumnName);
+  const normalizedExpectedColumns = expectedColumns.map(col => normalizeColumnName(String(col)));
+  const csvSet = new Set(normalizedCsvColumns);
+  const expectedSet = new Set(normalizedExpectedColumns);
+
+  // Vérifier que toutes les colonnes attendues sont présentes
+  for (const expected of expectedSet) {
+    if (!csvSet.has(expected)) {
+      throw new Error(
+        `Nom de colonne non conforme. Colonne manquante ou incorrecte: "${expected}"`
+      );
+    }
+  }
+
+  // Vérifier qu'il n'y a pas de colonnes supplémentaires non attendues
+  for (const csv of csvSet) {
+    if (!expectedSet.has(csv)) {
+      throw new Error(
+        `Nom de colonne non conforme. Colonne non reconnue: "${csv}"`
+      );
+    }
+  }
+}
 /**
  * @param file Le fichier récupéré depuis l'input
  * @param separator Le caractère délimiteur (ex: , ou ;)
@@ -14,84 +81,209 @@ import Papa from 'papaparse';
  */
 // Convertir les nombres français (virgule) en nombres JavaScript (point)
 const convertFrenchNumbersInObject = (obj: any): any => {
-    if (Array.isArray(obj)) {
-        return obj.map(item => convertFrenchNumbersInObject(item));
-    }
-    if (obj !== null && typeof obj === 'object') {
-        return Object.entries(obj).reduce((acc, [key, value]) => {
-            if (typeof value === 'string') {
-                // Convertir "12,5" en 12.5 si c'est un nombre
-                const trimmed = value.trim();
-                const converted = trimmed.replace(',', '.');
-                // Vérifier si c'est un nombre valide
-                if (!isNaN(Number(converted)) && converted !== '' && converted.match(/^-?\d+\.?\d*$/)) {
-                    acc[key] = Number(converted);
-                } else {
-                    acc[key] = value;
-                }
-            } else if (typeof value === 'object') {
-                acc[key] = convertFrenchNumbersInObject(value);
-            } else {
-                acc[key] = value;
-            }
-            return acc;
-        }, {} as any);
-    }
-    return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertFrenchNumbersInObject(item));
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (typeof value === 'string') {
+        // Convertir "12,5" en 12.5 si c'est un nombre
+        const trimmed = value.trim();
+        const converted = trimmed.replace(',', '.');
+        // Vérifier si c'est un nombre valide
+        if (!isNaN(Number(converted)) && converted !== '' && converted.match(/^-?\d+\.?\d*$/)) {
+          acc[key] = Number(converted);
+        } else {
+          acc[key] = value;
+        }
+      } else if (typeof value === 'object') {
+        acc[key] = convertFrenchNumbersInObject(value);
+      } else {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as any);
+  }
+  return obj;
 };
 
 export const parseCSVFile = <T>(
-    file: File, 
-    separator: string, 
-    onComplete: (data: T[]) => void
-) => {
+  file: File,
+  separator: string,
+  expectedColumns?: (keyof any)[],
+  expectedDateColumns?: string[],
+  expectedPositiveNumberColumns?: string[]
+): Promise<T[]> => {
+  return new Promise<T[]>((resolve, reject) => {
     Papa.parse(file, {
-        delimiter: separator,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-            console.log("Données CSV brutes:", results.data);
-            // Convertir les nombres français et filtrer les lignes vides
-            const cleanedData = (results.data as any[])
-                .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined))
-                .map(row => convertFrenchNumbersInObject(row)) as T[];
-            console.log("Données nettoyées et converties:", cleanedData);
-            onComplete(cleanedData);
-        },
-        error: (error) => {
-            console.error("Erreur lors du parsing CSV:", error.message);
+      delimiter: separator,
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        try {
+          console.log("Données CSV brutes:", results.data);
+
+          const csvColumns = (results.meta?.fields || []).filter(Boolean) as string[];
+          if (expectedColumns && expectedColumns.length > 0) {
+            validateColumnNames(csvColumns, expectedColumns);
+          }
+
+          const rows = (results.data as any[])
+            .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined));
+
+          if (expectedDateColumns && expectedDateColumns.length > 0) {
+            for (const row of rows) {
+              for (const dateColumn of expectedDateColumns) {
+                const rawValue = String(row?.[dateColumn] ?? "").trim();
+                if (rawValue && !isValidCsvDate(rawValue)) {
+                  throw new Error(
+                    `Format de date différente de DD/MM/YYYY. Colonne "${dateColumn}", valeur "${rawValue}"`
+                  );
+                }
+              }
+            }
+          }
+
+          if (expectedPositiveNumberColumns && expectedPositiveNumberColumns.length > 0) {
+            for (const row of rows) {
+              for (const numberColumn of expectedPositiveNumberColumns) {
+                const rawValue = row?.[numberColumn];
+                if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "") {
+                  throw new Error(
+                    `Montant manquant ou invalide. Colonne "${numberColumn}"`
+                  );
+                }
+
+                if (!isPositiveCsvNumber(rawValue)) {
+                  throw new Error(
+                    `Montant positif obligatoire. Colonne "${numberColumn}", valeur "${rawValue}"`
+                  );
+                }
+              }
+            }
+          }
+
+          const cleanedData = rows
+            .map(row => convertFrenchNumbersInObject(row)) as T[];
+          console.log("Données nettoyées et converties:", cleanedData);
+          resolve(cleanedData);
+        } catch (error: any) {
+          console.error("Erreur de validation:", error.message);
+          reject(error instanceof Error ? error : new Error(String(error)));
         }
+      },
+      error: (error) => {
+        console.error("Erreur lors du parsing CSV:", error.message);
+        reject(new Error(`Erreur lors du parsing CSV: ${error.message}`));
+      }
     });
+  });
+};
+
+export type InitialisationProgress = {
+  step: number;
+  total: number;
+  percent: number;
+  label: string;
 };
 
 // Initialiser toutes les données globales
-export async function InitialisationGLobal(): Promise<void> {
+export async function InitialisationGLobal(
+  onProgress?: (progress: InitialisationProgress) => void,
+): Promise<void> {
   try {
+    const totalSteps = 11;
+    let currentStep = 0;
+    const reportStep = (label: string) => {
+      currentStep += 1;
+      onProgress?.({
+        step: currentStep,
+        total: totalSteps,
+        percent: Math.round((currentStep / totalSteps) * 100),
+        label,
+      });
+    };
+
     console.log("Initialisation globale en cours...");
-        console.log("Suppression des commandes...");
-        await InitOrder();
+    console.log("Suppression de l'historique des commandes...");
+    await InitOrderHistory();
+    reportStep("Historique des commandes supprimé");
 
-        console.log("Suppression des paniers...");
-        await initPanier();
+    console.log("Suppression des commandes...");
+    await InitOrder();
+    reportStep("Commandes supprimées");
 
-        console.log("Suppression des adresses...");
-        await InitAdresse();
+    console.log("Suppression des paniers...");
+    await initPanier();
+    reportStep("Paniers supprimés");
 
-        console.log("Suppression des clients...");
-        await initClients();
+    console.log("Suppression des adresses...");
+    await InitAdresse();
+    reportStep("Adresses supprimées");
 
-        console.log("Suppression des valeurs d'attributs...");
-        await InitAttributesAndCharacteristics();
+    console.log("Suppression des clients...");
+    await initClients();
+    reportStep("Clients supprimés");
 
-        console.log("Suppression des produits...");
-        await InitProducts();
+    console.log("Suppression des images produits...");
+    await InitProductImages();
+    reportStep("Images produits supprimées");
 
-        console.log("Suppression des catégories...");
-        await InitCategory();
+    console.log("Suppression des produits...");
+    await InitProducts();
+    reportStep("Produits supprimés");
 
-        console.log("Initialisation globale réussie !");
+    console.log("Suppression des valeurs d'attributs...");
+    await InitAttributesAndCharacteristics();
+    reportStep("Attributs supprimés");
+
+
+    console.log("Suppression des catégories...");
+    await InitCategory();
+    reportStep("Catégories supprimées");
+
+    console.log("Suppression des taxes...");
+    await InitTaxes();
+    reportStep("Taxes supprimées");
+
+    console.log("Suppression des stocks et mouvements de stock...");
+    await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
+    reportStep("Stocks et mouvements supprimés");
+
+
+    console.log("Initialisation globale réussie !");
   } catch (error: any) {
     console.error("Erreur lors de l'initialisation globale:", error);
     throw new Error(`Erreur lors de l'initialisation global: ${error?.message ?? String(error)}`);
+  }
+}
+
+async function InitOrderHistory(): Promise<void> {
+  try {
+    const response = await requestPrestashopXml<any>("/order_histories", {
+      query: { display: "full", limit: 500 },
+    });
+
+    const rawHistories = response?.prestashop?.order_histories?.order_history;
+    const histories = asArray<any>(rawHistories);
+
+    for (const history of histories) {
+      const historyId = numFromUnknown(history?.id ?? history?.["@_id"]);
+      if (!historyId) continue;
+
+      try {
+        await requestPrestashopXml(`/order_histories/${historyId}`, { method: "DELETE" });
+        console.log(`✓ Suppression historique commande id=${historyId}`);
+      } catch (error: any) {
+        const status = Number(error?.status ?? 0);
+        if (status === 405) {
+          console.warn(`Suppression historique commande id=${historyId} non supportée par le webservice, on continue.`);
+          continue;
+        }
+        console.error(`Erreur suppression historique commande id=${historyId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("Erreur lors de la suppression des historiques de commande:", error);
   }
 }

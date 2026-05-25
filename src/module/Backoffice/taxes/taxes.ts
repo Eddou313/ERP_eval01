@@ -1,8 +1,8 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../utils/prestashopClient";
 import { asArray, languageField, textFromUnknown, normalizeText } from "../../../utils/helper";
 
-type CreatedTax = { id: number; name: string; rate: number };
-type CreatedTaxRuleGroup = { id: number; name: string; active: boolean };
+export type CreatedTax = { id: number; name: string; rate: number };
+export type CreatedTaxRuleGroup = { id: number; name: string; active: boolean };
 
 
 const DEFAULT_LANGUAGE_ID = 1;
@@ -173,3 +173,68 @@ export const ensureTaxRuleExists = async (
     cache.set(key, ruleId);
     return ruleId;
 };
+
+/**
+ * Supprime toutes les taxes (tax rules, tax rule groups, puis taxes)
+ */
+export async function InitTaxes(): Promise<void> {
+    try {
+        // 1. Supprimer tous les tax rules
+        try {
+            const taxRulesResponse = await requestPrestashopXml<any>('/tax_rules', { query: { display: 'full' } });
+            const taxRules = asArray(taxRulesResponse?.prestashop?.tax_rules?.tax_rule);
+            for (const rule of taxRules) {
+                const ruleId = Number(rule?.id ?? rule?.['@_id']);
+                if (ruleId > 0) {
+                    try {
+                        await requestPrestashopXml(`/tax_rules/${ruleId}`, { method: 'DELETE' });
+                    } catch (err) {
+                        console.warn(`Impossible de supprimer la tax rule ${ruleId}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Erreur lors de la suppression des tax rules:", err);
+        }
+
+        // 2. Supprimer tous les tax rule groups
+        try {
+            const groupsResponse = await requestPrestashopXml<any>('/tax_rule_groups', { query: { display: 'full' } });
+            const groups = asArray(groupsResponse?.prestashop?.tax_rule_groups?.tax_rule_group);
+            for (const group of groups) {
+                const groupId = Number(group?.id ?? group?.['@_id']);
+                if (groupId > 0) {
+                    try {
+                        await requestPrestashopXml(`/tax_rule_groups/${groupId}`, { method: 'DELETE' });
+                    } catch (err) {
+                        console.warn(`Impossible de supprimer le tax rule group ${groupId}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Erreur lors de la suppression des tax rule groups:", err);
+        }
+
+        // 3. Supprimer toutes les taxes
+        try {
+            const taxesResponse = await requestPrestashopXml<any>('/taxes', { query: { display: 'full' } });
+            const taxes = asArray(taxesResponse?.prestashop?.taxes?.tax);
+            for (const tax of taxes) {
+                const taxId = Number(tax?.id ?? tax?.['@_id']);
+                if (taxId > 0) {
+                    try {
+                        await requestPrestashopXml(`/taxes/${taxId}`, { method: 'DELETE' });
+                    } catch (err) {
+                        console.warn(`Impossible de supprimer la taxe ${taxId}:`, err);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn("Erreur lors de la suppression des taxes:", err);
+        }
+
+        console.log("Toutes les taxes ont été supprimées.");
+    } catch (error: any) {
+        console.error("Erreur lors de l'initialisation des taxes:", error);
+    }
+}

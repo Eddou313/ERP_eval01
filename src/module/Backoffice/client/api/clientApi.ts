@@ -422,10 +422,10 @@ export async function initClients(): Promise<void> {
         const ids = await listClientIds();
         await Promise.all(ids.map((id) => 
         {
-            if(id>1)
-            {
+            // if(id>1)
+            // {
                 deleteClient(id)
-            }
+            // }
         }));
         console.log("Tous les clients ont été supprimés.");
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listProductIds, listProductsLight } from "../../../Backoffice/produit/api/productsApi";
+import { listProductIds, listProductsLightPaginated } from "../../../Backoffice/produit/api/productsApi";
 import type { ProductListItem } from "../../../Backoffice/produit/api/object";
 import { listCategoriesLight } from "../../../Backoffice/categorie/api/categoriesApi";
 import type { CategoryListItem } from "../../../Backoffice/categorie/api/object";
@@ -23,18 +23,34 @@ export function useProduitsList(pageSize = 8) {
   const [appliedCriteria, setAppliedCriteria] = useState<ProductSearchCriteria>(DEFAULT_PRODUCT_SEARCH_CRITERIA);
 
   useEffect(() => {
+    const loadStaticData = async () => {
+      try {
+        const [productIds, loadedCategories] = await Promise.all([listProductIds(), listCategoriesLight()]);
+        setTotalProducts(productIds.length);
+        setCategoriesData(loadedCategories);
+      } catch (err) {
+        console.error("Erreur lors du chargement des données statiques produits:", err);
+        setError("Impossible de charger les catégories ou le total des produits.");
+      }
+    };
+
+    loadStaticData();
+  }, []);
+
+  useEffect(() => {
     const loadProducts = async () => {
       try {
         setLoading(true);
         const offset = (page - 1) * pageSize;
-        const [productIds, loadedProducts, loadedCategories] = await Promise.all([
-          listProductIds(),
-          listProductsLight(pageSize, offset),
-          listCategoriesLight(),
-        ]);
-        setTotalProducts(productIds.length);
-        setPageProducts(loadedProducts);
-        setCategoriesData(loadedCategories);
+        const loadedProducts = await listProductsLightPaginated(pageSize, offset);
+
+        const normalizedProducts: ProductListItem[] = loadedProducts.map((product) => ({
+          ...product,
+          combination_id: product.default_combination_id || undefined,
+          id_product_attribute: product.default_combination_id || undefined,
+        } as ProductListItem & { combination_id?: number; id_product_attribute?: number }));
+
+        setPageProducts(normalizedProducts);
       } catch (err) {
         console.error("Erreur lors du chargement des produits:", err);
         setError("Impossible de charger les produits. Vérifiez votre connexion à PrestaShop.");

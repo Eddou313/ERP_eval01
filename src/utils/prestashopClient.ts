@@ -14,7 +14,7 @@ export class PrestashopWebserviceError extends Error {
   }
 }
 
-function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
+export function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
   const value = import.meta.env[name] as string | undefined;
 
   if (!value) {
@@ -24,7 +24,7 @@ function getEnv(name: "VITE_BASE_URL" | "VITE_API_KEY"): string {
   return value;
 }
 
-function getEnvOptional(name: "VITE_BASE_URL_FULL" | "VITE_API_KEY"): string {
+export function getEnvOptional(name: "VITE_BASE_URL_FULL" | "VITE_API_KEY"): string {
   const value = import.meta.env[name] as string | undefined;
 
   return value?.trim() || "";
@@ -95,9 +95,9 @@ export async function requestPrestashopXml<T>(
   const bodyXml = opts.bodyXml?.replace(/^<\?xml[^>]*\?>\s*/i, "");
 
   if (bodyXml) {
-    console.log(
-      `\n===== XML OUT ${method} ${resourcePath} =====\n${bodyXml}\n===== END XML OUT =====\n`,
-    );
+    // console.log(
+      // `\n===== XML OUT ${method} ${resourcePath} =====\n${bodyXml}\n===== END XML OUT =====\n`,
+    // );
   }
 
   try {
@@ -117,11 +117,40 @@ export async function requestPrestashopXml<T>(
 
     const text = await response.text();
 
-    console.log(
-      `\n===== XML IN ${method} ${resourcePath} =====\n${text}\n===== END XML IN =====\n`,
-    );
-
     if (!response.ok) {
+      
+      // Fallback: certains endpoints n'acceptent pas DELETE directement (405).
+      // Pour les DELETE réessayons avec un POST + X-HTTP-Method-Override: DELETE
+      if (response.status === 405 && method === "DELETE") {
+        try {
+          const overrideHeaders: Record<string, string> = {
+            Accept: "application/xml",
+            "X-HTTP-Method-Override": "DELETE",
+          };
+          if (bodyXml) overrideHeaders["Content-Type"] = "application/xml";
+
+          const overrideResp = await fetch(fullUrl, {
+            method: "POST",
+            headers: overrideHeaders,
+            body: bodyXml,
+            signal: opts.signal,
+          });
+          const overrideText = await overrideResp.text();
+          if (!overrideResp.ok) {
+            throw new PrestashopWebserviceError(
+              `Erreur PrestaShop (override ${overrideResp.status})`,
+              overrideResp.status,
+              overrideText,
+            );
+          }
+          if (!overrideText.trim()) return {} as T;
+          return xmlToJson<T>(overrideText);
+        } catch (err) {
+          if (err instanceof PrestashopWebserviceError) throw err;
+          // tomberthrough vers l'erreur d'origine
+        }
+      }
+
       throw new PrestashopWebserviceError(
         `Erreur PrestaShop (${response.status})`,
         response.status,

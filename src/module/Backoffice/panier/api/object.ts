@@ -4,6 +4,7 @@ export type PrestashopCartItem = {
   id_customer?: unknown;
   id_guest?: unknown;
   id_order?: unknown;
+  secure_key?: unknown;
   id_carrier?: unknown;
   date_add?: unknown;
   date_upd?: unknown;
@@ -38,6 +39,7 @@ export type CartDetail = {
   id: number;
   id_order: number | null;
   id_customer: number;
+  secureKey?: string;
   customerName: string;
   customerEmail: string;
   customerRegistrationDate: string;
@@ -72,6 +74,7 @@ export type CartCreate = {
   id_shop_group?: number;
   secure_key?: string;
   date_add?: string;
+  date_upd?: string;
 };
 
 export type CartImport = CartCreate & {

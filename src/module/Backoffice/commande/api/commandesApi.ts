@@ -124,7 +124,7 @@ export async function listOrders(
     limit: number;
     offset: number;
     declencher?: number  // declencheur pour vrai commande
-    }>
+  }>
 ): Promise<OrderListItem[]> {
   const query: Record<string, string | number | boolean> = {
     display: "full",
@@ -232,8 +232,12 @@ export async function getOrder(id: number): Promise<OrderResource> {
     throw new Error(`ID commande invalide: ${id}`);
   }
 
-  const response = await requestPrestashopXml<OrderGetResponse>(`/orders/${id}`, {
-    query: { display: "full" },
+  const response = await requestPrestashopXml<OrderGetResponse>(`/orders/${id}`, 
+  {
+    query: { 
+      display: "full",
+      // "filter[email]": `[${gmail}]`,
+    },
   });
 
   if (!response?.prestashop?.order) {
@@ -258,7 +262,9 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     try {
       const customer = await getClient(form.id_customer);
       secureKey = customer?.secure_key || "";
-    } catch {
+      console.log(`Clé récupérée pour le client ${form.id_customer} :`, secureKey);
+    } catch (err) {
+      console.error(`Échec de la récupération du client ${form.id_customer} :`, err);
       secureKey = "";
     }
   }
@@ -274,7 +280,7 @@ export async function createOrder(form: OrderCreateForm): Promise<number> {
     ...form,
     module: paymentMethod.module,
     payment: paymentMethod.label,
-    secure_key: secureKey,
+    secure_key: form.secure_key || secureKey,
   };
 
   // Envoie la création
@@ -317,10 +323,21 @@ export async function updateOrder(id: number, form: OrderForm): Promise<void> {
 
 /**
  * UPDATE: Change l'état d'une commande
- * Utilise le workflow cohérent de PrestaShop
- * Envoie uniquement l'état + les champs obligatoires requis par PrestaShop
+ * Appelle le module personnalisé shiporder pour changer l'état
+ * Endpoint: /module/mon_module/shiporder?id_order=X&action=delivered
  */
-export async function updateOrderState(id: number, newState: number): Promise<void> {
+export async function updateOrderState(id: number, newState: number, date: string): Promise<void> {
+  try {
+    const order = await getOrder(id);
+    if (Number(order.current_state) === 5) {
+      alert("une commande deja livreer ne peut etre modifier");
+      return;
+    }
+  }
+  catch (e: any) {
+    // alert("le etat ne vas pas etre prend en compte" + e.message);
+  }
+
   if (!validateUnsignedId(id)) {
     throw new Error(`ID commande invalide: ${id}`);
   }
@@ -329,32 +346,53 @@ export async function updateOrderState(id: number, newState: number): Promise<vo
     throw new Error(`État invalide: ${newState}`);
   }
 
-  // Changer l'état via la ressource `order_history` évite d'altérer la commande
-  const xml = buildPrestashopXml({
-    prestashop: {
-      order_history: {
-        id_order: id,
-        id_order_state: newState,
-        // Certains shops exigent un employee; essayer avec 1 par défaut
-        id_employee: 1,
-      },
-    },
-  });
-
-  await requestPrestashopXml(`/order_histories`, {
-    method: "POST",
-    bodyXml: xml,
-  });
-
-  // Vérifier que PrestaShop a bien appliqué le nouvel état
   try {
-    const updated = await getOrder(id);
-    if (Number(updated.current_state) !== Number(newState)) {
-      throw new Error(`Échec du changement d'état (current_state=${updated.current_state})`);
+    const normalizedDate = date.includes("T")
+      ? date.replace("T", " ").replace("Z", "").slice(0, 19)
+      : date.slice(0, 19);
+
+    const xml = buildPrestashopXml({
+      prestashop: {
+        order_state_update: {
+          id_order: id,
+          id_order_state: newState,
+          date_add: normalizedDate,
+        },
+      },
+    });
+    // Appel via requestPrestashopXml qui passe par le proxy Vite /api
+    const response = await requestPrestashopXml<any>(
+      "/order_state_update",
+      {
+        method: "POST",
+        bodyXml: xml,
+      }
+    );
+    console.log(response);
+    const responseData =
+      response?.prestashop?.response ||
+      response?.prestashop?.order_state_update ||
+      response?.prestashop?.order_state_updates?.order_state_update ||
+      null;
+
+    const successValue = responseData?.success;
+    const success =
+      successValue === undefined ||
+      successValue === null ||
+      successValue === "true" ||
+      successValue === true ||
+      responseData?.id_order === id ||
+      responseData?.id_order_state === newState;
+    const message = textFromUnknown(responseData?.message);
+
+    if (!success) {
+      throw new Error(`Erreur module shiporder: ${message || "Réponse invalide"}`);
     }
-  } catch (err) {
-    // Relever l'erreur mais ne pas masquer l'appel original
-    throw new Error(`Erreur vérification changement d'état: ${err instanceof Error ? err.message : String(err)}`);
+
+    console.log(`✓ État de la commande #${id} changé à ${newState}: ${message}`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    throw new Error(`Impossible de changer l'état de la commande #${id}: ${errorMsg}`);
   }
 }
 

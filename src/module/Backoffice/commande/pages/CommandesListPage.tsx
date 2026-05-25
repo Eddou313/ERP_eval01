@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {formatCurrency,listOrdersLight,updateOrderState} from "../api/commandesApi";
 import "./Commandes.css";
 import {listOrderStates} from "../api/EtatCommande";
 import { IconSettings } from "@tabler/icons-react";
 import { CART_PENDING_STATE_LABEL, type OrderListItem } from "../api/ObjetOrder";
-import type { OrderStateListItem } from "../api/ObjetEtat";
+import { ALLOWED_STATES, type OrderStateListItem } from "../api/ObjetEtat";
 
 type OrderFilters = {
   reference: string;
@@ -26,10 +26,7 @@ const DEFAULT_FILTERS: OrderFilters = {
 };
 
 // États autorisés pour modification
-const ALLOWED_STATES = [
-  { id: 2, name: "Paiement accepter" },
-  { id: 6, name: "Annulé" },
-];
+
 
 
 
@@ -41,6 +38,9 @@ export default function CommandesListPage() {
   const [draftFilters, setDraftFilters] = useState<OrderFilters>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<OrderFilters>(DEFAULT_FILTERS);
   const [orderStates, setOrderStates] = useState<OrderStateListItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const pageSize = 10;
 
   // MODAL
   const [editingOrder, setEditingOrder] = useState<OrderListItem | null>(null);
@@ -49,14 +49,16 @@ export default function CommandesListPage() {
 
   const navigate = useNavigate();
 
-  async function refresh() {
+  async function refresh(currentPage = page) {
     setLoading(true);
     setError(null);
 
     try {
-      const orders = await listOrdersLight();
+      const offset = Math.max(0, (currentPage - 1) * pageSize);
+      const orders = await listOrdersLight({ limit: pageSize, offset });
       setItems(orders);
       setSelectedIds([]);
+      setHasNextPage(orders.length === pageSize);
     } catch (e: any) {
       setError(e?.message ?? "Erreur chargement commandes");
     } finally {
@@ -65,9 +67,9 @@ export default function CommandesListPage() {
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh(page);
     listOrderStates().then((states) => setOrderStates(states));
-  }, []);
+  }, [page]);
 
   const filtered = useMemo(() => 
   {
@@ -92,7 +94,7 @@ export default function CommandesListPage() {
 
     try {
       setSaving(true);
-      await updateOrderState(editingOrder.id, newState);
+      await updateOrderState(editingOrder.id, newState, new Date().toISOString());
       setEditingOrder(null);
       await refresh();
     } catch (e: any) {
@@ -153,6 +155,24 @@ export default function CommandesListPage() {
           ))}
         </tbody>
       </table>
+
+      <div className="pagination">
+        <button
+          className="btn"
+          onClick={() => setPage((current) => Math.max(1, current - 1))}
+          disabled={page === 1 || loading}
+        >
+          Précédent
+        </button>
+        <span className="page-info">Page {page}</span>
+        <button
+          className="btn"
+          onClick={() => setPage((current) => current + 1)}
+          disabled={loading || !hasNextPage}
+        >
+          Suivant
+        </button>
+      </div>
 
       {/* ================= MODAL ================= */}
       {editingOrder && (

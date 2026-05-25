@@ -1,4 +1,4 @@
-import { getProductImageUrl } from "../../../../utils/helper";
+import { getProductImageUrl, formatCurrency } from "../../../../utils/helper";
 import type { ProductListItem } from "../../../Backoffice/produit/api/object";
 
 type ProduitsGridProps = {
@@ -11,7 +11,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
     <div className="productsGrid">
       {products.map((product) => (
         <div
-          key={product.id}
+          key={(product as any).combination_id ? `${product.id}-${(product as any).combination_id}` : product.id}
           className="productCard"
           onClick={() => onProductClick(product)}
           style={{ cursor: "pointer" }}
@@ -36,7 +36,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
               </svg>
             )}
             {(() => {
-              const dateStr = product.available_date || product.date_add || "";
+              const dateStr = product.available_date  || "";
               if (!dateStr) return null;
 
               const date = new Date(dateStr);
@@ -68,7 +68,24 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
             <h3 className="productName">{product.name || "Produit sans nom"}</h3>
             <p className="productReference">{product.reference}</p>
             <div className="productPricing">
-              <span className="currentPrice">€{(product.price || 0).toFixed(2)}</span>
+              {(() => {
+                const taxRate = Number(product.tax_rate ?? 20) || 0;
+                // Use `price_ht` when available (HT), otherwise fall back to `price`.
+                // `price` from the API for simple products is already the final price (TTC),
+                // while combination entries set `price` to HT earlier. Prioritize `price_ht` to avoid double-taxing.
+                const priceHt = Number((product as any).price_ht ?? product.price ?? 0) || 0;
+                // Calculate TTC and round to 2 decimals for proper display
+                const priceTtc = Math.round(priceHt * (1 + taxRate / 100) * 100) / 100;
+                return (
+                  <>
+                    <span className="currentPrice">{formatCurrency(priceTtc)}</span>
+                    {(product as any).wholesale_price !== undefined && (product as any).wholesale_price !== null ? (
+                      <span className="wholesalePrice">Achat: {formatCurrency(Number((product as any).wholesale_price) || 0)}</span>
+                    ) : null}
+                  </>
+                );
+              })()}
+              <span className="currentPrice">date de disponibilité: {product.available_date }</span>
             </div>
             {product.quantity && product.quantity > 0 ? (
               <span className="inStock">

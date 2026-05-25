@@ -1,0 +1,180 @@
+import { addProductsToCart, createCart } from "./carts";
+import type { colonneCSV } from "./colonne";
+import { createClientAddress, getOrCreateCustomer } from "./customers";
+import { createOrderFromCart } from "./orders";
+import type { findProductByReference } from "./produit";
+import { parseAchat, regrouperCommandes } from "./regroupCommandes";
+
+export type Commande = colonneCSV["Commande_client_produit"];
+
+export type ProduitAchat = {
+    reference: string;
+    quantite: number;
+    karazany: string;
+}
+export type EtatCommande = "panier" | "paiement accepté" | "livré" | "annulé";
+
+export interface ImportCommandeResult {
+    email: string;
+    status: "success" | "error";
+    message: string;
+}
+
+export type ImportProgress = {
+    processed: number;
+    total: number;
+    imported: number;
+    failed: number;
+    current?: string;
+};
+
+export const ETAT_TO_ORDER_STATE: Record<string, number> = {
+    "paiement accepté": 2,
+    "livré": 5,
+    "annulé": 6,
+};
+export type ProductCache = Map<string, Awaited<ReturnType<typeof findProductByReference>>>;
+
+
+
+export async function importProduitCommandeCsv(
+    rows: Commande[],
+    options?: {
+        onProgress?: (progress: ImportProgress) => void;
+    },
+): Promise<{
+    customersCreated: number;
+    cartsCreated: number;
+    ordersCreated: number;
+    failed: number;
+}> {
+    rows = regrouperCommandes(rows);
+
+    let customersCreated = 0;
+    let cartsCreated = 0;
+    let ordersCreated = 0;
+    let failed = 0;
+    const total = rows.length;
+
+    options?.onProgress?.({ processed: 0, total, imported: 0, failed: 0, current: "Démarrage" });
+
+    for (let index = 0; index < rows.length; index++) {
+        const cmd = rows[index];
+        let current = cmd.email;
+        try {
+            const produits = regrouperAchat(parseAchat(cmd.achat));
+            console.log(produits);
+            const etat = normaliserEtat(cmd.etat);
+
+            // ── 1. Créer ou récupérer le client ──
+            const customer = await getOrCreateCustomer(cmd);
+            if (!customer) throw new Error(`Impossible de créer le client "${cmd.email}"`);
+            customersCreated++;
+            current = cmd.email;
+
+            console.log(`clef secure du client ${cmd.email} : ${customer.secure_key}`);
+
+            // const customerDetail = await getClient(customer.id).catch(() => null);
+            // const addressParts = (cmd.adresse || "").split(/,|\n/);
+            // const addressLine1 = addressParts[0]?.trim() || "Adresse non spécifiée";
+            // const addressPostal = addressParts[1]?.trim() || "00000";
+            // const addressCity = addressParts[2]?.trim() || "Ville";
+
+            const addressLine1 = (cmd.adresse || "").trim() || "Adresse non spécifiée";
+            const addressPostal = "00000";
+            const addressCity = "Ville";
+
+            const addressId = await createClientAddress(customer.id, {
+                firstname: customer?.firstname,
+                lastname: customer?.lastname || ".",
+                address1: addressLine1,
+                postcode: addressPostal,
+                city: addressCity,
+                id_country: 8,
+            });
+
+            // ── 2. Créer le panier (retourne cartId + addressId) ──
+            const { cartId } = await createCart(customer.id, customer.secure_key, addressId);
+            if (!cartId) {
+                throw new Error(`Impossible de créer le panier`);
+                continue;
+            }
+            // // ── 3. Ajouter TOUS les produits en un seul PUT ──
+            //    customerId et addressId passés explicitement pour éviter les 0
+            await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
+            cartsCreated++;
+
+            // // ── 4. Etat vide → panier uniquement ──
+            if (etat === "panier") continue;
+
+            // // ── 5. Créer la commande depuis le panier ──
+            const orderId = await createOrderFromCart(
+                cartId,
+                customer,                        // { id, secureKey }
+                ETAT_TO_ORDER_STATE[etat],
+                cmd.date,
+                addressId                        // fallback adresse
+            );
+            if (!orderId) throw new Error(`Impossible de créer la commande`);
+            ordersCreated++;
+
+        } catch (err: any) {
+            console.error(`[commande] Erreur pour ${cmd.email}:`, err?.message);
+            failed++;
+        } finally {
+            options?.onProgress?.({
+                processed: index + 1,
+                total,
+                imported: ordersCreated,
+                failed,
+                current,
+            });
+        }
+    }
+    options?.onProgress?.({
+        processed: total,
+        total,
+        imported: ordersCreated,
+        failed,
+        current: "Terminé",
+    });
+    console.log(`vita`);
+    return { customersCreated, cartsCreated, ordersCreated, failed };
+}
+
+// utils
+
+export function normaliserEtat(etat: string): EtatCommande {
+    const e = etat?.trim().toLowerCase();
+    if (!e) return "panier";
+    if (e.includes("paiement")) return "paiement accepté";
+    if (e.includes("livr")) return "livré";
+    if (e.includes("annul")) return "annulé";
+    return "panier";
+}
+
+export function generateSecureKey(): string {
+    return Array.from({ length: 32 }, () =>
+        Math.floor(Math.random() * 16).toString(16)
+    ).join("");
+}
+
+export function regrouperAchat(produits: ProduitAchat[]): ProduitAchat[] {
+    const map = new Map<string, ProduitAchat>();
+
+    for (const produit of produits) {
+        const key = `${produit.reference}|${produit.karazany}`;
+        const existing = map.get(key);
+
+        if (existing) {
+            existing.quantite += produit.quantite;
+            continue;
+        }
+
+        map.set(key, { ...produit });
+    }
+
+    return Array.from(map.values());
+}
+// -----
+

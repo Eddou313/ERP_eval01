@@ -42,12 +42,37 @@ export function ProduitDetail() {
         console.log("ProduitDetail attributeGroups:", attrs);
         setAttributeGroups(attrs);
 
-        setSelectedAttributeValues(
-          attrs.reduce((accumulator, group) => {
-            accumulator[group.group.id] = String(group.selectedValueId || "");
-            return accumulator;
-          }, {} as Record<number, string>)
-        );
+        // If navigation provided a combination_id, preselect its attribute values
+        const navComboId = (location.state as any)?.combination_id ?? (initialProduct as any)?.combination_id;
+
+        if (navComboId) {
+          // find the combination object in the loaded attribute groups
+          const allCombinations = attrs.flatMap((g) => g.combinations || []);
+          const found = allCombinations.find((c) => Number((c as any).id) === Number(navComboId));
+          if (found && (found as any).attributes && (found as any).attributes.length > 0) {
+            const mapping = (found as any).attributes.reduce((acc: Record<number, string>, a: any) => {
+              acc[a.groupId] = String(a.valueId);
+              return acc;
+            }, {} as Record<number, string>);
+            setSelectedAttributeValues(mapping);
+            // verify stock for this combination immediately
+            setTimeout(() => verifyStockForAttributes(mapping), 0);
+          } else {
+            setSelectedAttributeValues(
+              attrs.reduce((accumulator, group) => {
+                accumulator[group.group.id] = String(group.selectedValueId || "");
+                return accumulator;
+              }, {} as Record<number, string>)
+            );
+          }
+        } else {
+          setSelectedAttributeValues(
+            attrs.reduce((accumulator, group) => {
+              accumulator[group.group.id] = String(group.selectedValueId || "");
+              return accumulator;
+            }, {} as Record<number, string>)
+          );
+        }
       } catch (err) {
         console.error("Erreur lors du chargement des détails:", err);
         setError("Impossible de charger les détails du produit");
@@ -113,9 +138,11 @@ export function ProduitDetail() {
       if (match && match.id) {
         const comboId = Number(match.id);
         const stock = await getStockByProductId(product.id, comboId);
-        setAvailableStock(stock ?? 0);
-        console.log(`Stock vérifié pour combinaison ${comboId}:`, stock);
-        return stock;
+        const fallback = Number((match as any).quantity) || 0;
+        const finalStock = stock ?? fallback;
+        setAvailableStock(finalStock);
+        console.log(`Stock vérifié pour combinaison ${comboId}:`, stock, "fallback:", fallback);
+        return finalStock;
       }
 
       // Produit à déclinaisons mais combinaison non trouvée => stock 0
@@ -136,10 +163,12 @@ export function ProduitDetail() {
     const priceAfterCombination = Math.max(0, basePrice + comboImpact);
 
     const reductionAmount = Number(product?.reduction_amount ?? 0) || (product?.on_sale ? priceAfterCombination * 0.2 : 0);
-    const priceHt = Math.max(0, priceAfterCombination - reductionAmount);
+    let priceHt = Math.max(0, priceAfterCombination - reductionAmount);
+    
     const taxRate = Number(product?.tax_rate ?? 20) || 0;
-    const taxAmount = priceHt * (taxRate / 100);
-    const finalPrice = priceHt + taxAmount;
+    // Calculate TTC and round to 2 decimals for proper display
+    const finalPrice = Math.round(priceHt * (1 + taxRate / 100) * 100) / 100;
+    const taxAmount = Math.round((finalPrice - priceHt) * 100) / 100;
 
     console.log(
       "Formule prix produit:",

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { listOrderStates, type OrderStateListItem } from "../api/EtatCommande";
+import { listOrderStates } from "../api/EtatCommande";
+import {type OrderStateListItem} from "../api/ObjetEtat";
 import "./EtatCommande.css";
 
 export function EtatCommande() {

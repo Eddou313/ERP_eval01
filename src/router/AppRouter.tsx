@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import DashboardPage from "../module/Backoffice/tableauBord/pages/DashboardPage"
+import EvolutionStockPage from "../module/Backoffice/tableauBord/pages/Evolution_stock"
+import StatsPage from "../module/Backoffice/tableauBord/pages/StatsPage"
 
 // import CategoriesListPage from "../module/Backoffice/categorie/pages/CategoriesListPage"
 // import ProductsListPage from "../module/Backoffice/produit/pages/ProductsListPage"
@@ -21,6 +23,10 @@ import ClientListe from "../module/FrontOffice/client/pages/ClientListe"
 import { Panier } from "../module/FrontOffice/panier/Panier"
 import Commande from "../module/FrontOffice/commande/pages/Commande"
 import WorkFlowCommande from "../module/FrontOffice/commande/pages/WorkFlowCommande"
+import { Stock } from "../module/Backoffice/stock/pages/Stock"
+import StockMovements from "../module/Backoffice/stock/pages/StockMovements"
+import Traitement from "../module/FrontOffice/commande/pages/Traitement"
+import Import from "../import/pages/Import"
 
 function AppRouter() {
   return (
@@ -35,20 +41,25 @@ function AppRouter() {
           <Route path="/Mescommande" element={<Commande />} />
           <Route path="/Commande" element={<WorkFlowCommande />} />
           <Route path="/admin/login" element={<Login />} />
+          <Route path="/traitement" element={<Traitement />}></Route>
 
           <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}
             
             <Route path="/Dashboard" element={<DashboardPage />} />
+            <Route path="/stock/evolution" element={<EvolutionStockPage />} />
+            <Route path="/Dashboard/stats" element={<StatsPage />} />
 
             {/* <Route path="catalogue/categories" element={<CategoriesListPage />} /> */}
             {/* <Route path="catalogue/produits" element={<ProductsListPage />} /> */}
             {/* <Route path="catalogue/attributs-caracteristiques" element={<AttributsCaracteristiquesPage />} /> */}
             {/* <Route path="catalogue/marques-fournisseurs" element={<MarquesFournisseursPage />} /> */}
-            {/* <Route path="catalogue/stock" element={<StockPage />} /> */}
+            <Route path="/catalogue/stock" element={<Stock />} />
+            <Route path="/stock/etat"element={<StockMovements />} />
 
             <Route path="commandes/list" element={<CommandesListPage />} />
             <Route path="/catalogue/fichier" element={<ImportGlobal/>}/>
+            <Route path="/catalogue/file" element={<Import/>}/>
 
             {/* <Route path="/clients/clients" element={<ClientsListe/>}/> */}
             {/* <Route path="/clients/adresses" element={<ClientsAdressesListe/>}/> */}

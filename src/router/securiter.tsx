@@ -7,7 +7,7 @@ function SecureRoute() {
 	const session = getStoredAuthSession();
 
 	if (!session) {
-		return <Navigate to="/backoffice/login" replace state={{ from: location }} />;
+		return <Navigate to="/admin/login" replace state={{ from: location }} />;
 	}
 
 	return (

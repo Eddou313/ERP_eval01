@@ -31,6 +31,21 @@ async function resolveDefaultCombinationId(product: any, productId: number): Pro
   }
 }
 
+export async function getRealProductStock(product: any, productId: number, productAttributeId?: number): Promise<number | null> {
+  const resolvedAttributeId = Number(productAttributeId || 0);
+
+  if (resolvedAttributeId > 0) {
+    return getStockByProductId(productId, resolvedAttributeId);
+  }
+
+  const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
+  if (defaultCombinationId > 0) {
+    return getStockByProductId(productId, defaultCombinationId);
+  }
+
+  return getStockByProductId(productId);
+}
+
 async function resolveCombinationPriceImpact(productId: number, combinationId: number): Promise<number> {
   if (!combinationId) return 0;
 
@@ -141,20 +156,20 @@ export async function resolveProductPriceWorkflow(product: any, productId: numbe
   const defaultCombinationId = await resolveDefaultCombinationId(product, productId);
   const targetCombinationId = Number(combinationId || defaultCombinationId || 0);
   const combinationPriceImpact = await resolveCombinationPriceImpact(productId, targetCombinationId);
-  const priceAfterCombination = roundMoney(basePrice + combinationPriceImpact);
+  const priceAfterCombination = basePrice + combinationPriceImpact;
   const reductionAmount = await resolveReductionAmount(product, productId, priceAfterCombination, targetCombinationId);
-  const priceHt = roundMoney(Math.max(0, priceAfterCombination - reductionAmount));
+  const priceHt = Math.max(0, priceAfterCombination - reductionAmount);
   const taxRate = await resolveTaxRate(product);
-  const taxAmount = roundMoney(priceHt * (taxRate / 100));
+  const taxAmount = priceHt * (taxRate / 100);
   const finalPrice = roundMoney(priceHt + taxAmount);
 
   return {
-    basePrice: roundMoney(basePrice),
-    combinationPriceImpact: roundMoney(combinationPriceImpact),
+    basePrice: Number(basePrice.toFixed(6)),
+    combinationPriceImpact: Number(combinationPriceImpact.toFixed(6)),
     reductionAmount: roundMoney(reductionAmount),
     taxRate: roundMoney(taxRate),
-    taxAmount,
-    priceHt,
+    taxAmount: roundMoney(taxAmount),
+    priceHt: Number(priceHt.toFixed(6)),
     finalPrice,
     defaultCombinationId: targetCombinationId || defaultCombinationId,
   };
@@ -237,8 +252,8 @@ export async function getProduct(id: number): Promise<ProductListItem> {
   const json = await requestPrestashopXml<ProductGetResponse>(`/products/${id}`);
   const p = json.prestashop.product;
 
-  const stock = await getStockByProductId(id);
   const pricing = await resolveProductPriceWorkflow(p, id);
+  const stock = await getRealProductStock(p, id, pricing.defaultCombinationId);
 
   return mapProductFromApi(p, stock ?? 0, pricing);
 }
@@ -384,7 +399,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
         id_category_default: data.id_category_default,
         id_tax_rules_group: data.id_tax_rules_group || 0,
         id_default_image: data.id_default_image || 0,
-        type: data.type || "simple",
+        type: data.type || "standard",
         reference: data.reference || "",
         supplier_reference: data.supplier_reference || "",
         price: data.price,
@@ -471,6 +486,7 @@ export async function createProduct(data: ProductCreateForm): Promise<{ id: numb
  */
 export async function updateProduct(id: number, data: ProductUpdateForm): Promise<void> {
   const existing = await getProductDetail(id);
+  const existingAny = existing as any;
 
   const payload = {
     prestashop: {
@@ -479,13 +495,19 @@ export async function updateProduct(id: number, data: ProductUpdateForm): Promis
         id_manufacturer: data.id_manufacturer ?? existing.id_manufacturer,
         id_supplier: data.id_supplier ?? existing.id_supplier,
         id_category_default: data.id_category_default ?? existing.id_category_default,
+        id_tax_rules_group: data.id_tax_rules_group ?? existingAny.id_tax_rules_group ?? 0,
         id_default_image: data.id_default_image ?? existing.id_default_image,
         state: data.state ?? existing.state ?? 1,
         reference: data.reference ?? existing.reference ?? "",
         supplier_reference: data.supplier_reference ?? "",
         price: data.price ?? existing.price,
+        wholesale_price: data.wholesale_price ?? existingAny.wholesale_price ?? 0,
         on_sale: data.on_sale !== undefined ? (data.on_sale ? "1" : "0") : (existing.on_sale ? "1" : "0"),
         active: data.active !== undefined ? (data.active ? "1" : "0") : (existing.active ? "1" : "0"),
+        visibility: data.visibility ?? existing.type ?? "both",
+        available_for_order: data.available_for_order !== undefined ? (data.available_for_order ? "1" : "0") : (existingAny.available_for_order ? "1" : "0"),
+        show_price: data.show_price !== undefined ? (data.show_price ? "1" : "0") : (existingAny.show_price ? "1" : "0"),
+        available_date: data.available_date ?? existing.available_date ?? "",
         name: {
           language: {
             "@_id": "1",
@@ -547,12 +569,63 @@ export async function uploadProductImage(productId: number, file: Blob, fileName
 }
 
 /**
+ * Supprime une image produit.
+ */
+export async function deleteProductImage(productId: number, imageId?: number): Promise<void> {
+  const path = imageId ? `/images/products/${productId}/${imageId}` : `/images/products/${productId}`;
+  await requestPrestashopXml(path, {
+    method: "DELETE",
+  });
+}
+
+/**
+ * Supprime toutes les images d'un produit.
+ */
+export async function deleteAllProductImages(productId: number): Promise<void> {
+  const images = await getProductImages(productId);
+  if (images.length === 0) {
+    return;
+  }
+
+  await Promise.allSettled(
+    images.map((image) => deleteProductImage(productId, image.id_image)),
+  );
+}
+
+/**
+ * Supprime toutes les images de tous les produits.
+ */
+export async function InitProductImages(): Promise<void> {
+  try {
+    const data = await listProductsLight();
+    for (const product of data) {
+      if (product.id > 0) {
+        await deleteAllProductImages(product.id);
+      }
+    }
+    console.log("Toutes les images produits ont été supprimées.");
+  } catch (caught: any) {
+    console.error("Erreur lors de l'initialisation des images produits :", caught);
+  }
+}
+
+/**
  * Delete a product
  */
 export async function deleteProduct(id: number): Promise<void> {
-  await requestPrestashopXml(`/products/${id}`, {
-    method: "DELETE",
-  });
+  try {
+    await requestPrestashopXml(`/products/${id}`, {
+      method: "DELETE",
+    });
+  } catch (error: any) {
+    const status = Number(error?.status ?? 0);
+    if (status === 404 || status === 405) {
+      console.warn(`Suppression produit id=${id} non supportée ou produit introuvable, on continue.`);
+      return;
+    }
+
+    throw error;
+  }
 }
 
 /**
@@ -607,12 +680,12 @@ export async function InitProducts(): Promise<void> {
   // const confirmed = window.confirm("Vous etes sur de supprimer tous les produits ?");
   // if (!confirmed) return;
   try{
-    const data = await listProductsLight();
-    const sortedData = [...data].sort((a, b) => (b.id || 0) - (a.id || 0));
+    const ids = await listProductIds();
+    const sortedIds = [...ids].sort((a, b) => b - a);
 
-    for (const product of sortedData) {
-      if (product.id > 0) {
-          await deleteProduct(product.id);
+    for (const productId of sortedIds) {
+      if (productId > 0) {
+          await deleteProduct(productId);
       }
     }
   }

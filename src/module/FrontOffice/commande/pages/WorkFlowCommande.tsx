@@ -232,7 +232,7 @@ export default function WorkFlowCommande() {
 				};
 
 				const orderId = await createCommande(form);
-				await updateOrderState(orderId, 1);
+				// await updateOrderState(orderId, 1);
 
 				if (clearCartAfterOrder) {
 				setCart(null);
@@ -248,28 +248,26 @@ export default function WorkFlowCommande() {
 							throw new Error("Contexte de commande incomplet pour le retry");
 						}
 
-						const freshCartId = await createCart({
-							id_customer: Number(session.id),
-							id_lang: form.id_lang,
-							id_currency: form.id_currency,
-							id_address_delivery: deliveryAddressId,
-							id_address_invoice: invoiceAddressId || deliveryAddressId,
-							id_carrier: selectedModeLivraisonId,
-							id_shop: 1,
-							id_shop_group: 1,
-							items: cartItems.map((item) => ({
-								id_product: item.product_id,
-								id_product_attribute: item.id_product_attribute,
-								quantity: item.quantity,
-							})),
-						});
-
-						const retryCart = await getCart(freshCartId);
+					const retryCart = await createCart({
+						id_customer: Number(session.id),
+						id_lang: form.id_lang,
+						id_currency: form.id_currency,
+						id_address_delivery: deliveryAddressId,
+						id_address_invoice: invoiceAddressId || deliveryAddressId,
+						id_carrier: selectedModeLivraisonId,
+						id_shop: 1,
+						id_shop_group: 1,
+						items: cartItems.map((item) => ({
+							id_product: item.product_id,
+							id_product_attribute: item.id_product_attribute,
+							quantity: item.quantity,
+						})),
+					});
 						const retryTotalProducts = retryCart.items.reduce((sum, item) => sum + (item.total || 0), 0);
 						const retryGrandTotal = retryTotalProducts + shippingCost;
 						const retryForm = {
 							...form,
-							id_cart: freshCartId,
+						id_cart: retryCart.id,
 							total_paid: retryGrandTotal,
 							total_paid_tax_incl: retryGrandTotal,
 							total_paid_tax_excl: retryGrandTotal,
@@ -280,7 +278,8 @@ export default function WorkFlowCommande() {
 						};
 
 						const retryOrderId = await createCommande(retryForm);
-						await updateOrderState(retryOrderId, 1);
+						const dateJ = new Date().toISOString().split("T")[0];
+						await updateOrderState(retryOrderId, 1,dateJ);
 						if (clearCartAfterOrder) {
 
 							setCart(null);
