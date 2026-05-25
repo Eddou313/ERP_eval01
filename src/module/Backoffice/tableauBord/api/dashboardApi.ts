@@ -57,63 +57,82 @@ async function fetchCategoryName(categoryId: number) {
 }
 
 export async function getDashboardStats(): Promise<{
-  totalSalesHT: number;
-  totalPurchasesHT: number;
+  totalSalesTTC: number;
+  totalPurchases: number;
+  totalProfit: number;
   profitByCategory: CategoryStat[];
+  canceledByCategory: CategoryStat[];
+  canceledTotals: { sales: number; purchases: number; profit: number };
 }> {
   const salesTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
-  let totalSalesHT = 0;
-  let totalPurchasesHT = 0;
+  const canceledTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
+  let totalSalesTTC = 0;
+  let totalPurchases = 0;
+  let canceledSales = 0;
+  let canceledPurchases = 0;
 
   const response = await requestPrestashopXml<any>("/orders", { query: { display: "full", limit: "0,10000" } });
   const orders = asArray(response?.prestashop?.orders?.order ?? []);
 
-  // Agréger les commandes non annulées en s'appuyant sur le total HT Prestashop.
+  // Agréger les commandes selon la formule:
+  // bénéfice = vente TTC - achat
   for (const order of orders) {
     const currentState = numFromUnknown(order?.current_state);
-    if (currentState === 6) {
-      continue;
-    }
-
-    const orderSalesHT = Number(order?.total_paid_tax_excl ?? order?.total_paid ?? 0) || 0;
 
     const rows = asArray(order?.associations?.order_rows?.order_row ?? []);
-    const rowBaseAmounts = rows.map((row: any) => {
-      const productId = numFromUnknown(row?.product_id ?? row?.id_product ?? row?.id_product ?? 0) || 0;
-      const qty = Number(row?.product_quantity ?? row?.product_qty ?? 0) || 0;
+    const rowBaseAmounts = [] as Array<{ productId: number; qty: number; salesAmount: number }>;
 
-      let unitPrice = Number(row?.unit_price_tax_excl ?? row?.product_price ?? row?.unit_price ?? 0) || 0;
-      if (productId > 0 && (!unitPrice || unitPrice === 0)) {
-        const cachedProduct = productCache.get(productId);
-        unitPrice = cachedProduct?.price || 0;
-      }
+    for (const row of rows) {
+      const productId = numFromUnknown(row?.product_id ?? row?.id_product ?? row?.id ?? row?.['@_id'] ?? 0) || 0;
+      const qty = Number(row?.product_quantity ?? row?.product_qty ?? row?.quantity ?? 0) || 0;
 
-      return {
-        row,
+      const salesAmount = Number(row?.total_price_tax_incl);
+      const fallbackSalesAmount = (Number(row?.unit_price_tax_incl ?? row?.product_price_wt ?? 0) || 0) * qty;
+
+      rowBaseAmounts.push({
         productId,
         qty,
-        baseAmount: unitPrice * qty,
-      };
-    });
+        salesAmount: Number.isFinite(salesAmount) && salesAmount > 0 ? salesAmount : fallbackSalesAmount,
+      });
+    }
 
-    const totalBaseAmount = rowBaseAmounts.reduce((sum, item) => sum + item.baseAmount, 0);
-    totalSalesHT += orderSalesHT;
+    const orderSalesTTC = rowBaseAmounts.reduce((sum, item) => sum + item.salesAmount, 0);
+    let orderPurchases = 0;
+    const rowComputed = [] as Array<{ catId: number; saleAmount: number; purchaseAmount: number }>;
 
     for (const item of rowBaseAmounts) {
       const prodInfo = item.productId > 0 ? await fetchProductInfo(item.productId) : { price: 0, wholesale: 0, categories: [] };
       const wholesale = prodInfo.wholesale || 0;
       const purchaseAmount = wholesale * item.qty;
+      const saleAmount = item.salesAmount;
 
-      const saleAmount = totalBaseAmount > 0
-        ? orderSalesHT * (item.baseAmount / totalBaseAmount)
-        : 0;
-
-      totalPurchasesHT += purchaseAmount;
-
+      orderPurchases += purchaseAmount;
       const catId = prodInfo.categories?.[0] ?? 0;
+      rowComputed.push({ catId, saleAmount, purchaseAmount });
+    }
+
+    if (currentState === 6) {
+      canceledSales += orderSalesTTC;
+      canceledPurchases += orderPurchases;
+
+      for (const row of rowComputed) {
+        const catId = row.catId;
+        const entry = canceledTotalsByCategory.get(catId) ?? { sales: 0, purchases: 0 };
+        entry.sales += row.saleAmount;
+        entry.purchases += row.purchaseAmount;
+        canceledTotalsByCategory.set(catId, entry);
+      }
+      continue;
+    }
+
+    totalSalesTTC += orderSalesTTC;
+    totalPurchases += orderPurchases;
+
+    for (const row of rowComputed) {
+      const catId = row.catId;
       const entry = salesTotalsByCategory.get(catId) ?? { sales: 0, purchases: 0 };
-      entry.sales += saleAmount;
-      entry.purchases += purchaseAmount;
+      entry.sales += row.saleAmount;
+      entry.purchases += row.purchaseAmount;
       salesTotalsByCategory.set(catId, entry);
     }
   }
@@ -122,13 +141,44 @@ export async function getDashboardStats(): Promise<{
   for (const [catId, vals] of salesTotalsByCategory.entries()) {
     const name = catId === 0 ? "Sans catégorie" : await fetchCategoryName(catId);
     const profit = vals.sales - vals.purchases;
-    profitByCategory.push({ categoryId: catId, categoryName: name, sales: vals.sales, purchases: vals.purchases, profit });
+    profitByCategory.push({
+      categoryId: catId,
+      categoryName: name,
+      sales: vals.sales,
+      purchases: vals.purchases,
+      profit,
+    });
+  }
+
+  const canceledByCategory: CategoryStat[] = [];
+  for (const [catId, vals] of canceledTotalsByCategory.entries()) {
+    const name = catId === 0 ? "Sans catégorie" : await fetchCategoryName(catId);
+    const profit = vals.sales - vals.purchases;
+    canceledByCategory.push({
+      categoryId: catId,
+      categoryName: name,
+      sales: vals.sales,
+      purchases: vals.purchases,
+      profit,
+    });
   }
 
   // Sort by profit desc
   profitByCategory.sort((a, b) => b.profit - a.profit);
+  canceledByCategory.sort((a, b) => b.profit - a.profit);
 
-  return { totalSalesHT, totalPurchasesHT, profitByCategory };
+  return {
+    totalSalesTTC,
+    totalPurchases,
+    totalProfit: totalSalesTTC - totalPurchases,
+    profitByCategory,
+    canceledByCategory,
+    canceledTotals: {
+      sales: canceledSales,
+      purchases: canceledPurchases,
+      profit: canceledSales - canceledPurchases,
+    },
+  };
 }
 
 export type { CategoryStat };

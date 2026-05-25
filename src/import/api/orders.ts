@@ -275,6 +275,7 @@ export async function createOrderFromCart(
             total_products: order.total_products || 0,
             total_products_wt: order.total_products_wt || 0,
             total_paid_tax_incl: order.total_paid_tax_incl || 0,
+            total_paid_tax_excl: order.total_paid_tax_excl || 0,
           },
         },
       }),

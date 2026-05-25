@@ -4,9 +4,12 @@ import { getCategory } from "../api/../../categorie/api/categoriesApi";
 
 export default function StatsPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
-  const [totalSales, setTotalSales] = useState(0);
+  const [totalSalesTTC, setTotalSalesTTC] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
+  const [totalProfit, setTotalProfit] = useState(0);
   const [byCategory, setByCategory] = useState<CategoryStat[]>([]);
+  const [canceledByCategory, setCanceledByCategory] = useState<CategoryStat[]>([]);
+  const [canceledTotals, setCanceledTotals] = useState({ sales: 0, purchases: 0, profit: 0 });
 
   useEffect(() => {
     let mounted = true;
@@ -14,8 +17,11 @@ export default function StatsPage(): JSX.Element {
       try {
         const res = await getDashboardStats();
         if (!mounted) return;
-        setTotalSales(res.totalSalesHT || 0);
-        setTotalPurchases(res.totalPurchasesHT || 0);
+        setTotalSalesTTC(res.totalSalesTTC || 0);
+        setTotalPurchases(res.totalPurchases || 0);
+        setTotalProfit(res.totalProfit || 0);
+        setCanceledByCategory(res.canceledByCategory || []);
+        setCanceledTotals(res.canceledTotals || { sales: 0, purchases: 0, profit: 0 });
 
         // Ensure categories have names: if a categoryName is missing,
         // fetch the category by id as a fallback.
@@ -67,23 +73,23 @@ export default function StatsPage(): JSX.Element {
       {/* section des KPI Cards */}
       <div style={styles.kpiGrid}>
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Montant total des ventes (HT)</span>
+          <span style={styles.cardLabel}>Ventes totales (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
-            {totalSales.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
-          </span>
-        </div>
-        
-        <div style={styles.card}>
-          <span style={styles.cardLabel}>Montant total des achats (HT)</span>
-          <span style={{ ...styles.cardValue, color: "#ef4444" }}>
-            {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
+            {totalSalesTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Bénéfice global estimé(HT)</span>
-          <span style={{ ...styles.cardValue, color: "#3b82f6" }}>
-            {(totalSales - totalPurchases).toLocaleString("fr-FR", { minimumFractionDigits: 3, maximumFractionDigits: 3 })} €
+          <span style={styles.cardLabel}>Coût total des achats</span>
+          <span style={{ ...styles.cardValue, color: "#ef4444" }}>
+            {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          </span>
+        </div>
+
+        <div style={styles.card}>
+          <span style={styles.cardLabel}>Bénéfice estimé</span>
+          <span style={{ ...styles.cardValue, color: "#1e3a8a" }}>
+            {totalProfit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
       </div>
@@ -95,9 +101,9 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
-              <th style={styles.th}>Ventes (HT)</th>
-              <th style={styles.th}>Achats (HT)</th>
-              <th style={styles.th}>Bénéfice (HT)</th>
+              <th style={styles.th}>Ventes (TTC)</th>
+              <th style={styles.th}>Achat</th>
+              <th style={styles.th}>Bénéfice</th>
             </tr>
           </thead>
           <tbody>
@@ -109,19 +115,73 @@ export default function StatsPage(): JSX.Element {
                   style={index % 2 === 0 ? styles.trEven : styles.trOdd}
                 >
                   <td style={{ ...styles.td, textAlign: "left", fontWeight: 500 }}>{c.categoryName}</td>
-                  <td style={styles.td}>{c.sales.toFixed(3)} €</td>
-                  <td style={styles.td}>{c.purchases.toFixed(3)} €</td>
+                  <td style={styles.td}>{c.sales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                  <td style={styles.td}>{c.purchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
                   <td style={{ 
                     ...styles.td, 
                     fontWeight: "bold", 
                     color: isPositive ? "#10b981" : "#ef4444" 
                   }}>
-                    {c.profit.toFixed(3)} €
+                    {c.profit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                   </td>
                 </tr>
               );
             })}
           </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ ...styles.td, ...styles.totalCellLabel, textAlign: "left" }}>Total</td>
+              <td style={{ ...styles.td, ...styles.totalCell }}>
+                {byCategory.reduce((sum, row) => sum + row.sales, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell }}>
+                {byCategory.reduce((sum, row) => sum + row.purchases, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell, color: byCategory.reduce((sum, row) => sum + row.profit, 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                {byCategory.reduce((sum, row) => sum + row.profit, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <h3 style={styles.sectionTitle}>Commandes annulées par catégorie (hors totaux globaux)</h3>
+      <div style={styles.tableWrapper}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
+              <th style={styles.th}>Ventes (TTC)</th>
+              <th style={styles.th}>Achat</th>
+              <th style={styles.th}>Bénéfice</th>
+            </tr>
+          </thead>
+          <tbody>
+            {canceledByCategory.length === 0 ? (
+              <tr>
+                <td style={{ ...styles.td, textAlign: "left" }} colSpan={4}>Aucune commande annulée.</td>
+              </tr>
+            ) : canceledByCategory.map((row, index) => (
+              <tr key={row.categoryId} style={index % 2 === 0 ? styles.trEven : styles.trOdd}>
+                <td style={{ ...styles.td, textAlign: "left", fontWeight: 500 }}>{row.categoryName}</td>
+                <td style={styles.td}>{row.sales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                <td style={styles.td}>{row.purchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                <td style={{ ...styles.td, fontWeight: "bold", color: row.profit >= 0 ? "#10b981" : "#ef4444" }}>
+                  {row.profit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style={{ ...styles.td, ...styles.totalCellLabel, textAlign: "left" }}>Total annulées</td>
+              <td style={{ ...styles.td, ...styles.totalCell }}>{canceledTotals.sales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+              <td style={{ ...styles.td, ...styles.totalCell }}>{canceledTotals.purchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+              <td style={{ ...styles.td, ...styles.totalCell, color: canceledTotals.profit >= 0 ? "#10b981" : "#ef4444" }}>
+                {canceledTotals.profit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -200,6 +260,14 @@ const styles = {
     textAlign: "right" as const,
     borderBottom: "1px solid #f1f5f9",
     color: "#334155",
+  },
+  totalCellLabel: {
+    fontWeight: 700,
+    backgroundColor: "#f8fafc",
+  },
+  totalCell: {
+    fontWeight: 700,
+    backgroundColor: "#f8fafc",
   },
   trEven: {
     backgroundColor: "#ffffff",

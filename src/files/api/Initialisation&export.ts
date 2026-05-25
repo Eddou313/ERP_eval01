@@ -180,43 +180,75 @@ export const parseCSVFile = <T>(
   });
 };
 
+export type InitialisationProgress = {
+  step: number;
+  total: number;
+  percent: number;
+  label: string;
+};
+
 // Initialiser toutes les données globales
-export async function InitialisationGLobal(): Promise<void> {
+export async function InitialisationGLobal(
+  onProgress?: (progress: InitialisationProgress) => void,
+): Promise<void> {
   try {
+    const totalSteps = 11;
+    let currentStep = 0;
+    const reportStep = (label: string) => {
+      currentStep += 1;
+      onProgress?.({
+        step: currentStep,
+        total: totalSteps,
+        percent: Math.round((currentStep / totalSteps) * 100),
+        label,
+      });
+    };
+
     console.log("Initialisation globale en cours...");
     console.log("Suppression de l'historique des commandes...");
     await InitOrderHistory();
+    reportStep("Historique des commandes supprimé");
 
     console.log("Suppression des commandes...");
     await InitOrder();
+    reportStep("Commandes supprimées");
 
     console.log("Suppression des paniers...");
     await initPanier();
+    reportStep("Paniers supprimés");
 
     console.log("Suppression des adresses...");
     await InitAdresse();
+    reportStep("Adresses supprimées");
 
     console.log("Suppression des clients...");
     await initClients();
+    reportStep("Clients supprimés");
 
     console.log("Suppression des images produits...");
     await InitProductImages();
+    reportStep("Images produits supprimées");
 
     console.log("Suppression des produits...");
     await InitProducts();
+    reportStep("Produits supprimés");
 
     console.log("Suppression des valeurs d'attributs...");
     await InitAttributesAndCharacteristics();
+    reportStep("Attributs supprimés");
 
 
     console.log("Suppression des catégories...");
     await InitCategory();
+    reportStep("Catégories supprimées");
 
     console.log("Suppression des taxes...");
     await InitTaxes();
+    reportStep("Taxes supprimées");
 
     console.log("Suppression des stocks et mouvements de stock...");
     await SupprimerStocksEtMouvements({ deleteStocks: true, deleteMovements: true });
+    reportStep("Stocks et mouvements supprimés");
 
 
     console.log("Initialisation globale réussie !");

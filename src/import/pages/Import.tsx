@@ -7,7 +7,7 @@ import { importProduitCsv } from "../api/importCSV1";
 import { importCsv2ToPrestashop } from "../api/importCSV2";
 import { importProduitCommandeCsv } from "../api/importCSV3";
 import "./Import.css";
-import { InitialisationGLobal } from "../../files/api/Initialisation&export";
+import { InitialisationGLobal, type InitialisationProgress } from "../../files/api/Initialisation&export";
 
 type ImportStepKey = "zip" | "csv1" | "csv2" | "csv3";
 
@@ -49,6 +49,13 @@ export function Import() {
     const [mes, setMes] = useState<string>("");
     const [ver, setVer] = useState<boolean>(false);
     const [importing, setImporting] = useState<boolean>(false);
+    const [initializing, setInitializing] = useState<boolean>(false);
+    const [initProgress, setInitProgress] = useState<InitialisationProgress>({
+        step: 0,
+        total: 11,
+        percent: 0,
+        label: "Aucune initialisation en cours",
+    });
     const [progress, setProgress] = useState<Record<ImportStepKey, ImportProgress>>({
         zip: createIdleProgress("ZIP", "Aucun ZIP sélectionné"),
         csv1: createIdleProgress("Fichier 1", "Aucun fichier sélectionné"),
@@ -247,20 +254,60 @@ export function Import() {
         const confirmed = window.confirm("Êtes-vous sûr de vouloir réinitialiser toutes les données ? Cette action est irréversible.");
         if (confirmed) {
             try {
+                setInitializing(true);
                 setMes("Initialisation en cours...");
-                await InitialisationGLobal();
+                setInitProgress({
+                    step: 0,
+                    total: 11,
+                    percent: 0,
+                    label: "Démarrage de l'initialisation...",
+                });
+
+                await InitialisationGLobal((step) => {
+                    setInitProgress(step);
+                    setMes(`Initialisation en cours... (${step.step}/${step.total}) ${step.label}`);
+                });
+
+                setInitProgress({
+                    step: 11,
+                    total: 11,
+                    percent: 100,
+                    label: "Initialisation terminée",
+                });
                 setMes("Initialisation réussie !");
                 setTimeout(() => setMes(""), 3000);
             } catch (error) {
                 setMes("Erreur lors de l'initialisation");
                 console.error(error);
+            } finally {
+                setInitializing(false);
             }
         }
     }
 
     return (
         <div className="import-page">
-            <button onClick={InitialiserAllDonner} className="submit-button">Initialiser les donner +</button>
+            <button onClick={InitialiserAllDonner} className="submit-button" disabled={initializing || importing}>
+                {initializing ? "Initialisation en cours..." : "Initialiser les donner +"}
+            </button>
+
+            <div className="import-progress-card" style={{ marginTop: "12px", marginBottom: "12px" }}>
+                <div className="import-progress-card__header">
+                    <strong>Initialisation des données</strong>
+                    <span>{initProgress.percent}%</span>
+                </div>
+                <div className="import-progress-bar" aria-label="Progression initialisation des données">
+                    <div
+                        className={`import-progress-bar__fill import-progress-bar__fill--${initializing ? "running" : (initProgress.percent === 100 ? "done" : "idle")}`}
+                        style={{ ["--progress" as string]: `${initProgress.percent}%` }}
+                    />
+                </div>
+                <div className="import-progress-meta">
+                    <span>{initProgress.label}</span>
+                    <span>{initProgress.step}/{initProgress.total}</span>
+                </div>
+            </div>
+
             <div className="import-shell">
                 <div className="import-header">
                     <div>
