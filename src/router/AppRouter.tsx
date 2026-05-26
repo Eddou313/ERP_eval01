@@ -58,8 +58,9 @@ function AppRouter() {
             <Route path="/stock/etat"element={<StockMovements />} />
 
             <Route path="commandes/list" element={<CommandesListPage />} />
-            <Route path="/catalogue/fichier" element={<ImportGlobal/>}/>
-            <Route path="/catalogue/file" element={<Import/>}/>
+            <Route path="/catalogue/fichier" element={<Import/>}/>
+            {/* <Route path="/catalogue/fichier" element={<ImportGlobal/>}/> */}
+            {/* <Route path="/catalogue/file" element={<Import/>}/> */}
 
             {/* <Route path="/clients/clients" element={<ClientsListe/>}/> */}
             {/* <Route path="/clients/adresses" element={<ClientsAdressesListe/>}/> */}
