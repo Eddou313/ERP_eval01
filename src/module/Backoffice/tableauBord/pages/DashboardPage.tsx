@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState, type JSX } from "react";
-import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
+import { listOrdersLightCached, formatCurrency } from "../../commande/api/commandesApi";
 import { type OrderListItem, CART_PENDING_STATE_ID } from "../../commande/api/ObjetOrder";
 
 const StatsPage = lazy(() => import("./StatsPage"));
@@ -67,7 +67,7 @@ export function DashboardPage(): JSX.Element {
       setLoading(true);
       setError(null);
       try {
-        const data = await listOrdersLight();
+        const data = await listOrdersLightCached();
         // const data = await listOrdersLight({ declencher: 1 });
         const filteredData = data.filter((order) => Number(order.current_state) !== 6);
         setOrders(filteredData);
@@ -81,18 +81,19 @@ export function DashboardPage(): JSX.Element {
   }, []);
 
   const metrics = useMemo(() => buildMetrics(orders), [orders]);
-  const totalOrders = orders.length;
-  const totalAmountTtc = sumTtc(orders);
-  const totalAmountHt = sumHt(orders);
+  const orderTotals = useMemo(() => ({
+    totalOrders: orders.length,
+    totalAmountTtc: sumTtc(orders),
+    totalAmountHt: sumHt(orders),
+    avgOrder: orders.filter((order) => order.current_state === 0).length,
+    caPaniersTtc: sumTtc(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID),
+    caPaniersHt: sumHt(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID),
+    caCommandesSansPanierTtc: sumTtc(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID),
+    caCommandesSansPanierHt: sumHt(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID),
+  }), [orders]);
   const latestDay = metrics[0];
   const topDays = metrics.slice(0, 8);
-  const avgOrder = orders.filter((order) => order.current_state === 0).length;
-  // Chiffres d'affaires séparés: commandes réelles vs paniers
-  const caPaniersTtc = sumTtc(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID);
-  const caPaniersHt = sumHt(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID);
-
-  const caCommandesSansPanierTtc = sumTtc(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID);
-  const caCommandesSansPanierHt = sumHt(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID);
+  const { totalOrders, totalAmountTtc, totalAmountHt, avgOrder, caPaniersTtc, caPaniersHt, caCommandesSansPanierTtc, caCommandesSansPanierHt } = orderTotals;
 
   return (
     <main style={styles.container}>

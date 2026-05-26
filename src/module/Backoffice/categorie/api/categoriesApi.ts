@@ -1,6 +1,9 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, boolFromPrestashop, getFirstLanguageText, keywordsFromPrestashop, numFromPrestashop, slugify, stringFromPrestashop, textFromUnknown } from "../../../../utils/helper";
 import type { CategoryGetResponse, CategoryGroup, CategoryListItem } from "./object";
+import { getProductsByCategory } from "../../produit/api/productsApi";
+import { applyStockModification } from "../../stock/api/stockMovementService";
+import type { ProductListItem } from "../../produit/api/object";
 
 const DEFAULT_LANGUAGE_ID = 1;
 const ROOT_CATEGORY_ID = 2;
@@ -206,4 +209,126 @@ export async function InitCategory(): Promise<void> {
     }
   }
   console.log("Toutes les catégories ont été supprimées.");
+}
+
+export type StockReductionLine = {
+  productId: number;
+  productName: string;
+  reference: string;
+  quantityBefore: number;
+  requestedReduction: number;
+  appliedReduction: number;
+  quantityAfter: number;
+  success: boolean;
+  message?: string;
+};
+
+export type StockReductionSummary = {
+  categoryId: number;
+  requestedReduction: number;
+  totalBefore: number;
+  totalApplied: number;
+  totalAfter: number;
+  remainingRequested: number;
+  lines: StockReductionLine[];
+};
+
+function normalizeStockQuantity(value: unknown): number {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return 0;
+  }
+
+  return Math.floor(quantity);
+}
+
+function getProductCombinationId(product: ProductListItem): number {
+  return Number(product.default_combination_id ?? 0) || 0;
+}
+
+export async function ReduireAllProductDansCategoryId(idCategory: number, number: number): Promise<StockReductionSummary> {
+  const requestedReduction = Math.floor(Number(number) || 0);
+  if (!Number.isFinite(idCategory) || idCategory <= 0) {
+    throw new Error("Catégorie invalide");
+  }
+  if (!Number.isFinite(requestedReduction) || requestedReduction <= 0) {
+    throw new Error("La valeur de réduction doit être supérieure à 0");
+  }
+
+  const allProductMemeCategory = await getProductsByCategory(idCategory);
+  const lines: StockReductionLine[] = [];
+  let totalBefore = 0;
+  let totalApplied = 0;
+
+  for (const product of allProductMemeCategory) {
+    const quantityBefore = normalizeStockQuantity(product.quantity ?? 0);
+    const appliedReduction = Math.min(requestedReduction, quantityBefore);
+    const quantityAfter = quantityBefore - appliedReduction;
+
+    totalBefore += quantityBefore;
+
+    if (appliedReduction > 0) {
+      const result = await applyStockModification(
+        product.id,
+        quantityBefore,
+        -appliedReduction,
+        getProductCombinationId(product),
+        "adjustment",
+        1,
+      );
+
+      if (result.success) {
+        totalApplied += appliedReduction;
+        lines.push({
+          productId: product.id,
+          productName: product.name ?? `Produit ${product.id}`,
+          reference: product.reference ?? "",
+          quantityBefore,
+          requestedReduction,
+          appliedReduction,
+          quantityAfter,
+          success: true,
+          message: result.message,
+        });
+        continue;
+      }
+
+      lines.push({
+        productId: product.id,
+        productName: product.name ?? `Produit ${product.id}`,
+        reference: product.reference ?? "",
+        quantityBefore,
+        requestedReduction,
+        appliedReduction: 0,
+        quantityAfter: quantityBefore,
+        success: false,
+        message: result.message,
+      });
+      continue;
+    }
+
+    lines.push({
+      productId: product.id,
+      productName: product.name ?? `Produit ${product.id}`,
+      reference: product.reference ?? "",
+      quantityBefore,
+      requestedReduction,
+      appliedReduction: 0,
+      quantityAfter,
+      success: true,
+      message: "Aucun stock à réduire",
+    });
+  }
+
+  const totalAfter = Math.max(0, totalBefore - totalApplied);
+
+  return {
+    categoryId: idCategory,
+    requestedReduction,
+    totalBefore,
+    totalApplied,
+    totalAfter,
+    remainingRequested: Math.max(0, requestedReduction - totalApplied),
+    lines,
+  };
 }

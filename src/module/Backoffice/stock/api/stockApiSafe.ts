@@ -2,6 +2,8 @@ import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/help
 import { requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { extractStockMovementItems, fetchStockMovementsResponse, type StockMovement } from "./object";
 
+let cachedSafeMovementsPromise: Promise<StockMovement[]> | null = null;
+
 /**
  * Résout les IDs produit/attribut depuis un mouvement de stock avec gestion d'erreur silencieuse.
  * Contrairement à la version originale, capture les erreurs 404 et continue sans les logguer.
@@ -98,6 +100,11 @@ async function resolveCombinationLabelSafe(productAttributeId: number): Promise<
  * Filtre silencieusement les mouvements qui ne peuvent pas être résolus (id_product === 0).
  */
 export async function listStockMovementsSafe(): Promise<StockMovement[]> {
+  if (cachedSafeMovementsPromise) {
+    return cachedSafeMovementsPromise;
+  }
+
+  cachedSafeMovementsPromise = (async () => {
   try {
     const response = await fetchStockMovementsResponse();
     const items = extractStockMovementItems(response);
@@ -196,4 +203,9 @@ export async function listStockMovementsSafe(): Promise<StockMovement[]> {
     console.error("Error fetching stock movements (safe):", error);
     return [];
   }
+  })().finally(() => {
+    cachedSafeMovementsPromise = null;
+  });
+
+  return cachedSafeMovementsPromise;
 }

@@ -1,5 +1,8 @@
 import { asArray, numFromUnknown, textFromUnknown } from "../../../utils/helper";
 import { requestPrestashopXml } from "../../../utils/prestashopClient";
+import { getClient } from "../client/api/clientApi";
+import { listOrders, getOrder } from "../commande/api/commandesApi";
+import { getStateId } from "../commande/api/ObjetEtat";
 import { getOrderStateLabel } from "../commande/api/commandesApi";
 
 export type OrderStatusHistoryItem = {
@@ -93,4 +96,29 @@ export function formatOrderStatusLabel(stateId: number, fallback = "Statut incon
 
   const label = getOrderStateLabel(stateId);
   return label || fallback;
+}
+
+// Retourne toutes les commandes, avec filtrage optionnel par état.
+export async function getAllCommande(etat?: number | string): Promise<Awaited<ReturnType<typeof listOrders>>> {
+  const stateId = typeof etat === "number" ? etat : getStateId(String(etat ?? "")) ?? undefined;
+  return listOrders(stateId ? { state: stateId } : undefined);
+}
+
+// Retourne le client associé à une commande.
+export async function getClientCommande(orderId: number): Promise<Awaited<ReturnType<typeof getClient>> | null> {
+  if (!Number.isFinite(orderId) || orderId <= 0) {
+    return null;
+  }
+
+  const order = await getOrder(orderId);
+  if (!order?.id_customer || order.id_customer <= 0) {
+    return null;
+  }
+
+  return getClient(order.id_customer);
+}
+
+// Alias plus explicite pour l'appel métier.
+export async function getClientDuneCommande(orderId: number): Promise<Awaited<ReturnType<typeof getClient>> | null> {
+  return getClientCommande(orderId);
 }

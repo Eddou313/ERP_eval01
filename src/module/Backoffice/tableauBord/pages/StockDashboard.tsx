@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { listStockItems } from "../../stock/api/stockApi";
 import { listStockMovementsSafe } from "../../stock/api/stockApiSafe";
 import { getProduct } from "../../produit/api/productsApi";
@@ -21,6 +21,8 @@ export function StockDashboard(): JSX.Element {
 
   // États calculés pour les cartes KPI globales
   const [totals, setTotals] = useState({ physique: 0, reservee: 0, disponible: 0, reelleValide: 0 });
+
+  const totalsMemo = useMemo(() => totals, [totals]);
 
   useEffect(() => {
     let mounted = true;
@@ -215,28 +217,28 @@ export function StockDashboard(): JSX.Element {
         <div style={styles.card}>
           <span style={styles.cardLabel}>Quantité Physique Totale</span>
           <span style={{ ...styles.cardValue, color: "#475569" }}>
-            {totals.physique.toLocaleString("fr-FR")}
+            {totalsMemo.physique.toLocaleString("fr-FR")}
           </span>
         </div>
         
         <div style={styles.card}>
           <span style={styles.cardLabel}>Quantité Réservée</span>
           <span style={{ ...styles.cardValue, color: "#f59e0b" }}>
-            {totals.reservee.toLocaleString("fr-FR")}
+            {totalsMemo.reservee.toLocaleString("fr-FR")}
           </span>
         </div>
 
         <div style={styles.card}>
           <span style={styles.cardLabel}>Quantité Disponible</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
-            {totals.disponible.toLocaleString("fr-FR")}
+            {totalsMemo.disponible.toLocaleString("fr-FR")}
           </span>
         </div>
 
         <div style={styles.card}>
           <span style={styles.cardLabel}>Quantité Réelle Validée</span>
           <span style={{ ...styles.cardValue, color: "#0ea5e9" }}>
-            {totals.reelleValide.toLocaleString("fr-FR")}
+            {totalsMemo.reelleValide.toLocaleString("fr-FR")}
           </span>
         </div>
       </div>

@@ -226,6 +226,36 @@ export async function listOrders(
 
 export const listOrdersLight = listOrders;
 
+let cachedLightOrdersPromise: Promise<OrderListItem[]> | null = null;
+
+export async function listOrdersLightCached(
+  params?: Partial<{
+    reference: string;
+    id_customer: number;
+    payment: string;
+    minAmount: number;
+    maxAmount: number;
+    state: number;
+    limit: number;
+    offset: number;
+    declencher?: number;
+  }>,
+): Promise<OrderListItem[]> {
+  if (!params && cachedLightOrdersPromise) {
+    return cachedLightOrdersPromise;
+  }
+
+  const promise = listOrders(params);
+  if (!params) {
+    cachedLightOrdersPromise = promise.finally(() => {
+      cachedLightOrdersPromise = null;
+    });
+    return cachedLightOrdersPromise;
+  }
+
+  return promise;
+}
+
 /**
  * READ: Récupère une commande complète par ID
  */

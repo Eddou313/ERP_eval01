@@ -14,6 +14,16 @@ type CategoryStat = {
 
 const productCache = new Map<number, { price: number; wholesale: number; categories: number[] }>();
 const categoryNameCache = new Map<number, string>();
+let dashboardStatsPromise: Promise<{
+  totalSalesHT: number;
+  totalSalesTTC: number;
+  totalPurchasesHT: number;
+  totalPurchases: number;
+  totalProfit: number;
+  profitByCategory: CategoryStat[];
+  canceledByCategory: CategoryStat[];
+  canceledTotals: { sales: number; purchases: number; profit: number };
+}> | null = null;
 
 async function fetchProductInfo(productId: number) {
   if (productCache.has(productId)) return productCache.get(productId)!;
@@ -59,7 +69,7 @@ async function fetchCategoryName(categoryId: number) {
   }
 }
 
-export async function getDashboardStats(): Promise<{
+async function loadDashboardStats(): Promise<{
   totalSalesHT: number;
   totalSalesTTC: number;
   totalPurchasesHT: number;
@@ -217,6 +227,25 @@ export async function getDashboardStats(): Promise<{
       profit: canceledSales - canceledPurchases,
     },
   };
+}
+
+export async function getDashboardStats(): Promise<{
+  totalSalesHT: number;
+  totalSalesTTC: number;
+  totalPurchasesHT: number;
+  totalPurchases: number;
+  totalProfit: number;
+  profitByCategory: CategoryStat[];
+  canceledByCategory: CategoryStat[];
+  canceledTotals: { sales: number; purchases: number; profit: number };
+}> {
+  if (dashboardStatsPromise) return dashboardStatsPromise;
+
+  dashboardStatsPromise = loadDashboardStats().finally(() => {
+    dashboardStatsPromise = null;
+  });
+
+  return dashboardStatsPromise;
 }
 
 export type { CategoryStat };

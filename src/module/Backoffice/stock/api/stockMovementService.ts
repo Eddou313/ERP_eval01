@@ -266,7 +266,7 @@ export async function updateStockViaApi(
       },
     });
 
-// http://localhost:8001/module/stockapi/update?id_product=21&id_product_attribute=43&delta=5
+    // http://localhost:8001/module/stockapi/update?id_product=21&id_product_attribute=43&delta=5
 
     await requestPrestashopXml(`/stock_availables/${stockAvailableId}`, {
       method: "PUT",
@@ -351,6 +351,8 @@ export async function applyStockModification(
 ): Promise<{
   success: boolean;
   message: string;
+  numberReel? : number;
+  numberModifiable? : number;
 }> {
   // ✓ Valider que la quantité n'est pas 0
   if (quantityDelta === 0) {
@@ -359,14 +361,16 @@ export async function applyStockModification(
       message: "La quantité doit être différente de 0",
     };
   }
+  const numberReel = quantityDelta;
+  let numberModifiable = quantityDelta;
 
   // ✓ Valider que la nouvelle quantité ne sera pas négative
-  const newQuantity = currentQuantity + quantityDelta;
+  let newQuantity = currentQuantity + quantityDelta;
+
   if (newQuantity < 0) {
-    return {
-      success: false,
-      message: `Impossible: la nouvelle quantité serait négative (${newQuantity})`,
-    };
+    quantityDelta = -Math.abs(currentQuantity);
+    newQuantity = 0;
+    numberModifiable = quantityDelta;
   }
 
   try {
@@ -383,6 +387,8 @@ export async function applyStockModification(
     const sign = quantityDelta > 0 ? "+" : "";
     return {
       success: true,
+      numberReel : numberReel,
+      numberModifiable : numberModifiable,
       message: `Stock ${direction} de ${sign}${quantityDelta} (${currentQuantity} → ${newQuantity})`,
     };
   } catch (error) {

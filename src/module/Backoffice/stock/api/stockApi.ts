@@ -2,6 +2,9 @@ import { asArray, numFromUnknown, textFromUnknown } from "../../../../utils/help
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { extractStockAvailableEntries, extractStockMovementItems, fetchStockMovementsResponse, type PrestashopStockAvailableListResponse, type PrestashopStockAvailableResponse, type StockItem, type StockMovement, type StockCreateForm, type PrestashopStockMovementListResponse } from "./object";
 
+let cachedStockItemsPromise: Promise<StockItem[]> | null = null;
+let cachedStockItemsPagedPromise = new Map<string, Promise<StockItem[]>>();
+
 async function resolveCombinationLabel(productAttributeId: number): Promise<string> {
   if (!productAttributeId || productAttributeId <= 0) {
     return "";
@@ -90,217 +93,235 @@ async function resolveMovementProductIds(item: any): Promise<{
 }
 
 export async function listStockItems(): Promise<StockItem[]> {
-  try {
-    const response = await requestPrestashopXml<PrestashopStockAvailableListResponse>(
-      "/stock_availables",
-      { query: { display: "full" } }
-    );
+  if (cachedStockItemsPromise) {
+    return cachedStockItemsPromise;
+  }
 
-    if (!response?.prestashop?.stock_availables?.stock_available) {
+  const promise = (async (): Promise<StockItem[]> => {
+    try {
+      const response = await requestPrestashopXml<PrestashopStockAvailableListResponse>(
+        "/stock_availables",
+        { query: { display: "full" } }
+      );
+
+      if (!response?.prestashop?.stock_availables?.stock_available) {
+        return [];
+      }
+
+      const items = asArray(response.prestashop.stock_availables.stock_available);
+
+      const stocks = await Promise.all(
+        items.map(async (item: any) => {
+          const id = numFromUnknown(item?.id);
+          const id_product = numFromUnknown(item?.id_product);
+          const id_product_attribute = numFromUnknown(item?.id_product_attribute);
+          const physicalQuantity = numFromUnknown(item?.physical_quantity);
+          const reservedQuantity = numFromUnknown(item?.reserved_quantity);
+          const availableQuantity = numFromUnknown(item?.quantity);
+          const id_shop = numFromUnknown(item?.id_shop);
+          const id_shop_group = numFromUnknown(item?.id_shop_group);
+          const quantity = availableQuantity;
+          const depends_on_stock = Boolean(numFromUnknown(item?.depends_on_stock));
+          const out_of_stock_raw = numFromUnknown(item?.out_of_stock);
+          const out_of_stock: 0 | 1 | 2 = [0, 1, 2].includes(out_of_stock_raw)
+            ? (out_of_stock_raw as 0 | 1 | 2)
+            : 2;
+          const location = textFromUnknown(item?.location) || undefined;
+
+          let productName = "Produit";
+          let reference = "";
+          let supplier = "";
+          let id_default_image = 0;
+          let combinationLabel = "";
+
+          if (id_product > 0) {
+            try {
+              const productResponse = await requestPrestashopXml<any>(
+                `/products/${id_product}`,
+                { query: { display: "full" } }
+              );
+
+              if (productResponse?.prestashop?.product) {
+                const prod = productResponse.prestashop.product;
+                const nameField = prod.name;
+                if (nameField) {
+                  const nameObj = asArray(nameField)[0];
+                  productName =
+                    textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
+                }
+                reference = textFromUnknown(prod.reference);
+                id_default_image = numFromUnknown(prod.id_default_image);
+              }
+            } catch {
+              // Erreur silencieuse
+            }
+          } else {
+            productName = "Produit introuvable";
+          }
+
+          if (id_product_attribute > 0) {
+            combinationLabel = await resolveCombinationLabel(id_product_attribute);
+          }
+
+          let status: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
+          if (availableQuantity === 0) {
+            status = "out_of_stock";
+          } else if (availableQuantity < 5) {
+            status = "low_stock";
+          }
+
+          return {
+            id,
+            id_product,
+            id_product_attribute,
+            productName,
+            combinationLabel,
+            reference,
+            supplier,
+            physicalQuantity,
+            reservedQuantity,
+            availableQuantity,
+            status,
+            id_default_image,
+            id_shop,
+            id_shop_group,
+            quantity,
+            depends_on_stock,
+            out_of_stock,
+            location,
+          };
+        })
+      );
+
+      return stocks;
+    } catch (error) {
+      console.error("Error fetching stock items:", error);
       return [];
     }
+  })().finally(() => {
+    cachedStockItemsPromise = null;
+  });
 
-    const items = asArray(response.prestashop.stock_availables.stock_available);
-
-    // Récupérer les infos produit pour chaque stock
-    const stocks = await Promise.all(
-      items.map(async (item: any) => {
-        const id = numFromUnknown(item?.id);
-        const id_product = numFromUnknown(item?.id_product);
-        const id_product_attribute = numFromUnknown(item?.id_product_attribute);
-        const physicalQuantity = numFromUnknown(item?.physical_quantity);
-        const reservedQuantity = numFromUnknown(item?.reserved_quantity);
-        const availableQuantity = numFromUnknown(item?.quantity);
-        const id_shop = numFromUnknown(item?.id_shop);
-        const id_shop_group = numFromUnknown(item?.id_shop_group);
-        const quantity = availableQuantity;
-        const depends_on_stock = Boolean(numFromUnknown(item?.depends_on_stock));
-        const out_of_stock_raw = numFromUnknown(item?.out_of_stock);
-        const out_of_stock: 0 | 1 | 2 = [0, 1, 2].includes(out_of_stock_raw)
-          ? (out_of_stock_raw as 0 | 1 | 2)
-          : 2;
-        const location = textFromUnknown(item?.location) || undefined;
-
-        let productName = "Produit";
-        let reference = "";
-        let supplier = "";
-        let id_default_image = 0;
-        let combinationLabel = "";
-
-        if (id_product > 0) {
-          try {
-            const productResponse = await requestPrestashopXml<any>(
-              `/products/${id_product}`,
-              { query: { display: "full" } }
-            );
-
-            if (productResponse?.prestashop?.product) {
-              const prod = productResponse.prestashop.product;
-              const nameField = prod.name;
-              if (nameField) {
-                const nameObj = asArray(nameField)[0];
-                productName =
-                  textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
-              }
-              reference = textFromUnknown(prod.reference);
-              id_default_image = numFromUnknown(prod.id_default_image);
-            }
-          } catch (e) {
-            // Erreur silencieuse
-          }
-        } else {
-          productName = "Produit introuvable";
-        }
-
-        if (id_product_attribute > 0) {
-          combinationLabel = await resolveCombinationLabel(id_product_attribute);
-        }
-
-        // Déterminer le statut
-        let status: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
-        if (availableQuantity === 0) {
-          status = "out_of_stock";
-        } else if (availableQuantity < 5) {
-          status = "low_stock";
-        }
-
-        return {
-          id,
-          id_product,
-          id_product_attribute,
-          productName,
-          combinationLabel,
-          reference,
-          supplier,
-          physicalQuantity,
-          reservedQuantity,
-          availableQuantity,
-          status,
-          id_default_image,
-
-          id_shop,
-          id_shop_group,
-          quantity,
-          depends_on_stock,
-          out_of_stock,
-          location,
-        };
-      })
-    );
-
-    return stocks;
-  } catch (error) {
-    console.error("Error fetching stock items:", error);
-    return [];
-  }
+  cachedStockItemsPromise = promise;
+  return promise;
 }
 
 // Version paginée pour éviter de récupérer trop d'éléments d'un coup.
 export async function listStockItemsPaged(page = 1, limit = 10): Promise<StockItem[]> {
-  try {
-    const offset = Math.max(0, (page - 1) * limit);
-    const response = await requestPrestashopXml<PrestashopStockAvailableListResponse>(
-      "/stock_availables",
-      { query: { display: "full", limit: `${offset},${limit}` } }
-    );
+  const cacheKey = `${page}:${limit}`;
+  const cached = cachedStockItemsPagedPromise.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
-    if (!response?.prestashop?.stock_availables?.stock_available) {
+  const promise = (async (): Promise<StockItem[]> => {
+    try {
+      const offset = Math.max(0, (page - 1) * limit);
+      const response = await requestPrestashopXml<PrestashopStockAvailableListResponse>(
+        "/stock_availables",
+        { query: { display: "full", limit: `${offset},${limit}` } }
+      );
+
+      if (!response?.prestashop?.stock_availables?.stock_available) {
+        return [];
+      }
+
+      const items = asArray(response.prestashop.stock_availables.stock_available);
+
+      const stocks = await Promise.all(
+        items.map(async (item: any) => {
+          const id = numFromUnknown(item?.id);
+          const id_product = numFromUnknown(item?.id_product);
+          const id_product_attribute = numFromUnknown(item?.id_product_attribute);
+          const physicalQuantity = numFromUnknown(item?.physical_quantity);
+          const reservedQuantity = numFromUnknown(item?.reserved_quantity);
+          const availableQuantity = numFromUnknown(item?.quantity);
+          const id_shop = numFromUnknown(item?.id_shop);
+          const id_shop_group = numFromUnknown(item?.id_shop_group);
+          const quantity = availableQuantity;
+          const depends_on_stock = Boolean(numFromUnknown(item?.depends_on_stock));
+          const out_of_stock_raw = numFromUnknown(item?.out_of_stock);
+          const out_of_stock: 0 | 1 | 2 = [0, 1, 2].includes(out_of_stock_raw)
+            ? (out_of_stock_raw as 0 | 1 | 2)
+            : 2;
+          const location = textFromUnknown(item?.location) || undefined;
+
+          let productName = "Produit";
+          let reference = "";
+          let supplier = "";
+          let id_default_image = 0;
+          let combinationLabel = "";
+
+          if (id_product > 0) {
+            try {
+              const productResponse = await requestPrestashopXml<any>(
+                `/products/${id_product}`,
+                { query: { display: "full" } }
+              );
+
+              if (productResponse?.prestashop?.product) {
+                const prod = productResponse.prestashop.product;
+                const nameField = prod.name;
+                if (nameField) {
+                  const nameObj = asArray(nameField)[0];
+                  productName =
+                    textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
+                }
+                reference = textFromUnknown(prod.reference);
+                id_default_image = numFromUnknown(prod.id_default_image);
+              }
+            } catch {
+              // Erreur silencieuse
+            }
+          } else {
+            productName = "Produit introuvable";
+          }
+
+          if (id_product_attribute > 0) {
+            combinationLabel = await resolveCombinationLabel(id_product_attribute);
+          }
+
+          let status: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
+          if (availableQuantity === 0) {
+            status = "out_of_stock";
+          } else if (availableQuantity < 5) {
+            status = "low_stock";
+          }
+
+          return {
+            id,
+            id_product,
+            id_product_attribute,
+            productName,
+            combinationLabel,
+            reference,
+            supplier,
+            physicalQuantity,
+            reservedQuantity,
+            availableQuantity,
+            status,
+            id_default_image,
+            id_shop,
+            id_shop_group,
+            quantity,
+            depends_on_stock,
+            out_of_stock,
+            location,
+          };
+        })
+      );
+
+      return stocks;
+    } catch (error) {
+      console.error("Error fetching paged stock items:", error);
       return [];
     }
+  })().finally(() => {
+    cachedStockItemsPagedPromise.delete(cacheKey);
+  });
 
-    const items = asArray(response.prestashop.stock_availables.stock_available);
-
-    // Récupérer les infos produit pour chaque stock
-    const stocks = await Promise.all(
-      items.map(async (item: any) => {
-        const id = numFromUnknown(item?.id);
-        const id_product = numFromUnknown(item?.id_product);
-        const id_product_attribute = numFromUnknown(item?.id_product_attribute);
-        const physicalQuantity = numFromUnknown(item?.physical_quantity);
-        const reservedQuantity = numFromUnknown(item?.reserved_quantity);
-        const availableQuantity = numFromUnknown(item?.quantity);
-        const id_shop = numFromUnknown(item?.id_shop);
-        const id_shop_group = numFromUnknown(item?.id_shop_group);
-        const quantity = availableQuantity;
-        const depends_on_stock = Boolean(numFromUnknown(item?.depends_on_stock));
-        const out_of_stock_raw = numFromUnknown(item?.out_of_stock);
-        const out_of_stock: 0 | 1 | 2 = [0, 1, 2].includes(out_of_stock_raw)
-          ? (out_of_stock_raw as 0 | 1 | 2)
-          : 2;
-        const location = textFromUnknown(item?.location) || undefined;
-
-        let productName = "Produit";
-        let reference = "";
-        let supplier = "";
-        let id_default_image = 0;
-        let combinationLabel = "";
-
-        if (id_product > 0) {
-          try {
-            const productResponse = await requestPrestashopXml<any>(
-              `/products/${id_product}`,
-              { query: { display: "full" } }
-            );
-
-            if (productResponse?.prestashop?.product) {
-              const prod = productResponse.prestashop.product;
-              const nameField = prod.name;
-              if (nameField) {
-                const nameObj = asArray(nameField)[0];
-                productName =
-                  textFromUnknown(nameObj?.["#text"]) || textFromUnknown(nameField);
-              }
-              reference = textFromUnknown(prod.reference);
-              id_default_image = numFromUnknown(prod.id_default_image);
-            }
-          } catch (e) {
-            // Erreur silencieuse
-          }
-        } else {
-          productName = "Produit introuvable";
-        }
-
-        if (id_product_attribute > 0) {
-          combinationLabel = await resolveCombinationLabel(id_product_attribute);
-        }
-
-        // Déterminer le statut
-        let status: "in_stock" | "low_stock" | "out_of_stock" = "in_stock";
-        if (availableQuantity === 0) {
-          status = "out_of_stock";
-        } else if (availableQuantity < 5) {
-          status = "low_stock";
-        }
-
-        return {
-          id,
-          id_product,
-          id_product_attribute,
-          productName,
-          combinationLabel,
-          reference,
-          supplier,
-          physicalQuantity,
-          reservedQuantity,
-          availableQuantity,
-          status,
-          id_default_image,
-
-          id_shop,
-          id_shop_group,
-          quantity,
-          depends_on_stock,
-          out_of_stock,
-          location,
-        };
-      })
-    );
-
-    return stocks;
-  } catch (error) {
-    console.error("Error fetching paged stock items:", error);
-    return [];
-  }
+  cachedStockItemsPagedPromise.set(cacheKey, promise);
+  return promise;
 }
 
 // ========== API STOCK MOVEMENTS ==========

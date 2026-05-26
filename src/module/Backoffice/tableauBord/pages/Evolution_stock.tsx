@@ -192,7 +192,7 @@ export function EvolutionStockPage() {
   const stockMetricsWithValidated = useMemo<StockDayMetricWithValidated[]>(() => {
     if (!selectedProduct) return [];
 
-    let runningQuantity = Number(selectedProduct.availableQuantity) || 0;
+    let runningQuantity = Number(selectedProduct.quantity) || 0;
     return stockMetrics.map((day) => {
       const row: StockDayMetricWithValidated = {
         ...day,
@@ -279,7 +279,7 @@ export function EvolutionStockPage() {
                     <div className="ev-info-item">
                       <span className="ev-info-label">Stock actuel :</span>
                       <span className="ev-info-value ev-stock-current">
-                        {selectedProduct.availableQuantity}
+                        {selectedProduct.quantity}
                       </span>
                     </div>
                     <div className="ev-info-item">

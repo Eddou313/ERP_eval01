@@ -698,6 +698,137 @@
   font-size: 0.9rem;
 }
 
+.reduceStockButton {
+  margin: 12px 0 0;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: #1f2937;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.reduceStockButton:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.productsGrid .modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 24, 39, 0.56);
+  z-index: 1000;
+  padding: 16px;
+}
+
+.productsGrid .modal {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  width: min(560px, calc(100vw - 32px));
+}
+
+.productsGrid .modal {
+  width: min(80%, calc(100vw - 32px));
+}
+
+.modalLarge {
+  width: min(1180px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
+.modal-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-row label {
+  font-weight: 700;
+  color: #2f2f36;
+}
+
+.modal-row input,
+.modal-row select {
+  width: 100%;
+  border: 1px solid #d9d9df;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #ffffff;
+  color: #1f1f24;
+}
+
+.modalHint {
+  margin: 12px 0 0;
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
+.modalError {
+  margin: 12px 0 0;
+  color: #b42318;
+  font-weight: 600;
+}
+
+.summaryMeta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.summaryMeta p {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f4f5f7;
+  color: #2b2b30;
+  font-size: 0.92rem;
+}
+
+.summaryTableWrap {
+  margin-top: 18px;
+  overflow: auto;
+  border: 1px solid #e4e4ea;
+  border-radius: 14px;
+}
+
+.summaryTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.summaryTable th,
+.summaryTable td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e9e9ef;
+  text-align: left;
+  vertical-align: top;
+}
+
+.summaryTable thead th {
+  background: #f8fafc;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summaryTable tbody tr:nth-child(even) {
+  background: #fcfcfd;
+}
+
+.summaryTable tfoot th {
+  background: #f3f4f6;
+}
+
 /* RESPONSIVE */
 @media (max-width: 768px) {
   .productsSearchPanel {
