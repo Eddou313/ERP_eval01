@@ -14,6 +14,9 @@ export default function StatsPage(): JSX.Element {
   const [canceledByCategory, setCanceledByCategory] = useState<CategoryStat[]>([]);
   const [canceledTotals, setCanceledTotals] = useState({ sales: 0, purchases: 0, profit: 0 });
 
+  const formatCurrency = (value: number) =>
+    value.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -128,9 +131,11 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
+              <th style={styles.th}>Ventes estimées (HT)</th>
               <th style={styles.th}>Ventes estimées (TTC)</th>
-              <th style={styles.th}>Achat estimé</th>
-              <th style={styles.th}>Bénéfice estimé</th>
+              <th style={styles.th}>Achats estimés (HT)</th>
+              <th style={styles.th}>Bénéfice estimé (HT)</th>
+              <th style={styles.th}>Bénéfice estimé (TTC)</th>
             </tr>
           </thead>
           <tbody>
@@ -142,14 +147,22 @@ export default function StatsPage(): JSX.Element {
                   style={index % 2 === 0 ? styles.trEven : styles.trOdd}
                 >
                   <td style={{ ...styles.td, textAlign: "left", fontWeight: 500 }}>{c.categoryName}</td>
-                  <td style={styles.td}>{c.sales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
-                  <td style={styles.td}>{c.purchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                  <td style={styles.td}>{formatCurrency(c.salesHT)} €</td>
+                  <td style={styles.td}>{formatCurrency(c.sales)} €</td>
+                  <td style={styles.td}>{formatCurrency(c.purchasesHT)} €</td>
+                  <td style={{
+                    ...styles.td, 
+                    fontWeight: "bold", 
+                    color: c.profitHT >= 0 ? "#10b981" : "#ef4444" 
+                  }}>
+                    {formatCurrency(c.profitHT)} €
+                  </td>
                   <td style={{ 
                     ...styles.td, 
                     fontWeight: "bold", 
                     color: isPositive ? "#10b981" : "#ef4444" 
                   }}>
-                    {c.profit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {formatCurrency(c.profit)} €
                   </td>
                 </tr>
               );
@@ -159,13 +172,19 @@ export default function StatsPage(): JSX.Element {
             <tr>
               <td style={{ ...styles.td, ...styles.totalCellLabel, textAlign: "left" }}>Total</td>
               <td style={{ ...styles.td, ...styles.totalCell }}>
-                {byCategory.reduce((sum, row) => sum + row.sales, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatCurrency(byCategory.reduce((sum, row) => sum + row.salesHT, 0))} €
               </td>
               <td style={{ ...styles.td, ...styles.totalCell }}>
-                {byCategory.reduce((sum, row) => sum + row.purchases, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatCurrency(byCategory.reduce((sum, row) => sum + row.sales, 0))} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell }}>
+                {formatCurrency(byCategory.reduce((sum, row) => sum + row.purchasesHT, 0))} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell, color: byCategory.reduce((sum, row) => sum + row.profitHT, 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                {formatCurrency(byCategory.reduce((sum, row) => sum + row.profitHT, 0))} €
               </td>
               <td style={{ ...styles.td, ...styles.totalCell, color: byCategory.reduce((sum, row) => sum + row.profit, 0) >= 0 ? "#10b981" : "#ef4444" }}>
-                {byCategory.reduce((sum, row) => sum + row.profit, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatCurrency(byCategory.reduce((sum, row) => sum + row.profit, 0))} €
               </td>
             </tr>
           </tfoot>
