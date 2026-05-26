@@ -351,8 +351,8 @@ export async function applyStockModification(
 ): Promise<{
   success: boolean;
   message: string;
-  numberReel? : number;
-  numberModifiable? : number;
+  numberReel?: number;
+  numberModifiable?: number;
 }> {
   // ✓ Valider que la quantité n'est pas 0
   if (quantityDelta === 0) {
@@ -387,8 +387,82 @@ export async function applyStockModification(
     const sign = quantityDelta > 0 ? "+" : "";
     return {
       success: true,
-      numberReel : numberReel,
-      numberModifiable : numberModifiable,
+      numberReel: numberReel,
+      numberModifiable: numberModifiable,
+      message: `Stock ${direction} de ${sign}${quantityDelta} (${currentQuantity} → ${newQuantity})`,
+    };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("Erreur application modification:", errorMsg);
+    return {
+      success: false,
+      message: `Erreur: ${errorMsg}`,
+    };
+  }
+}
+
+export async function applyStockModificationAugmentation(
+  idProduct: number,
+  currentQuantity: number,
+  quantityDelta: number,
+  idProductAttribute?: number,
+  reason: string = "adjustment",
+  idEmployee: number = 1,
+  limite?: number
+): Promise<{
+  success: boolean;
+  message: string;
+  numberReel?: number;
+  numberModifiable?: number;
+}> {
+  if(!limite)
+  {
+    limite = 30;
+  }
+  // ✓ Valider que la quantité n'est pas 0
+  if (quantityDelta === 0) {
+    return {
+      success: false,
+      message: "La quantité doit être différente de 0",
+    };
+  }
+  const numberReel = quantityDelta;
+  let numberModifiable = quantityDelta;
+
+  // ✓ Valider que la nouvelle quantité ne sera pas trop
+  if (currentQuantity >= limite) {
+    return {
+      success: true,
+      numberReel: numberReel,
+      numberModifiable: 0,
+      message: `Aucun modification`,
+    };
+  }
+  let newQuantity = currentQuantity + quantityDelta;
+
+  if (newQuantity >limite) {
+    quantityDelta = newQuantity - currentQuantity;
+    // quantityDelta = Math.abs(currentQuantity);
+    newQuantity = limite;
+    numberModifiable = quantityDelta;
+  }
+
+  try {
+    // 1. Mettre à jour le stock
+    const stockUpdated = await updateStockAndCreateMovement(idProduct, quantityDelta, idProductAttribute, reason, idEmployee);
+    if (!stockUpdated) {
+      return {
+        success: false,
+        message: "Erreur lors de la mise à jour du stock",
+      };
+    }
+
+    const direction = quantityDelta > 0 ? "augmenté" : "diminué";
+    const sign = quantityDelta > 0 ? "+" : "";
+    return {
+      success: true,
+      numberReel: numberReel,
+      numberModifiable: numberModifiable,
       message: `Stock ${direction} de ${sign}${quantityDelta} (${currentQuantity} → ${newQuantity})`,
     };
   } catch (error) {

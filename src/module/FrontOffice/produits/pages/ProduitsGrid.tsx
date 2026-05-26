@@ -16,7 +16,7 @@ type ProduitsGridProps = {
 function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [authPassword, setAuthPassword] = useState("");
+  const [authPassword, setAuthPassword] = useState("randrianarison");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number>(0);
   const [reductionAmount, setReductionAmount] = useState<number>(0);
   const [category, setCategory] = useState<CategoryListItem[]>([]);
@@ -25,6 +25,9 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
   const [summary, setSummary] = useState<StockReductionSummary | null>(null);
   const [authError, setAuthError] = useState("");
   const [formError, setFormError] = useState("");
+
+  const [selectedCategoryId2, setSelectedCategoryId2] = useState<number>(0);
+  const [augmentationAmount, setAugmentationAmount] = useState<number>(0);
 
   function closeAllModals() {
     setAuthModalOpen(false);
@@ -38,8 +41,7 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
     setSaving(false);
   }
 
-  function openAuthModal() 
-  {
+  function openAuthModal() {
     setAuthError("");
     setFormError("");
     setSummary(null);
@@ -65,21 +67,22 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
   }
 
   async function confirmReduction() {
-    if (!selectedCategoryId) {
+    if(!selectedCategoryId2 && !selectedCategoryId) {
       setFormError("Veuillez choisir une catégorie.");
       return;
     }
 
-    if (!Number.isFinite(reductionAmount) || reductionAmount <= 0) {
-      setFormError("Veuillez saisir un nombre de réduction supérieur à 0.");
-      return;
-    }
+    // if (!Number.isFinite(reductionAmount) || reductionAmount <= 0 && !Number.isFinite(augmentationAmount) || augmentationAmount <= 0) {
+      // setFormError("Veuillez saisir un nombre de réduction supérieur à 0.");
+      // return;
+    // }
 
     setSaving(true);
     setFormError("");
 
     try {
-      const update = await ReduireAllProductDansCategoryId(selectedCategoryId, reductionAmount);
+      const update = await ReduireAllProductDansCategoryId(selectedCategoryId, reductionAmount,selectedCategoryId2,augmentationAmount);
+      console.log(selectedCategoryId,"-",reductionAmount,"//",selectedCategoryId2,"+",augmentationAmount);
       setSummary(update);
       setReductionModalOpen(false);
       navigate("/resultat/reduction", { state: { summary: update } });
@@ -233,6 +236,36 @@ function ProduitsGrid({ products, onProductClick }: ProduitsGridProps) {
       {reductionModalOpen && (
         <div className="modal-backdrop">
           <div className="modal modalLarge">
+            <h3>augment de stock par catégorie</h3>
+            <div className="modal-row">
+              <label htmlFor="category">Catégorie</label>
+              <select
+                name="category"
+                id="category"
+                value={selectedCategoryId2}
+                onChange={(e) => setSelectedCategoryId2(Number(e.target.value))}
+              >
+                <option value={0}>Sélectionner une catégorie</option>
+                {category.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    id {item.id} - {item.name || "sans nom"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="modal-row">
+              <label htmlFor="number">Augmentation par produit</label>
+              <input
+                type="number"
+                id="number"
+                min={1}
+                step={1}
+                value={augmentationAmount}
+                onChange={(e) => setAugmentationAmount(Number(e.target.value))}
+              />
+            </div>
+
+            <br></br>
             <h3>Réduction de stock par catégorie</h3>
             <div className="modal-row">
               <label htmlFor="category">Catégorie</label>

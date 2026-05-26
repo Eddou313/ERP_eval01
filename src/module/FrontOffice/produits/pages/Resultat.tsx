@@ -24,20 +24,20 @@ export function Resultat({ summary, onClose }: ResultatProps) {
 
                 {routeSummary ? (
                     <>
-                        <div className="summaryMeta">
-                            <p>Catégorie ID: {routeSummary.categoryId}</p>
-                            <p>Réduction demandée: {routeSummary.requestedReduction}</p>
-                            <p>Total appliqué: {routeSummary.totalApplied}</p>
-                            <p>Stock total avant: {routeSummary.totalBefore}</p>
-                            <p>Stock total après: {routeSummary.totalAfter}</p>
-                        </div>
+                        {/* <div className="summaryMeta"> */}
+                            {/* <p>Catégorie ID: {routeSummary.categoryId}</p> */}
+                            {/* <p>Réduction demandée: {routeSummary.requestedReduction}</p> */}
+                            {/* <p>Total appliqué: {routeSummary.totalApplied}</p> */}
+                            {/* <p>Stock total avant: {routeSummary.totalBefore}</p> */}
+                            {/* <p>Stock total après: {routeSummary.totalAfter}</p> */}
+                        {/* </div> */}
                         <div className="summaryTableWrap">
                             <table className="summaryTable">
                                 <thead>
                                     <tr>
                                         <th>Produit</th>
                                         <th>Réf.</th>
-                                        <th>Avant</th>
+                                        {/* <th>Avant</th> */}
                                         <th>Demandé</th>
                                         <th>Appliqué</th>
                                         <th>Après</th>
@@ -49,7 +49,7 @@ export function Resultat({ summary, onClose }: ResultatProps) {
                                         <tr key={line.productId}>
                                             <td>{line.productName}</td>
                                             <td>{line.reference || "-"}</td>
-                                            <td>{line.quantityBefore}</td>
+                                            {/* <td>{line.quantityBefore}</td> */}
                                             <td>{line.requestedReduction}</td>
                                             <td>{line.appliedReduction}</td>
                                             <td>{line.quantityAfter}</td>
@@ -60,7 +60,7 @@ export function Resultat({ summary, onClose }: ResultatProps) {
                                 <tfoot>
                                     <tr>
                                         <th colSpan={2}>Total</th>
-                                        <th>{routeSummary.totalBefore}</th>
+                                        {/* <th>{routeSummary.totalBefore}</th> */}
                                         <th>{routeSummary.requestedReduction}</th>
                                         <th>{routeSummary.totalApplied}</th>
                                         <th>{routeSummary.totalAfter}</th>
