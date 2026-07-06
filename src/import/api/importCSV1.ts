@@ -3,12 +3,19 @@ import { ensureTaxExists, ensureTaxRuleExists, ensureTaxRuleGroupExists, listTax
 import { slugify } from "../../utils/helper";
 import { ensureCategoryExists, type CreatedCategory } from "./category";
 import type { colonneCSV } from "./colonne";
+import {
+    createImportSessionContext,
+    registerImportedProduct,
+    type ImportSessionContext,
+    type ImportProductSnapshot,
+} from "./importContext";
 import { createProductSimple, uploadProductImage } from "./produit";
 import { normalizeText } from "./zip";
 type ZipImageAsset = { blob: Blob; fileName: string };
 export type ProductImportRow = colonneCSV["produitImport"];
 
 type ProductImportContext = {
+    session: ImportSessionContext;
     categoryIdByKey: Map<string, number>;
     taxRuleGroupIdByRateKey: Map<string, number>;
 };
@@ -50,6 +57,7 @@ async function prepareProductImportContext(rows: ProductImportRow[]): Promise<Pr
     }
 
     return {
+        session: createImportSessionContext(),
         categoryIdByKey: categoryCache,
         taxRuleGroupIdByRateKey,
     };
@@ -100,7 +108,7 @@ export async function importProduitCsv(
     options?: {
         onProgress?: (progress: { processed: number; total: number; imported: number; failed: number; current?: string }) => void;
     },
-): Promise<{ imported: number; failed: number }> {
+): Promise<{ imported: number; failed: number; context: ImportSessionContext }> {
     const importContext = await prepareProductImportContext(rows);
 
     let imported = 0;
@@ -165,6 +173,16 @@ export async function importProduitCsv(
                 description_short: `Import CSV - ${row.reference}`,
                 link_rewrite: slugify(row.nom),
             });
+
+            registerImportedProduct(importContext.session, {
+                id: product.id,
+                reference: row.reference,
+                name: row.nom,
+                priceHt,
+                taxRate,
+                categoryId,
+                taxRuleGroupId,
+            } satisfies ImportProductSnapshot);
             current = String(row.reference ?? row.nom ?? `Ligne ${index + 1}`);
 
             const imageAsset = imageMap?.get(normalizeImageReference(row.reference));
@@ -193,7 +211,7 @@ export async function importProduitCsv(
 
     options?.onProgress?.({ processed: total, total, imported, failed, current: "Terminé" });
     console.info(`Import CSV1 terminer`);
-    return { imported, failed };
+    return { imported, failed, context: importContext.session };
 }
 function normalizeImageReference(value: string): string {
     return normalizeText(String(value ?? "").replace(/\.[^.]+$/, ""));

@@ -59,6 +59,7 @@ export type CartDetail = {
     attributes_label?: string;
   }>;
   total_products: number;
+  total_products_tax_excl: number;
   total: number;
 };
 

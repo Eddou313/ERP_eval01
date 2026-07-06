@@ -1,6 +1,10 @@
 import { buildPrestashopXml, requestPrestashopXml } from "../../../../utils/prestashopClient";
 import { asArray, boolFromPrestashop, getFirstLanguageText, keywordsFromPrestashop, numFromPrestashop, slugify, stringFromPrestashop, textFromUnknown } from "../../../../utils/helper";
 import type { CategoryGetResponse, CategoryGroup, CategoryListItem } from "./object";
+import { getProductAttributes, getProductsByCategory } from "../../produit/api/productsApi";
+import { applyStockModification, applyStockModificationAugmentation } from "../../stock/api/stockMovementService";
+import type { ProductListItem } from "../../produit/api/object";
+import { getStockByProductId } from "../../stock/api/stockApi";
 
 const DEFAULT_LANGUAGE_ID = 1;
 const ROOT_CATEGORY_ID = 2;
@@ -206,4 +210,223 @@ export async function InitCategory(): Promise<void> {
     }
   }
   console.log("Toutes les catégories ont été supprimées.");
+}
+
+export type StockReductionLine = {
+  productId: number;
+  productName: string;
+  reference: string;
+  quantityBefore: number;
+  requestedReduction: number;
+  appliedReduction: number;
+  quantityAfter: number;
+  success: boolean;
+  message?: string;
+};
+
+export type StockReductionSummary = {
+  categoryId: number;
+  requestedReduction: number;
+  totalBefore: number;
+  totalApplied: number;
+  totalAfter: number;
+  remainingRequested: number;
+  lines: StockReductionLine[];
+};
+
+function normalizeStockQuantity(value: unknown): number {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return 0;
+  }
+
+  return Math.floor(quantity);
+}
+
+type StockTarget = {
+  productId: number;
+  combinationId: number;
+  productName: string;
+  reference: string;
+  quantityBefore: number;
+};
+
+async function buildCategoryStockTargets(product: ProductListItem): Promise<StockTarget[]> {
+  const productName = product.name ?? `Produit ${product.id}`;
+  const productReference = product.reference ?? "";
+  const targets: StockTarget[] = [];
+
+  const parentQuantity = await getStockByProductId(product.id);
+  targets.push({
+    productId: product.id,
+    combinationId: 0,
+    productName,
+    reference: productReference,
+    quantityBefore: normalizeStockQuantity(parentQuantity ?? product.quantity ?? 0),
+  });
+
+  const combinations = await getProductAttributes(product.id);
+  for (const combination of combinations) {
+    const combinationId = Number(combination.id_product_attribute ?? 0) || 0;
+    if (combinationId <= 0) {
+      continue;
+    }
+
+    targets.push({
+      productId: product.id,
+      combinationId,
+      productName: `${productName} (combinaison ${combinationId})`,
+      reference: combination.reference ?? productReference,
+      quantityBefore: normalizeStockQuantity(combination.quantity ?? 0),
+    });
+  }
+
+  return targets;
+}
+
+async function processCategoryStockOperation(
+  idCategory: number,
+  number: number,
+  mode: "reduction" | "augmentation",
+  limite = 0,
+): Promise<StockReductionSummary> {
+  const requestedReduction = Math.floor(Number(number) || 0);
+  if (!Number.isFinite(idCategory) || idCategory <= 0) {
+    throw new Error("Catégorie invalide");
+  }
+  if (!Number.isFinite(requestedReduction) || requestedReduction <= 0) {
+    throw new Error("La valeur de réduction doit être supérieure à 0");
+  }
+
+  const effectiveLimit = limite > 0 ? limite : 30;
+  const allProductMemeCategory = await getProductsByCategory(idCategory);
+  const lines: StockReductionLine[] = [];
+  let totalBefore = 0;
+  let totalApplied = 0;
+
+  for (const product of allProductMemeCategory) {
+    const targets = await buildCategoryStockTargets(product);
+
+    for (const target of targets) {
+      const quantityBefore = normalizeStockQuantity(target.quantityBefore);
+      const appliedAmount = requestedReduction;
+      const quantityDelta = mode === "reduction" ? -Math.min(appliedAmount, quantityBefore) : appliedAmount;
+      const quantityAfter = mode === "reduction"
+        ? Math.max(0, quantityBefore + quantityDelta)
+        : quantityBefore + quantityDelta;
+
+      totalBefore += quantityBefore;
+
+      if (quantityDelta > 0 || quantityDelta < 0) {
+        const result = mode === "reduction"
+          ? await applyStockModification(
+            target.productId,
+            quantityBefore,
+            quantityDelta,
+            target.combinationId > 0 ? target.combinationId : undefined,
+            "adjustment",
+            1,
+          )
+          : await applyStockModificationAugmentation(
+            target.productId,
+            quantityBefore,
+            quantityDelta,
+            target.combinationId > 0 ? target.combinationId : undefined,
+            "adjustment",
+            1,
+            effectiveLimit,
+          );
+
+        const appliedValue = result.success
+          ? Math.abs(Number(result.numberModifiable ?? quantityDelta) || 0)
+          : 0;
+
+        if (result.success) {
+          totalApplied += appliedValue;
+        }
+
+        lines.push({
+          productId: target.productId,
+          productName: target.productName,
+          reference: target.reference,
+          quantityBefore,
+          requestedReduction,
+          appliedReduction: appliedValue,
+          quantityAfter: result.success
+            ? (mode === "reduction" ? Math.max(0, quantityBefore - appliedValue) : quantityBefore + appliedValue)
+            : quantityBefore,
+          success: result.success,
+          message: result.message,
+        });
+        continue;
+      }
+
+      lines.push({
+        productId: target.productId,
+        productName: target.productName,
+        reference: target.reference,
+        quantityBefore,
+        requestedReduction,
+        appliedReduction: 0,
+        quantityAfter,
+        success: true,
+        message: mode === "reduction" ? "Aucun stock à réduire" : "Aucun stock à augmenter",
+      });
+    }
+  }
+
+  const totalAfter = mode === "reduction"
+    ? Math.max(0, totalBefore - totalApplied)
+    : totalBefore + totalApplied;
+
+  return {
+    categoryId: idCategory,
+    requestedReduction,
+    totalBefore,
+    totalApplied,
+    totalAfter,
+    remainingRequested: Math.max(0, requestedReduction - totalApplied),
+    lines,
+  };
+}
+
+export async function ReduireAllProductDansCategoryId(idCategory: number, number: number, idCategory2: number, number2: number): Promise<StockReductionSummary | null> {
+  const summaries: StockReductionSummary[] = [];
+
+  if (idCategory2 !== 0 && number2 !== 0) {
+    summaries.push(await augment(idCategory2, number2, 0));
+  }
+
+  if (idCategory !== 0 && number !== 0) {
+    summaries.push(await reduire(idCategory, number));
+  }
+
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  if (summaries.length === 1) {
+    return summaries[0];
+  }
+
+  return {
+    categoryId: summaries.every((summary) => summary.categoryId === summaries[0].categoryId)
+      ? summaries[0].categoryId
+      : 0,
+    requestedReduction: summaries.reduce((sum, summary) => sum + summary.requestedReduction, 0),
+    totalBefore: summaries.reduce((sum, summary) => sum + summary.totalBefore, 0),
+    totalApplied: summaries.reduce((sum, summary) => sum + summary.totalApplied, 0),
+    totalAfter: summaries.reduce((sum, summary) => sum + summary.totalAfter, 0),
+    remainingRequested: summaries.reduce((sum, summary) => sum + summary.remainingRequested, 0),
+    lines: summaries.flatMap((summary) => summary.lines),
+  };
+}
+
+export async function reduire(idCategory: number, number: number): Promise<StockReductionSummary> {
+  return processCategoryStockOperation(idCategory, number, "reduction");
+}
+
+
+export async function augment(idCategory: number, number: number, limite: number): Promise<StockReductionSummary> {
+  return processCategoryStockOperation(idCategory, number, "augmentation", limite);
 }

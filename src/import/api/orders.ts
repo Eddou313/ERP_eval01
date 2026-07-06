@@ -3,8 +3,8 @@ import { textFromUnknown, validateUnsignedId } from "../../utils/helper";
 import { getAllModeLivraison } from "../../module/Backoffice/Livraison/api/LivraisonApi";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import { generateSecureKey } from "./importCSV3";
-import { computeCartTotals } from "./carts";
-import type { ClientForm } from "./customers";
+import { computeCartTotals, computeCartTotalsFromContext } from "./carts";
+import type { ImportCustomerSnapshot, ImportSessionContext } from "./importContext";
 import { updateStockWithMovement } from "./stock";
 
 type StockMovementSign = 1 | -1;
@@ -142,8 +142,14 @@ export async function createOrderDirect(params: {
   conversion_rate: number;
   module: string;
   payment: string;
+  totals?: {
+    total_products: number;
+    total_products_wt: number;
+    total_paid: number;
+    total_paid_real: number;
+  };
 }): Promise<number> {
-  const totals = await computeCartTotals(params.id_cart);
+  const totals = params.totals ?? await computeCartTotals(params.id_cart);
 
   const created = await requestPrestashopXml<any>("/orders", {
     method: "POST",
@@ -205,10 +211,11 @@ export async function createOrderDirect(params: {
 
 export async function createOrderFromCart(
   cartId: number,
-  customer: ClientForm,
+  customer: ImportCustomerSnapshot,
   orderStateId: number,
   dateStr: string,
-  fallbackAddressId?: number
+  fallbackAddressId?: number,
+  context?: ImportSessionContext,
 ): Promise<number> {
   const [day, month, year] = dateStr.split("/");
   const dateTime = `${year}-${month}-${day} 00:00:00`;
@@ -228,6 +235,10 @@ export async function createOrderFromCart(
   if (!validateUnsignedId(carrierId)) throw new Error(`Transporteur invalide — panier ${cartId}`);
 
   // ── 1. Créer la commande ──
+  const totals = context
+    ? await computeCartTotalsFromContext(cartId, context)
+    : await computeCartTotals(cartId);
+
   const orderId = await createOrderDirect({
     id_customer: customer.id,
     id_cart: cartId,
@@ -244,6 +255,7 @@ export async function createOrderFromCart(
     conversion_rate: 1,
     module: "ps_cashondelivery",
     payment: "Paiement à la livraison",
+    totals,
   });
 
   // ── 2. Forcer la date via PUT ──

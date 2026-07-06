@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState, type JSX } from "react";
-import { useNavigate } from "react-router-dom";
-import { listOrdersLight, formatCurrency } from "../../commande/api/commandesApi";
+import { Suspense, lazy, useEffect, useMemo, useState, type JSX } from "react";
+import { listOrdersLightCached, formatCurrency } from "../../commande/api/commandesApi";
 import { type OrderListItem, CART_PENDING_STATE_ID } from "../../commande/api/ObjetOrder";
-import { StockDashboard } from "./StockDashboard";
-import StatsPage from "./StatsPage";
-import EvolutionStockPage from "./Evolution_stock";
-// import { count } from "console";
+
+const StatsPage = lazy(() => import("./StatsPage"));
+const StockDashboard = lazy(() => import("./StockDashboard").then((module) => ({ default: module.StockDashboard })));
+const EvolutionStockPage = lazy(() => import("./Evolution_stock").then((module) => ({ default: module.EvolutionStockPage })));
 
 type DayMetric = {
   date: string;
@@ -43,8 +42,19 @@ function buildMetrics(orders: OrderListItem[]): DayMetric[] {
   return Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date));
 }
 
+function sumTtc(orders: OrderListItem[], predicate?: (order: OrderListItem) => boolean): number {
+  return orders
+    .filter((order) => (predicate ? predicate(order) : true))
+    .reduce((sum, order) => sum + (Number(order.total_paid_tax_incl) || 0), 0);
+}
+
+function sumHt(orders: OrderListItem[], predicate?: (order: OrderListItem) => boolean): number {
+  return orders
+    .filter((order) => (predicate ? predicate(order) : true))
+    .reduce((sum, order) => sum + (Number(order.total_paid_tax_excl) || 0), 0);
+}
+
 export function DashboardPage(): JSX.Element {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState<OrderListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +67,7 @@ export function DashboardPage(): JSX.Element {
       setLoading(true);
       setError(null);
       try {
-        const data = await listOrdersLight();
+        const data = await listOrdersLightCached();
         // const data = await listOrdersLight({ declencher: 1 });
         const filteredData = data.filter((order) => Number(order.current_state) !== 6);
         setOrders(filteredData);
@@ -71,20 +81,19 @@ export function DashboardPage(): JSX.Element {
   }, []);
 
   const metrics = useMemo(() => buildMetrics(orders), [orders]);
-  const totalOrders = orders.length;
-  const totalAmount = orders.reduce((sum, o) => sum + (Number(o.total_paid_tax_incl) || 0), 0);
+  const orderTotals = useMemo(() => ({
+    totalOrders: orders.length,
+    totalAmountTtc: sumTtc(orders),
+    totalAmountHt: sumHt(orders),
+    avgOrder: orders.filter((order) => order.current_state === 0).length,
+    caPaniersTtc: sumTtc(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID),
+    caPaniersHt: sumHt(orders, (order) => Number(order.current_state) === CART_PENDING_STATE_ID),
+    caCommandesSansPanierTtc: sumTtc(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID),
+    caCommandesSansPanierHt: sumHt(orders, (order) => Number(order.current_state) !== CART_PENDING_STATE_ID),
+  }), [orders]);
   const latestDay = metrics[0];
   const topDays = metrics.slice(0, 8);
-  const avgOrder = orders.filter((order) => order.current_state === 0).length;
-  // const avgOrder = totalOrders > 0 ? totalAmount / totalOrders : 0;
-  // Chiffres d'affaires séparés: commandes réelles vs paniers
-  const caPaniers = orders
-    .filter((o) => Number(o.current_state) === CART_PENDING_STATE_ID)
-    .reduce((s, o) => s + (Number(o.total_paid_tax_incl) || 0), 0);
-
-  const caCommandesSansPanier = orders
-    .filter((o) => Number(o.current_state) !== CART_PENDING_STATE_ID)
-    .reduce((s, o) => s + (Number(o.total_paid_tax_incl) || 0), 0);
+  const { totalOrders, totalAmountTtc, totalAmountHt, avgOrder, caPaniersTtc, caPaniersHt, caCommandesSansPanierTtc, caCommandesSansPanierHt } = orderTotals;
 
   return (
     <main style={styles.container}>
@@ -149,15 +158,15 @@ export function DashboardPage(): JSX.Element {
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>Chiffre d'affaires</span>
-              <span style={{ ...styles.cardValue, color: "#10b981" }}>{formatCurrency(totalAmount)}</span>
+              <span style={{ ...styles.cardValue, color: "#10b981" }}>{formatCurrency(totalAmountTtc)}</span>
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>CA commandes (sans panier)</span>
-              <span style={{ ...styles.cardValue, color: "#0ea5a4" }}>{formatCurrency(caCommandesSansPanier)}</span>
+              <span style={{ ...styles.cardValue, color: "#0ea5a4" }}>{formatCurrency(caCommandesSansPanierTtc)}</span>
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>CA paniers</span>
-              <span style={{ ...styles.cardValue, color: "#f59e0b" }}>{formatCurrency(caPaniers)}</span>
+              <span style={{ ...styles.cardValue, color: "#f59e0b" }}>{formatCurrency(caPaniersTtc)}</span>
             </div>
             <div style={styles.card}>
               <span style={styles.cardLabel}>Panier</span>
@@ -166,6 +175,18 @@ export function DashboardPage(): JSX.Element {
             <div style={styles.card}>
               <span style={styles.cardLabel}>Jours actifs</span>
               <span style={{ ...styles.cardValue, color: "#64748b" }}>{metrics.length}</span>
+            </div>
+            <div style={styles.card}>
+              <span style={styles.cardLabel}>CA total HT</span>
+              <span style={{ ...styles.cardValue, color: "#0f766e" }}>{formatCurrency(totalAmountHt)}</span>
+            </div>
+            <div style={styles.card}>
+              <span style={styles.cardLabel}>CA commandes HT</span>
+              <span style={{ ...styles.cardValue, color: "#14b8a6" }}>{formatCurrency(caCommandesSansPanierHt)}</span>
+            </div>
+            <div style={styles.card}>
+              <span style={styles.cardLabel}>CA paniers HT</span>
+              <span style={{ ...styles.cardValue, color: "#d97706" }}>{formatCurrency(caPaniersHt)}</span>
             </div>
           </section>
 
@@ -220,11 +241,13 @@ export function DashboardPage(): JSX.Element {
         </>
       )}
 
-      {activeTab === "stats" && <StatsPage />}
+      <Suspense fallback={<p style={styles.stateMessage}>Chargement de l’onglet...</p>}>
+        {activeTab === "stats" && <StatsPage />}
 
-      {activeTab === "stock" && <StockDashboard />}
+        {activeTab === "stock" && <StockDashboard />}
 
-      {activeTab === "evolution" && <EvolutionStockPage />}
+        {activeTab === "evolution" && <EvolutionStockPage />}
+      </Suspense>
     </main>
   );
 }
@@ -234,8 +257,8 @@ const styles = {
   container: {
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
     padding: "24px",
-    backgroundColor: "transprent",
-    margin_right: "40px",
+    backgroundColor: "transparent",
+    marginRight: "40px",
     minHeight: "100vh",
     color: "#1e293b",
   },

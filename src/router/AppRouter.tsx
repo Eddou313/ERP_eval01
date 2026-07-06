@@ -27,6 +27,7 @@ import { Stock } from "../module/Backoffice/stock/pages/Stock"
 import StockMovements from "../module/Backoffice/stock/pages/StockMovements"
 import Traitement from "../module/FrontOffice/commande/pages/Traitement"
 import Import from "../import/pages/Import"
+import { Resultat } from "../module/FrontOffice/produits/pages/Resultat"
 
 function AppRouter() {
   return (
@@ -42,6 +43,7 @@ function AppRouter() {
           <Route path="/Commande" element={<WorkFlowCommande />} />
           <Route path="/admin/login" element={<Login />} />
           <Route path="/traitement" element={<Traitement />}></Route>
+          <Route path="/resultat/reduction" element={<Resultat summary={null} />}></Route>
 
           <Route element={<SecureRoute />}>
             {/* <Route path="/Home" element={<Home />} /> */}
@@ -58,8 +60,9 @@ function AppRouter() {
             <Route path="/stock/etat"element={<StockMovements />} />
 
             <Route path="commandes/list" element={<CommandesListPage />} />
-            <Route path="/catalogue/fichier" element={<ImportGlobal/>}/>
-            <Route path="/catalogue/file" element={<Import/>}/>
+            <Route path="/catalogue/fichier" element={<Import/>}/>
+            {/* <Route path="/catalogue/fichier" element={<ImportGlobal/>}/> */}
+            {/* <Route path="/catalogue/file" element={<Import/>}/> */}
 
             {/* <Route path="/clients/clients" element={<ClientsListe/>}/> */}
             {/* <Route path="/clients/adresses" element={<ClientsAdressesListe/>}/> */}

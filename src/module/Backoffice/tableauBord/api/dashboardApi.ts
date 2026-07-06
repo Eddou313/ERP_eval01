@@ -5,12 +5,25 @@ type CategoryStat = {
   categoryId: number;
   categoryName: string;
   sales: number;
+  salesHT: number;
   purchases: number;
+  purchasesHT: number;
   profit: number;
+  profitHT: number;
 };
 
 const productCache = new Map<number, { price: number; wholesale: number; categories: number[] }>();
 const categoryNameCache = new Map<number, string>();
+let dashboardStatsPromise: Promise<{
+  totalSalesHT: number;
+  totalSalesTTC: number;
+  totalPurchasesHT: number;
+  totalPurchases: number;
+  totalProfit: number;
+  profitByCategory: CategoryStat[];
+  canceledByCategory: CategoryStat[];
+  canceledTotals: { sales: number; purchases: number; profit: number };
+}> | null = null;
 
 async function fetchProductInfo(productId: number) {
   if (productCache.has(productId)) return productCache.get(productId)!;
@@ -56,7 +69,7 @@ async function fetchCategoryName(categoryId: number) {
   }
 }
 
-export async function getDashboardStats(): Promise<{
+async function loadDashboardStats(): Promise<{
   totalSalesHT: number;
   totalSalesTTC: number;
   totalPurchasesHT: number;
@@ -67,7 +80,9 @@ export async function getDashboardStats(): Promise<{
   canceledTotals: { sales: number; purchases: number; profit: number };
 }> {
   const salesTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
+  const salesTotalsByCategoryHT = new Map<number, { sales: number; purchases: number }>();
   const canceledTotalsByCategory = new Map<number, { sales: number; purchases: number }>();
+  const canceledTotalsByCategoryHT = new Map<number, { sales: number; purchases: number }>();
   let totalSalesHT = 0;
   let totalSalesTTC = 0;
   let totalPurchasesHT = 0;
@@ -130,6 +145,11 @@ export async function getDashboardStats(): Promise<{
         entry.sales += row.saleAmountTTC;
         entry.purchases += row.purchaseAmount;
         canceledTotalsByCategory.set(catId, entry);
+
+        const entryHT = canceledTotalsByCategoryHT.get(catId) ?? { sales: 0, purchases: 0 };
+        entryHT.sales += row.saleAmountHT;
+        entryHT.purchases += row.purchaseAmount;
+        canceledTotalsByCategoryHT.set(catId, entryHT);
       }
       continue;
     }
@@ -145,32 +165,47 @@ export async function getDashboardStats(): Promise<{
       entry.sales += row.saleAmountTTC;
       entry.purchases += row.purchaseAmount;
       salesTotalsByCategory.set(catId, entry);
+
+      const entryHT = salesTotalsByCategoryHT.get(catId) ?? { sales: 0, purchases: 0 };
+      entryHT.sales += row.saleAmountHT;
+      entryHT.purchases += row.purchaseAmount;
+      salesTotalsByCategoryHT.set(catId, entryHT);
     }
   }
 
   const profitByCategory: CategoryStat[] = [];
   for (const [catId, vals] of salesTotalsByCategory.entries()) {
+    const valsHT = salesTotalsByCategoryHT.get(catId) ?? { sales: 0, purchases: 0 };
     const name = catId === 0 ? "Sans catégorie" : await fetchCategoryName(catId);
     const profit = vals.sales - vals.purchases;
+    const profitHT = valsHT.sales - valsHT.purchases;
     profitByCategory.push({
       categoryId: catId,
       categoryName: name,
       sales: vals.sales,
+      salesHT: valsHT.sales,
       purchases: vals.purchases,
+      purchasesHT: valsHT.purchases,
       profit,
+      profitHT,
     });
   }
 
   const canceledByCategory: CategoryStat[] = [];
   for (const [catId, vals] of canceledTotalsByCategory.entries()) {
+    const valsHT = canceledTotalsByCategoryHT.get(catId) ?? { sales: 0, purchases: 0 };
     const name = catId === 0 ? "Sans catégorie" : await fetchCategoryName(catId);
     const profit = vals.sales - vals.purchases;
+    const profitHT = valsHT.sales - valsHT.purchases;
     canceledByCategory.push({
       categoryId: catId,
       categoryName: name,
       sales: vals.sales,
+      salesHT: valsHT.sales,
       purchases: vals.purchases,
+      purchasesHT: valsHT.purchases,
       profit,
+      profitHT,
     });
   }
 
@@ -192,6 +227,25 @@ export async function getDashboardStats(): Promise<{
       profit: canceledSales - canceledPurchases,
     },
   };
+}
+
+export async function getDashboardStats(): Promise<{
+  totalSalesHT: number;
+  totalSalesTTC: number;
+  totalPurchasesHT: number;
+  totalPurchases: number;
+  totalProfit: number;
+  profitByCategory: CategoryStat[];
+  canceledByCategory: CategoryStat[];
+  canceledTotals: { sales: number; purchases: number; profit: number };
+}> {
+  if (dashboardStatsPromise) return dashboardStatsPromise;
+
+  dashboardStatsPromise = loadDashboardStats().finally(() => {
+    dashboardStatsPromise = null;
+  });
+
+  return dashboardStatsPromise;
 }
 
 export type { CategoryStat };

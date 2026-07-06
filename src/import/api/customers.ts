@@ -1,45 +1,21 @@
 import { asArray, boolFromUnknown, numFromUnknown, textFromUnknown } from "../../utils/helper";
 import { buildPrestashopXml, requestPrestashopXml } from "../../utils/prestashopClient";
 import type { Commande } from "./importCSV3";
+import {
+  addressKey,
+  customerEmailKey,
+  type ImportCustomerSnapshot,
+  type ImportSessionContext,
+} from "./importContext";
 
 export async function getOrCreateCustomer(
-  cmd: Commande
-): Promise<ClientForm> {
-  const res = await requestPrestashopXml<any>("/customers", {
-    query: {
-      display: "full",
-      "filter[email]": `[${cmd.email}]`,
-      limit: "1",
-    },
-  });
-
-  const existing = res?.prestashop?.customers?.customer;
-  if (existing) {
-    const list = Array.isArray(existing) ? existing : [existing];
-    if (list[0]?.id) {
-      return {
-        id: list[0].id,
-        id_gender: list[0].id_gender,
-        id_default_group: list[0].id_default_group,
-        id_lang: list[0].id_lang,
-        firstname: list[0].firstname,
-        lastname: list[0].lastname,
-        email: list[0].email,
-        passwd: list[0].passwd,
-        birthday: list[0].birthday,
-        active: list[0].active,
-        newsletter: list[0].newsletter,
-        optin: list[0].optin,
-        company: list[0].company,
-        siret: list[0].siret,
-        ape: list[0].ape,
-        website: list[0].website,
-        note: list[0].note,
-        is_guest: list[0].is_guest,
-        deleted: list[0].deleted,
-        secure_key: list[0].secure_key,
-      };
-    }
+  cmd: Commande,
+  context?: ImportSessionContext,
+): Promise<ImportCustomerSnapshot> {
+  const emailKey = customerEmailKey(cmd.email);
+  const cached = context?.customerByEmail.get(emailKey);
+  if (cached) {
+    return cached;
   }
 
   const [prenom, ...restNom] = cmd.nom.trim().split(" ");
@@ -65,28 +41,16 @@ export async function getOrCreateCustomer(
   const newId = Number(created?.prestashop?.customer?.id);
   if (!newId) throw new Error(`Création client échouée pour ${cmd.email}`);
 
-  return {
-    id: created?.prestashop?.customer?.id,
-    id_gender: created?.prestashop?.customer?.id_gender,
-    id_default_group: created?.prestashop?.customer?.id_default_group,
-    id_lang: created?.prestashop?.customer?.id_lang,
+  const customer: ImportCustomerSnapshot = {
+    id: newId,
     firstname: created?.prestashop?.customer?.firstname,
     lastname: created?.prestashop?.customer?.lastname,
     email: created?.prestashop?.customer?.email,
-    passwd: created?.prestashop?.customer?.passwd,
-    birthday: created?.prestashop?.customer?.birthday,
-    active: created?.prestashop?.customer?.active,
-    newsletter: created?.prestashop?.customer?.newsletter,
-    optin: created?.prestashop?.customer?.optin,
-    company: created?.prestashop?.customer?.company,
-    siret: created?.prestashop?.customer?.siret,
-    ape: created?.prestashop?.customer?.ape,
-    website: created?.prestashop?.customer?.website,
-    note: created?.prestashop?.customer?.note,
-    is_guest: created?.prestashop?.customer?.is_guest,
-    deleted: created?.prestashop?.customer?.deleted,
     secure_key: created?.prestashop?.customer?.secure_key,
   };
+
+  context?.customerByEmail.set(emailKey, customer);
+  return customer;
 }
 
 
@@ -190,7 +154,7 @@ export async function getClient(id: number): Promise<ClientForm & { id: number; 
   };
 }
 
-export async function createClientAddress(idCustomer: number, form: ClientAddressImportForm): Promise<number> {
+export async function createClientAddress(idCustomer: number, form: ClientAddressImportForm, context?: ImportSessionContext): Promise<number> {
   const normalizeText = (value: string | undefined): string =>
     String(value ?? "").trim().replace(/\s+/g, " ");
 
@@ -198,33 +162,12 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
   const postcode = normalizeText(form.postcode) || "00000";
   const city = normalizeText(form.city) || "Ville";
   const idCountry = Number(form.id_country) || 8;
+  const cacheKey = addressKey(idCustomer, address1, postcode, city, idCountry);
 
-  const res = await requestPrestashopXml<any>("/addresses", {
-    query: {
-      display: "full",
-      "filter[id_customer]": `[${idCustomer}]`,
-      "filter[address1]": `[${address1}]`,
-      "filter[postcode]": `[${postcode}]`,
-      "filter[city]": `[${city}]`,
-      "filter[id_country]": `[${idCountry}]`,
-
-      limit: "1",
-    },
-  });
-
-  const addresses = res?.prestashop?.addresses?.address;
-
-  if (addresses) {
-    const firstAddress = Array.isArray(addresses)
-      ? addresses[0]
-      : addresses;
-
-    const existingId = Number(firstAddress?.id);
-
-    if (Number.isFinite(existingId) && existingId > 0) {
-      return existingId;
-    }
+  if (context?.addressIdByKey.has(cacheKey)) {
+    return context.addressIdByKey.get(cacheKey) ?? 0;
   }
+
   const firstname = normalizeText(form.firstname) || "Client";
   const lastname = normalizeText(form.lastname) || "Client";
   // const baseAlias = normalizeText(form.alias || `${firstname} ${lastname}`) || "Adresse";
@@ -263,6 +206,7 @@ export async function createClientAddress(idCustomer: number, form: ClientAddres
 
       const id = Number(response?.prestashop?.address?.id);
       if (Number.isFinite(id) && id > 0) {
+        context?.addressIdByKey.set(cacheKey, id);
         return id;
       }
     } catch (error: any) {

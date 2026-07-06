@@ -27,6 +27,7 @@ export type OrderListItem = {
   id_customer: number;
   payment: string;
   total_paid_tax_incl: number;
+  total_paid_tax_excl?: number;
   current_state: number;
   date_add: string;
 };

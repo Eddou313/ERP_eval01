@@ -2,7 +2,7 @@ import { addProductsToCart, createCart } from "./carts";
 import type { colonneCSV } from "./colonne";
 import { createClientAddress, getOrCreateCustomer } from "./customers";
 import { createOrderFromCart } from "./orders";
-import type { findProductByReference } from "./produit";
+import type { ImportSessionContext } from "./importContext";
 import { parseAchat, regrouperCommandes } from "./regroupCommandes";
 
 export type Commande = colonneCSV["Commande_client_produit"];
@@ -33,15 +33,15 @@ export const ETAT_TO_ORDER_STATE: Record<string, number> = {
     "livré": 5,
     "annulé": 6,
 };
-export type ProductCache = Map<string, Awaited<ReturnType<typeof findProductByReference>>>;
 
-
+export type ProductCache = Map<string, any>;
 
 export async function importProduitCommandeCsv(
     rows: Commande[],
     options?: {
         onProgress?: (progress: ImportProgress) => void;
     },
+    context?: ImportSessionContext,
 ): Promise<{
     customersCreated: number;
     cartsCreated: number;
@@ -67,7 +67,7 @@ export async function importProduitCommandeCsv(
             const etat = normaliserEtat(cmd.etat);
 
             // ── 1. Créer ou récupérer le client ──
-            const customer = await getOrCreateCustomer(cmd);
+            const customer = await getOrCreateCustomer(cmd, context);
             if (!customer) throw new Error(`Impossible de créer le client "${cmd.email}"`);
             customersCreated++;
             current = cmd.email;
@@ -91,7 +91,7 @@ export async function importProduitCommandeCsv(
                 postcode: addressPostal,
                 city: addressCity,
                 id_country: 8,
-            });
+            }, context);
 
             // ── 2. Créer le panier (retourne cartId + addressId) ──
             const { cartId } = await createCart(customer.id, customer.secure_key, addressId);
@@ -101,7 +101,7 @@ export async function importProduitCommandeCsv(
             }
             // // ── 3. Ajouter TOUS les produits en un seul PUT ──
             //    customerId et addressId passés explicitement pour éviter les 0
-            await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId);
+            await addProductsToCart(cartId, produits, cmd.date, customer.id, addressId, context);
             cartsCreated++;
 
             // // ── 4. Etat vide → panier uniquement ──
@@ -113,7 +113,8 @@ export async function importProduitCommandeCsv(
                 customer,                        // { id, secureKey }
                 ETAT_TO_ORDER_STATE[etat],
                 cmd.date,
-                addressId                        // fallback adresse
+                addressId,                       // fallback adresse
+                context,
             );
             if (!orderId) throw new Error(`Impossible de créer la commande`);
             ordersCreated++;

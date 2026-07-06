@@ -1,6 +1,5 @@
-import { useEffect, useState, type JSX } from "react";
+import { useEffect, useMemo, useState, type JSX } from "react";
 import { getDashboardStats, type CategoryStat } from "../api/dashboardApi";
-import { getCategory } from "../api/../../categorie/api/categoriesApi";
 
 export default function StatsPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
@@ -9,9 +8,30 @@ export default function StatsPage(): JSX.Element {
   const [totalPurchasesHT, setTotalPurchasesHT] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
   const [totalProfit, setTotalProfit] = useState(0);
+  const [totalProfitHT, setTotalProfitHT] = useState(0);
   const [byCategory, setByCategory] = useState<CategoryStat[]>([]);
   const [canceledByCategory, setCanceledByCategory] = useState<CategoryStat[]>([]);
   const [canceledTotals, setCanceledTotals] = useState({ sales: 0, purchases: 0, profit: 0 });
+
+  const currencyFormatter = useMemo(
+    () => new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    []
+  );
+  const formatCurrency = (value: number) => currencyFormatter.format(value);
+
+  const categoryTotals = useMemo(() => {
+    return byCategory.reduce(
+      (acc, row) => {
+        acc.salesHT += row.salesHT;
+        acc.sales += row.sales;
+        acc.purchasesHT += row.purchasesHT;
+        acc.profitHT += row.profitHT;
+        acc.profit += row.profit;
+        return acc;
+      },
+      { salesHT: 0, sales: 0, purchasesHT: 0, profitHT: 0, profit: 0 }
+    );
+  }, [byCategory]);
 
   useEffect(() => {
     let mounted = true;
@@ -24,31 +44,10 @@ export default function StatsPage(): JSX.Element {
         setTotalPurchasesHT(res.totalPurchasesHT || 0);
         setTotalPurchases(res.totalPurchases || 0);
         setTotalProfit(res.totalProfit || 0);
+        setTotalProfitHT((res.totalSalesHT || 0) - (res.totalPurchasesHT || 0));
         setCanceledByCategory(res.canceledByCategory || []);
         setCanceledTotals(res.canceledTotals || { sales: 0, purchases: 0, profit: 0 });
-
-        // Ensure categories have names: if a categoryName is missing,
-        // fetch the category by id as a fallback.
-        const enriched: CategoryStat[] = [];
-        for (const c of (res.profitByCategory || [])) {
-          if (c.categoryName && c.categoryName.trim()) {
-            enriched.push(c);
-            continue;
-          }
-
-          let name = c.categoryName || "(Inconnu)";
-          try {
-            if (typeof c.categoryId === "number" && c.categoryId > 0) {
-              const cat = await getCategory(c.categoryId);
-              name = cat?.name || name;
-            }
-          } catch (err) {
-            console.debug("StatsPage: fallback category lookup failed", err);
-          }
-          enriched.push({ ...c, categoryName: name });
-        }
-
-        setByCategory(enriched);
+        setByCategory(res.profitByCategory || []);
       } catch (err) {
         console.error("Erreur chargement stats:", err);
       } finally {
@@ -77,35 +76,42 @@ export default function StatsPage(): JSX.Element {
       {/* section des KPI Cards */}
       <div style={styles.kpiGrid}>
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Ventes totales (HT)</span>
+          <span style={styles.cardLabel}>Ventes totales estimées (HT)</span>
           <span style={{ ...styles.cardValue, color: "#059669" }}>
             {totalSalesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Ventes totales (TTC)</span>
+          <span style={styles.cardLabel}>Ventes totales estimées (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#10b981" }}>
             {totalSalesTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Coût total des achats (HT)</span>
+          <span style={styles.cardLabel}>Achats estimés (HT)</span>
           <span style={{ ...styles.cardValue, color: "#dc2626" }}>
             {totalPurchasesHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Coût total des achats</span>
+          <span style={styles.cardLabel}>Achats estimés (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#ef4444" }}>
             {totalPurchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
         </div>
 
         <div style={styles.card}>
-          <span style={styles.cardLabel}>Bénéfice estimé</span>
+          <span style={styles.cardLabel}>Bénéfice estimé (HT)</span>
+          <span style={{ ...styles.cardValue, color: "#1d4ed8" }}>
+            {totalProfitHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+          </span>
+        </div>
+
+        <div style={styles.card}>
+          <span style={styles.cardLabel}>Bénéfice estimé (TTC)</span>
           <span style={{ ...styles.cardValue, color: "#1e3a8a" }}>
             {totalProfit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </span>
@@ -119,9 +125,11 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
-              <th style={styles.th}>Ventes (TTC)</th>
-              <th style={styles.th}>Achat</th>
-              <th style={styles.th}>Bénéfice</th>
+              <th style={styles.th}>Ventes estimées (HT)</th>
+              <th style={styles.th}>Ventes estimées (TTC)</th>
+              <th style={styles.th}>Achats estimés (HT)</th>
+              <th style={styles.th}>Bénéfice estimé (HT)</th>
+              <th style={styles.th}>Bénéfice estimé (TTC)</th>
             </tr>
           </thead>
           <tbody>
@@ -133,14 +141,22 @@ export default function StatsPage(): JSX.Element {
                   style={index % 2 === 0 ? styles.trEven : styles.trOdd}
                 >
                   <td style={{ ...styles.td, textAlign: "left", fontWeight: 500 }}>{c.categoryName}</td>
-                  <td style={styles.td}>{c.sales.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
-                  <td style={styles.td}>{c.purchases.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                  <td style={styles.td}>{formatCurrency(c.salesHT)} €</td>
+                  <td style={styles.td}>{formatCurrency(c.sales)} €</td>
+                  <td style={styles.td}>{formatCurrency(c.purchasesHT)} €</td>
+                  <td style={{
+                    ...styles.td, 
+                    fontWeight: "bold", 
+                    color: c.profitHT >= 0 ? "#10b981" : "#ef4444" 
+                  }}>
+                    {formatCurrency(c.profitHT)} €
+                  </td>
                   <td style={{ 
                     ...styles.td, 
                     fontWeight: "bold", 
                     color: isPositive ? "#10b981" : "#ef4444" 
                   }}>
-                    {c.profit.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                    {formatCurrency(c.profit)} €
                   </td>
                 </tr>
               );
@@ -150,13 +166,19 @@ export default function StatsPage(): JSX.Element {
             <tr>
               <td style={{ ...styles.td, ...styles.totalCellLabel, textAlign: "left" }}>Total</td>
               <td style={{ ...styles.td, ...styles.totalCell }}>
-                {byCategory.reduce((sum, row) => sum + row.sales, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatCurrency(categoryTotals.salesHT)} €
               </td>
               <td style={{ ...styles.td, ...styles.totalCell }}>
-                {byCategory.reduce((sum, row) => sum + row.purchases, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                {formatCurrency(categoryTotals.sales)} €
               </td>
-              <td style={{ ...styles.td, ...styles.totalCell, color: byCategory.reduce((sum, row) => sum + row.profit, 0) >= 0 ? "#10b981" : "#ef4444" }}>
-                {byCategory.reduce((sum, row) => sum + row.profit, 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+              <td style={{ ...styles.td, ...styles.totalCell }}>
+                {formatCurrency(categoryTotals.purchasesHT)} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell, color: categoryTotals.profitHT >= 0 ? "#10b981" : "#ef4444" }}>
+                {formatCurrency(categoryTotals.profitHT)} €
+              </td>
+              <td style={{ ...styles.td, ...styles.totalCell, color: categoryTotals.profit >= 0 ? "#10b981" : "#ef4444" }}>
+                {formatCurrency(categoryTotals.profit)} €
               </td>
             </tr>
           </tfoot>
@@ -169,9 +191,9 @@ export default function StatsPage(): JSX.Element {
           <thead>
             <tr>
               <th style={{ ...styles.th, textAlign: "left" }}>Catégorie</th>
-              <th style={styles.th}>Ventes (TTC)</th>
-              <th style={styles.th}>Achat</th>
-              <th style={styles.th}>Bénéfice</th>
+              <th style={styles.th}>Ventes estimées (TTC)</th>
+              <th style={styles.th}>Achat estimé</th>
+              <th style={styles.th}>Bénéfice estimé</th>
             </tr>
           </thead>
           <tbody>

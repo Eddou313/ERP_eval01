@@ -103,6 +103,7 @@ function extractOrderListItem(orderXml: Record<string, unknown>): OrderListItem 
     id_customer: numFromUnknown(orderXml.id_customer),
     payment: textFromUnknown(orderXml.payment).trim(),
     total_paid_tax_incl: numFromUnknown(orderXml.total_paid_tax_incl),
+    total_paid_tax_excl: numFromUnknown(orderXml.total_paid_tax_excl),
     current_state: numFromUnknown(orderXml.current_state) || 1,
     date_add: textFromUnknown(orderXml.date_add).split(" ")[0],
   };
@@ -192,6 +193,7 @@ export async function listOrders(
             id_customer: detail.id_customer,
             payment: "Panier en cours",
             total_paid_tax_incl: Number(detail.total) || 0,
+            total_paid_tax_excl: Number(detail.total_products_tax_excl) || Number(detail.total_products) || Number(detail.total) || 0,
             current_state: CART_PENDING_STATE_ID,
             date_add: detail.date_add || textFromUnknown((cart as any).date_add).split(" ")[0],
           } as OrderListItem;
@@ -223,6 +225,36 @@ export async function listOrders(
 }
 
 export const listOrdersLight = listOrders;
+
+let cachedLightOrdersPromise: Promise<OrderListItem[]> | null = null;
+
+export async function listOrdersLightCached(
+  params?: Partial<{
+    reference: string;
+    id_customer: number;
+    payment: string;
+    minAmount: number;
+    maxAmount: number;
+    state: number;
+    limit: number;
+    offset: number;
+    declencher?: number;
+  }>,
+): Promise<OrderListItem[]> {
+  if (!params && cachedLightOrdersPromise) {
+    return cachedLightOrdersPromise;
+  }
+
+  const promise = listOrders(params);
+  if (!params) {
+    cachedLightOrdersPromise = promise.finally(() => {
+      cachedLightOrdersPromise = null;
+    });
+    return cachedLightOrdersPromise;
+  }
+
+  return promise;
+}
 
 /**
  * READ: Récupère une commande complète par ID

@@ -1,7 +1,10 @@
-import type { listProductsLight } from "../../module/Backoffice/produit/api/productsApi";
 import { createCombination, getOrCreateAttributeGroup, getOrCreateAttributeValue } from "./attribut";
 import { type colonneCSV } from "./colonne";
-import { findProductByReference } from "./produit";
+import {
+    findImportedProductByReference,
+    registerImportedCombination,
+    type ImportSessionContext,
+} from "./importContext";
 import { updateStockWithMovement } from "./stock";
 
 export type Csv2Row = colonneCSV["produit_Attribut_StockImport"];
@@ -19,15 +22,14 @@ export type ImportProgress = {
     current?: string;
 };
 
-type ProductLight = Awaited<ReturnType<typeof listProductsLight>>[number];
 export async function importCsv2ToPrestashop(
     rows: Csv2Row[],
     options?: {
         onProgress?: (progress: ImportProgress) => void;
     },
+    context?: ImportSessionContext,
 ): Promise<ImportResult[]> {
     rows = regrouperStocks(rows);
-    const productsCache = new Map<string, ProductLight | null>();
     const results: ImportResult[] = [];
     // const total = rows.length;
     const firstCombinationByProduct = new Map<number, boolean>();
@@ -43,7 +45,7 @@ export async function importCsv2ToPrestashop(
 
         console.log(`commencement de l import csv2 `);
         try {
-            const productReel = await findProductByReference(row.reference, productsCache);
+            const productReel = context ? findImportedProductByReference(context, row.reference) : null;
             const productId = productReel ? Number(productReel.id) : null;
             if (!productId) {
                 failed += 1;
@@ -56,6 +58,10 @@ export async function importCsv2ToPrestashop(
                 continue;
             }
             current = reference;
+            const product = productReel;
+            if (!product) {
+                throw new Error(`Produit introuvable pour la référence "${reference}"`);
+            }
 
             const hasAttribute = specificité?.trim() !== "" && karazany?.trim() !== "";
             stock_initial = Number(row.stock_initial) || 0;
@@ -72,19 +78,32 @@ export async function importCsv2ToPrestashop(
                 });
             } else {
                 // ── Produit avec combinaison ──
-                const groupId = await getOrCreateAttributeGroup(specificité.trim());
-                const valueId = await getOrCreateAttributeValue(groupId, karazany.trim());
+                if (!context) {
+                    throw new Error("Contexte d'import manquant pour les attributs");
+                }
+
+                const groupId = await getOrCreateAttributeGroup(specificité.trim(), context);
+                const valueId = await getOrCreateAttributeValue(groupId, karazany.trim(), context);
                 const priceTtc = Number(prix_vente_ttc) || 0;
-                const basePriceHt = Number(productReel?.price_ht ?? productReel?.base_price ?? productReel?.price ?? 0) || 0;
-                const taxRate = Number(productReel?.tax_rate ?? 20) || 0;
+                const basePriceHt = Number(product.priceHt) || 0;
+                const taxRate = Number(product.taxRate) || 0;
                 const priceHtRaw = priceTtc > 0 ? parseTtcToHt(priceTtc, taxRate) : basePriceHt;
                 const priceHt = Math.ceil(priceHtRaw * 1000) / 1000;
                 const priceImpactHt = priceTtc > 0 ? Number((priceHt - basePriceHt).toFixed(6)) : 0;
 
                 const isFirst = !firstCombinationByProduct.has(productId);
                 if (isFirst) firstCombinationByProduct.set(productId, true);
-                
-                await createCombination(productId, valueId, stock_initial, priceImpactHt,isFirst);
+
+                const combinationId = await createCombination(productId, valueId, stock_initial, priceImpactHt, isFirst);
+                registerImportedCombination(context, {
+                    id: combinationId,
+                    productId,
+                    productReference: row.reference,
+                    attributeName: specificité.trim(),
+                    attributeValue: karazany.trim(),
+                    priceImpactHt,
+                    stockInitial: stock_initial,
+                });
                 imported += 1;
                 results.push({
                     reference,
